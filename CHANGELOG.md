@@ -332,6 +332,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not a colour falls back to the default blue on update.
 
 ### Fixed
+- **Weights in grams and kilograms sit on the same line** (#2328). A weight sent over the API in
+  grams (95400 g) was drawn next to the kilogram readings as a spike at 95400, and the change card
+  showed +95,304.7. Readings of one kind are now converted to a single unit before the chart, the
+  average and the change are calculated - the unit most of your readings use, otherwise kilograms.
+  The same applies to height and head circumference (cm, m, mm, in), temperature (°C, °F) and blood
+  sugar (mg/dL, mmol/L). The stored readings stay as they were sent.
 - **The dashboard and calendar are fast again with synced recurring events** (#2226). Since the
   fix for occurrences on the clock change day (#2034), every occurrence of a repeating event is
   placed in its time zone with several lookups, and each lookup set up a fresh date formatter - the
