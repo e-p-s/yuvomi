@@ -7,7 +7,7 @@
  *                  server/utils/http.js (node-nativer Safe-HTTP-Client)
  */
 
-import { localCalendarIdSql, defaultCalendarId, validateCalendarId } from './local-calendars.js';
+import { localCalendarIdSql, defaultCalendarId, validateCalendarId, importedEventColor } from './local-calendars.js';
 
 import { runExternalJob } from '../utils/restore-state.js';
 import dns from 'node:dns/promises';
@@ -412,12 +412,13 @@ async function importToLocal(userId, { ics, url, color, localCalendarId = null, 
   // Einzel-Vorkommen werden eigenständige Termine statt die Serie zu killen (#549).
   rawEvents = normalizeRecurrenceOverrides(rawEvents);
 
-  // HIER bleibt der Fallback bewusst stehen, anders als im Abo-Sync oben (#891).
-  // Ein einmaliger Import macht aus den Terminen LOKALE Termine ohne Quelle -
-  // sie haben danach keinen Kalender mehr, von dem sie eine Farbe erben koennten,
-  // und `color` ist der Wert, den der Nutzer fuer genau diesen Import angegeben
-  // hat. Das ist eine Wahl und gehoert deshalb in die Eigenfarb-Spalte.
-  const fallbackColor = color || '#007AFF';
+  // Die Farbe des Formulars ist nur dann eine Eigenfarbe, wenn sie von der des
+  // Zielkalenders abweicht (#2303). Bis dahin stand hier `color || '#007AFF'`
+  // mit der Begruendung, ein Import habe keinen Kalender, von dem er erben
+  // koennte - seit es lokale Kalender gibt, hat er einen, und die kopierte
+  // Farbe hielt ihn bei jedem Umfaerben auf der alten fest. Eine COLOR aus der
+  // Datei selbst bleibt wie im Abo-Sync (#891) die Farbe dieses Termins.
+  const fallbackColor = importedEventColor(db.get(), localCalendarId, color);
   // `series_authored = 1`: die Termine gehoeren nach dem Import dem Nutzer und
   // sind lokale Zeilen wie jede hier angelegte - so hat sie der ausgehende Weg
   // schon behandelt, als er noch `external_source` las (#1935).
@@ -501,7 +502,7 @@ async function importToLocal(userId, { ics, url, color, localCalendarId = null, 
         const tzid = localRule && !ev.allDay && isValidTimeZone(ev.tzid) ? ev.tzid : null;
         const info = insert.run(
           ev.summary, ev.description, ev.dtstart, ev.dtend,
-          ev.allDay ? 1 : 0, ev.location, ev.color || fallbackColor,
+          ev.allDay ? 1 : 0, ev.location, ev.color || fallbackColor || null,
           ev.uid || null, localRule, tzid, userId, localCalendarId,
         );
         // EXDATE nur übernehmen, wenn die Serie erhalten blieb (localRule != null).

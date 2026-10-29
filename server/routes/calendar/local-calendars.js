@@ -9,6 +9,7 @@ import {
   localCalendarById,
   localCalendarIdSql,
   regenerateCalendarFeedToken,
+  releaseCopiedCalendarColor,
   serializeCalendar,
   validateCalendarColor,
   validateCalendarName,
@@ -160,6 +161,10 @@ router.put('/calendars/:id', (req, res) => {
     }
     if (checks.some((check) => check.error)) return sendValidationErrors(res, checks);
     if (Object.keys(changes).length) {
+      // Importierte Termine trugen bis #2303 eine Kopie der Kalenderfarbe und
+      // blieben beim Umfaerben auf der alten stehen. Im selben Schritt wie das
+      // Umfaerben, damit keine Antwort dazwischen den halben Stand liest.
+      if (changes.color && changes.color !== row.color) releaseCopiedCalendarColor(database, id, row.color);
       database.prepare(`
         UPDATE local_calendars
         SET name = COALESCE(@name, name),
