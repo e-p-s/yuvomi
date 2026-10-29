@@ -1095,11 +1095,24 @@ function wireTagBadgeFilter(container) {
 }
 
 /**
+ * Die Rotationsmodi einer Serie — die Werte sind das Vokabular von
+ * server/services/task-rotation.js, und dabei muss es bleiben: ein eigener Name
+ * hier waerte beim Speichern ein 400 des Servers. Die leere Option („ohne
+ * Rotation") steht nicht in dieser Liste — sie ist der Abwaehler des Feldes,
+ * kein Modus.
+ */
+const ROTATION_MODES = [
+  { value: 'round_robin', labelKey: 'tasks.rotationModeRoundRobin' },
+  { value: 'least_assigned', labelKey: 'tasks.rotationModeLeastAssigned' },
+  { value: 'least_recent', labelKey: 'tasks.rotationModeLeastRecent' },
+];
+
+/**
  * Was hinter „Weitere Einstellungen" des Aufgabendialogs liegt, als Hinweis
  * unter dem Aufklapper (DESIGN.md: „Weitere Einstellungen nennt, was dahinter
  * liegt"; A3 P1-2). Dieselbe Bauart wie eventAdvancedTopics() im Kalender.
  */
-function taskAdvancedTopics({ privacy = true, recurrence = false, reminder = false, countdown = false } = {}) {
+function taskAdvancedTopics({ privacy = true, recurrence = false, rotation = false, reminder = false, countdown = false } = {}) {
   const topics = [
     t('tasks.startDateLabel'),
     countdown ? t('dashboard.countdownTitle') : null,
@@ -1111,6 +1124,10 @@ function taskAdvancedTopics({ privacy = true, recurrence = false, reminder = fal
     // Nur solange sie leer hinter dem Aufklapper liegen (R16) - der Hinweis
     // nennt, was dahinter IST, nicht was dort sein koennte.
     recurrence ? t('rrule.labelRepeat') : null,
+    // Rotation reist mit der Wiederholung ein und aus (siehe
+    // renderRotationSection) — also nennt der Hinweis sie genau dann, wenn er
+    // die Wiederholung nennt.
+    rotation ? t('tasks.rotationLabel') : null,
     reminder ? t('reminders.sectionTitle') : null,
   ].filter(Boolean);
   try {
@@ -1118,6 +1135,57 @@ function taskAdvancedTopics({ privacy = true, recurrence = false, reminder = fal
   } catch {
     return topics.join(', ');
   }
+}
+
+/**
+ * DER ROTATIONS-ABSCHNITT — eine Serien-Angabe, keine Aufgaben-Angabe.
+ *
+ * Rotation beantworten zwei Zahlen: ein Modus und ein Pool mit mindestens zwei
+ * Koepfen (server/services/task-rotation.js: unter zwei Koepfen ist "Rotation"
+ * dieselbe Person in anderem Kostuem, der Server antwortet mit 400). Beides
+ * haengt an der Wiederholung — ohne zweite Instanz verteilt sich nichts. Der
+ * Abschnitt haengt deshalb an der Wiederholungsfrage mit: er ist verborgen,
+ * solange das Formular keine Regel zeigt (wireRotationGate loest ihn mit dem
+ * Frequenzfeld), und ein GESETZTER Modus holt ihn zurueck — beim Bearbeiten
+ * darf nichts Gesetztes versteckt sein (R16, dieselbe Regel wie beim
+ * Wiederholungsfeld selbst).
+ *
+ * Der Pool folgt dem Personen-Picker-Muster der Zustaendigen
+ * (renderUserMultiSelect): dieselbe Scheibe, derselbe Trefferflaeche. Die
+ * Ablieferungsreihenfolge ist die Reihenfolge der Liste — getSelectedUserIds
+ * liest sie in Markup-Reihenfolge, also genau die, die der Nutzer sieht; der
+ * Hinweis sagt es, damit die Reihenfolge keine Entdeckung ist.
+ *
+ * FEHLT DER KNOTEN GANZ (Ein-Personen-Haushalt), sendet der Absende-Pfad das
+ * Feld nicht — und der Server laesst einen etwaig gespeicherten Stand in Ruhe,
+ * statt ihn ueber einen nicht bedienbaren Weg zu loeschen.
+ */
+function renderRotationSection(users = [], task = null) {
+  if (users.length < 2) return '';
+  // Ein Bestandswert ausserhalb der Liste faellt auf „ohne" zurueck — wie das
+  // Statusfeld oben: der Browser wuerde sonst die erste Option zeigen, waehrend
+  // die Zusammenfassung den alten Wert nennt.
+  const mode = ROTATION_MODES.some((m) => m.value === task?.rotation_mode) ? task.rotation_mode : '';
+  const pool = Array.isArray(task?.rotation_pool) ? task.rotation_pool.map(Number) : [];
+  const shown = !!task?.recurrence_rule || !!mode;
+  const modeOptions = [
+    { value: '', label: t('tasks.rotationModeNone') },
+    ...ROTATION_MODES.map((m) => ({ value: m.value, label: t(m.labelKey) })),
+  ].map((o) =>
+    `<option value="${o.value}" ${mode === o.value ? 'selected' : ''}>${o.label}</option>`
+  ).join('');
+  return `
+      <div class="form-group" id="task-rotation-section"${shown ? '' : ' hidden'}>
+        <label class="label" for="task-rotation-mode">${t('tasks.rotationLabel')}</label>
+        <select class="input" id="task-rotation-mode" name="rotation_mode">${modeOptions}</select>
+        <!-- Der Pool steht unter seinem Modus, nicht daneben: ohne Modus ist er
+             unbedienbar (welche Reihenfolge sollte man ohne Rotation schon
+             pflegen?), und ein Feld, das man nicht braucht, ist ein Feld zu viel. -->
+        <div id="task-rotation-pool"${mode ? '' : ' hidden'}>
+          ${renderUserMultiSelect(users, pool, 'task_rotation', 'tasks.rotationPoolLabel')}
+          <p class="task-field-hint">${t('tasks.rotationPoolHint')}</p>
+        </div>
+      </div>`;
 }
 
 function renderModalContent({ task = null, users = [], reminder = null } = {}) {
@@ -1218,12 +1286,19 @@ function renderModalContent({ task = null, users = [], reminder = null } = {}) {
     expandsFromStart: false,
   });
   const reminderHtml = renderReminderSection(task, reminder);
+  // Rotation und Wiederholung sind ein Paar: derselbe Platz, dasselbe Ein- und
+  // Ausklappen (renderRotationSection erklaert die Regel).
+  const rotationHtml = renderRotationSection(users, task);
   const recurrenceTucked = !task?.recurrence_rule;
   const reminderTucked = !reminder && reminderHtml !== '';
   const advancedHint = taskAdvancedTopics({
     countdown: !task?.countdown,
     privacy: !hidesPrivacyControls('tasks'),
     recurrence: recurrenceTucked,
+    // Nur wenn der Abschnitt wirklich existiert (R16): der Hinweis nennt, was
+    // dahinter IST — im Ein-Personen-Haushalt baut renderRotationSection kein
+    // Feld, also darf die Zeile auch keines versprechen.
+    rotation: recurrenceTucked && rotationHtml !== '',
     reminder: reminderTucked,
   });
 
@@ -1346,7 +1421,7 @@ ${syncTargetFieldHtml(task)}
         label: t('tasks.documentsLabel'),
       })}
 ${countdownTucked ? `<div class="task-form__tucked">${countdownHtml}</div>` : ''}
-${recurrenceTucked ? `<div class="task-form__tucked">${recurrenceHtml}</div>` : ''}
+${recurrenceTucked ? `<div class="task-form__tucked">${recurrenceHtml}${rotationHtml}</div>` : ''}
 ${reminderTucked ? `<div class="task-form__tucked">${reminderHtml}</div>` : ''}`;
 
   return `
@@ -1437,7 +1512,7 @@ ${reminderTucked ? `<div class="task-form__tucked">${reminderHtml}</div>` : ''}`
 
       ${advancedSection(advancedFieldsHtml, { label: advancedLabel, hint: advancedHint })}
 
-      ${recurrenceTucked ? '' : recurrenceHtml}
+      ${recurrenceTucked ? '' : `${recurrenceHtml}${rotationHtml}`}
 
       ${reminderTucked ? '' : reminderHtml}
 
@@ -2456,6 +2531,45 @@ function taskDocumentVisibility(panel) {
 }
 
 /**
+ * Die Verdrahtung des Rotationsabschnitts. Der Abschnitt haelt seine
+ * Sichtbarkeit nicht selbst — er haelt sie gar nicht, wenn die Aufgabe nie
+ * wiederkehren sollte — sondern folgt dem Frequenzfeld desselben Formulars:
+ *
+ * - Frequenz gewaehlt  => der Abschnitt darf mitreden (noch ohne Pool: erst ein
+ *   Modus macht die Personenfrage zur Frage).
+ * - Frequenz geraeumt  => der Abschnitt verschwindet, aber der Modus bleibt
+ *   stehen, wenn einer gesetzt ist: ein versehentlicher Wechsel und zurueck
+ *   verschluckt ihn nicht (dieselbe Regel wie der Wochentags-Haken im
+ *   RRULE-Baustein). Und solange ein Modus gesetzt ist, bleibt der Abschnitt
+ *   sichtbar — die Absende-Pruefung meldet die Kombination erst, statt sie
+ *   still zu loeschen.
+ * - Modus gewaehlt     => der Pool tritt hervor.
+ *
+ * Das Frequenzfeld liegt im geteilten RRULE-Baustein; der Lauscher haengt hier,
+ * weil die Frage „gibt es diese Aufgabe zweimal?" nur das Formular beantworten
+ * kann, nicht der Baustein.
+ */
+function wireRotationGate(panel) {
+  const section = panel.querySelector('#task-rotation-section');
+  if (!section) return;
+  const modeSelect = panel.querySelector('#task-rotation-mode');
+  const poolWrap = panel.querySelector('#task-rotation-pool');
+  // Dasselbe Dokument wie in bindRRuleEvents oben: der Dialog haengt im
+  // Dokument, nicht in einem Shadow-Tree, und das Frequenzfeld kennt nur diese
+  // eine Instanz je Formular.
+  const freqSelect = document.querySelector('#task-rrule-freq');
+  const sync = () => {
+    const hasRule = !!freqSelect?.value;
+    const hasMode = !!modeSelect?.value;
+    section.hidden = !(hasRule || hasMode);
+    if (poolWrap) poolWrap.hidden = !hasMode;
+  };
+  freqSelect?.addEventListener('change', sync);
+  modeSelect?.addEventListener('change', sync);
+  sync();
+}
+
+/**
  * @param {HTMLElement} panel
  * @param {{task?: object|null, container?: HTMLElement|null,
  *          onChanged?: () => (void|Promise<void>)}} opts
@@ -2469,6 +2583,11 @@ function wireTaskForm(panel, { task = null, container = null, onChanged = () => 
   // RRULE-Events binden
   bindRRuleEvents(document, 'task');
   bindUserMultiSelect(panel, 'task_assigned');
+  // Der Pool ist dieselbe Personenauswahl wie die Zustaendigen; seine Kaestchen
+  // brauchen keine Bindung — ohne „Niemand"-Chip tut die Checkbox genau das, was
+  // sie zeigt. Die Leere ist hier kein Zustand, sondern der Fehler, den die
+  // Absende-Pruefung nennt.
+  wireRotationGate(panel);
   wireVisibilityWarning(panel, '#task-visibility', 'task_assigned', '#task-visibility-warning', '#task-visibility-private-warning',
     task?.created_by ?? state.currentUserId);
   wireCountdownGate(panel);
@@ -2797,6 +2916,29 @@ async function handleFormSubmit(e, { container = null, onChanged = () => loadTas
   if (dueTimeRaw && !dueTime) { resetSubmit(t('calendar.invalidDate')); return; }
   body.due_time = dueTime || null;
   if (form.status) body.status = form.status.value;
+
+  /* ROTATION — dieselbe Regel wie auf dem Server (parseRotationInput in
+   * server/routes/tasks.js), vor dem Absenden: ein Modus ohne wiederkehrende
+   * Aufgabe und ein Modus mit einem Pool unter zwei Koepfen sind dort 400.
+   * Der Dialog kennt beide Bedingungen und nennt sie am Feld, das der Nutzer
+   * bedienen kann, statt die Aufgabe gegen die Absage zu schicken und auf
+   * Englisch zu beantworten (dieselbe Lehre wie beim Faelligkeitsdatum der
+   * Erinnerung).
+   *
+   * OHNE KNOTEN sendet dieses Formular nichts: dort, wo der Abschnitt nie
+   * stand (Ein-Personen-Haushalt), bleibt der gespeicherte Stand unangetastet —
+   * das Fehlen ist keine Abwahl. */
+  const rotationModeEl = form.querySelector('#task-rotation-mode');
+  if (rotationModeEl) {
+    const rotationMode = rotationModeEl.value || null;
+    if (rotationMode && !rrule.is_recurring) { resetSubmit(t('tasks.rotationNeedsRecurring')); return; }
+    body.rotation_mode = rotationMode;
+    if (rotationMode) {
+      const rotationPool = getSelectedUserIds(form, 'task_rotation');
+      if (rotationPool.length < 2) { resetSubmit(t('tasks.rotationNeedsPool')); return; }
+      body.rotation_pool = rotationPool;
+    }
+  }
 
   // Erinnerungs-Vorbedingungen VOR dem Speichern prüfen — verhindert den
   // widersprüchlichen Zustand "Aufgabe gespeichert (Erfolgs-Toast) + roter
@@ -6764,6 +6906,10 @@ export const __test = {
   restoreAssignedToMe, persistAssignedToMe,
   // Der Aufgaben-Dialog als Markup: welche Felder er zeigt und wen er anbietet.
   renderModalContent,
+  // Der Rotationsabschnitt mit seiner Verdrahtung: die Sichtbarkeit ist die
+  // halbe Antwort (nur bei wiederkehrender Aufgabe), die Verdrahtung die andere
+  // — ein Listener, den niemand anhaengt, hat dieselbe Luecke wie keine Regel.
+  renderRotationSection, wireRotationGate, ROTATION_MODES,
   // Der Erinnerungs-Abschnitt einzeln, weil er einen Zustand zu BENENNEN hat,
   // den seine Auswahlliste nicht abbildet: eine Erinnerung nach der
   // Faelligkeit. Was der Abschnitt dabei sagt, ist der halbe Fix - die andere
