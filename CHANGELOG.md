@@ -332,6 +332,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not a colour falls back to the default blue on update.
 
 ### Fixed
+- **Switching a module on or off no longer doubles "Settings" in the sidebar** (#2324). After a
+  module was toggled under Settings > Active modules, the sidebar showed "Settings" twice until the
+  next reload. It now stays once, at its place at the bottom, however often the list is rebuilt.
+- **Imported calendars take their new colour** (#2303). Changing the colour of a calendar under
+  "Manage calendars" now also recolours the events that were imported into it from an ICS file in the
+  day, week, month and detail views. The import used to copy the colour into every event, which then
+  kept the old one. The colour field of the import now starts on the colour of the chosen calendar;
+  picking a different one still gives those events their own colour.
 - **The dashboard and calendar are fast again with synced recurring events** (#2226). Since the
   fix for occurrences on the clock change day (#2034), every occurrence of a repeating event is
   placed in its time zone with several lookups, and each lookup set up a fresh date formatter - the
