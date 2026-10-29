@@ -60,6 +60,8 @@ import {
   hasUploadAttempt, removeLeftoverUploads,
 } from './caldav-upload-attempts.js';
 import { householdTimeZone, localToUTC } from '../utils/timezone.js';
+import { timedSeriesUntil } from '../utils/rrule-until.js';
+import { rruleValue } from './recurrence.js';
 import { loadTags, tagsKey } from '../utils/task-tags.js';
 import { runSerialized } from '../utils/sync-lock.js';
 import { noteMoveTakenBack } from './shopping-move-notices.js';
@@ -108,7 +110,11 @@ export const MODULES = {
     // Feldvergleich sieht aber nur die Zeile. Der Aufrufer hängt den
     // kanonischen Schlüssel (utils/task-tags.js: tagsKey) an beide Seiten,
     // sonst bliebe eine reine Tag-Änderung unbemerkt (#586).
-    mirrored: ['title', 'description', 'priority', 'status', 'due_date', 'due_time', 'tags_key'],
+    // `is_recurring`/`recurrence_rule` reisen als RRULE (#2350).
+    mirrored: [
+      'title', 'description', 'priority', 'status', 'due_date', 'due_time', 'tags_key',
+      'is_recurring', 'recurrence_rule',
+    ],
     icsFields: icsFieldsForTask,
     labelOf: (row) => row.title,
   },
@@ -208,7 +214,45 @@ export function icsFieldsForTask(task, hadCompleted = false, tz = householdTimeZ
     ...completionFields(task.status === 'done', task.status === 'in_progress', hadCompleted),
   };
   if (Array.isArray(task.tags)) fields.CATEGORIES = task.tags;
+  const rrule = vtodoRecurrence(task, tz);
+  if (rrule) fields.RRULE = rrule;
+  else if (ownsRecurrence(task)) fields.RRULE = null;
   return fields;
+}
+
+/**
+ * Die Wiederholung einer Aufgabe als RRULE-Wert (ohne Praefix) - oder null (#2350).
+ *
+ * Keine Regel ohne DUE: VTODO rechnet die Serie an DUE (Yuvomi sendet kein
+ * DTSTART), und eine Aufgabe, die ab Erledigung zaehlt, kann ganz ohne
+ * Faelligkeit wiederkehren. Keine Regel an einer erledigten Aufgabe: das
+ * Abhaken legt in Yuvomi eine Folgeinstanz als eigene Zeile und eigenes VTODO
+ * an; behielte das erledigte Objekt seine Regel, zeigte ein Client die Serie
+ * zweimal. Der Anker "ab Erledigung" (#658) reist nicht mit, RFC 5545 kennt ihn
+ * nicht.
+ *
+ * UNTIL hat nach RFC 5545 den Werttyp des Ankers: an einem reinen Datum ein
+ * Datum (ein altes `T235959Z` aus dem frueheren Formular wird darauf
+ * zurueckgeschnitten), an einer Uhrzeit das Ende des Ortstags in UTC (#1974,
+ * utils/rrule-until.js) - DUE steht dann ebenfalls in UTC. COUNT bleibt, wie es
+ * gespeichert ist.
+ */
+function vtodoRecurrence(task, tz) {
+  if (!task.is_recurring || !task.recurrence_rule || !task.due_date || task.status === 'done') return null;
+  const rule = rruleValue(task.recurrence_rule).trim();
+  if (!rule) return null;
+  const dated = rule.split(';').map((part) => part.replace(/^(\s*UNTIL\s*=\s*)(\d{8})T\d{6}Z?\s*$/i, '$1$2')).join(';');
+  return task.due_time ? timedSeriesUntil(dated, tz) : dated;
+}
+
+/**
+ * Darf der Push eine RRULE auf dem Server entfernen? Nur an einem Objekt, das
+ * Yuvomi selbst angelegt hat. Der Inbound liest die Regel eines VTODO nicht
+ * ein: eine in einer anderen App angelegte Serie ist hier nicht wiederkehrend,
+ * und ein Entfernen bei jeder Bearbeitung loeschte ihre Wiederholung.
+ */
+function ownsRecurrence(task) {
+  return task.external_source !== 'caldav' || isOwnUidOfRow(task.external_uid, 'task', task.id);
 }
 
 /** VTODO-Properties eines lokalen Einkaufspostens. */

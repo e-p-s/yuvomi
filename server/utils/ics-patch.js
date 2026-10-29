@@ -28,9 +28,13 @@ const MANAGED_VEVENT = new Set([
 // seit Yuvomi die vollständige Liste hält: solange nur ein einzelner Wert
 // gespiegelt worden wäre, hätte jeder Push die übrigen Tags des Servers
 // gelöscht.
+//
+// RRULE kam mit #2350 dazu: eine wiederkehrende Aufgabe ging ohne ihre Regel
+// hinaus. Ersetzt oder entfernt wird sie nur, wenn der Aufrufer das Feld
+// mitgibt - icsFieldsForTask laesst es bei einer fremden Serie weg.
 const MANAGED_VTODO = new Set([
   'SUMMARY', 'DESCRIPTION', 'DUE', 'PRIORITY', 'STATUS', 'COMPLETED', 'PERCENT-COMPLETE',
-  'CATEGORIES',
+  'CATEGORIES', 'RRULE',
 ]);
 
 // Properties, deren Wert eine kommaseparierte Liste ist.

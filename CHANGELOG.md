@@ -332,6 +332,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not a colour falls back to the default blue on update.
 
 ### Fixed
+- **Recurring tasks keep their repeat on a CalDAV server** (#2350). A task that repeats in Yuvomi
+  went to the server as a one-off task: the outgoing VTODO carried title, due date and status but no
+  `RRULE`, so Tasks.org, Thunderbird or a Baikal-backed phone showed it once. The rule now goes along
+  on the first upload and on every later edit, and an end date is written the way RFC 5545 wants it
+  next to the due date - a plain date for a task without a time, the end of that day in UTC for one
+  with a time. A ticked-off occurrence goes up without the rule, because the next occurrence is its
+  own task on the server, and a series someone set up in another app keeps its rule even though
+  Yuvomi does not read it in. "Repeat from completion" stays a Yuvomi setting: the standard has no
+  way to say it.
 - **The dashboard and calendar are fast again with synced recurring events** (#2226). Since the
   fix for occurrences on the clock change day (#2034), every occurrence of a repeating event is
   placed in its time zone with several lookups, and each lookup set up a fresh date formatter - the
