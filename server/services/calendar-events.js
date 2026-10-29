@@ -497,6 +497,13 @@ export function expandRecurringEvents(
      * Countdown. */
     const sprungZiel = resumeNear
       ?? (resumeAtWindow ? shiftDateKey(from, -(3 + Math.max(0, durationDays))) : null);
+    // MIT COUNT GIBT ES KEINEN SPRUNG, also darf die Schleife bis zum COUNT
+    // laufen, um das Fenster zu erreichen - nie weiter als die Gesamtgrenze.
+    // Die Arbeit begrenzt die Serie selbst, wie auf den Pfaden mit grosser
+    // Grenze; eine Serie ohne COUNT bleibt bei der Grenze des Aufrufers.
+    const serienGrenze = resumeAtWindow && maxCount !== null
+      ? Math.max(iterationLimit, Math.min(maxCount, MAX_EXPANSION_ITERATIONS))
+      : iterationLimit;
     if (sprungZiel && maxCount === null && parsedRule && sprungZiel > currentDate) {
       const sprung = resumeKeyFor(currentDate, parsedRule, sprungZiel);
       const hinterEnde = parsedRule.until && new Date(`${sprung}T00:00:00Z`) > parsedRule.until;
@@ -506,7 +513,7 @@ export function expandRecurringEvents(
       }
     }
 
-    while (currentDate <= schleifenEnde && iterations < iterationLimit) {
+    while (currentDate <= schleifenEnde && iterations < serienGrenze) {
       iterations++;
 
       // BYDAY-FILTER VOR DEM ZAEHLEN, EXDATE DANACH - die beiden sehen gleich

@@ -102,3 +102,17 @@ test('der vierttaegige Block, der vor dem Fenster beginnt, ragt weiter hinein', 
   // 2026-11-05 ist ein Donnerstag: der Block vom 05.11. laeuft bis 09.11.
   assert.deepEqual(reader([block], '2026-11-08', '2026-11-08'), [`${block.id}@2026-11-05`]);
 });
+
+test('ein beliebig weites Fenster bleibt je Serie bei der Standardgrenze', () => {
+  // GET /calendar nimmt from/to ungeprueft. Die grosse Grenze haette einer
+  // taeglichen Serie ueber 1900..2200 bis zu 100000 Schritte und Zeilen je
+  // Anfrage erlaubt; mit dem Sprung reicht die Standardgrenze fuer jedes
+  // Fenster bis gut 1000 Tage, und weiter gehen nur Serien mit COUNT - bis zu
+  // ihrem COUNT, den sie selbst begrenzen.
+  const daily = insertSeries({
+    title: 'Daily wide', start: '2020-01-06T08:00:00Z', end: '2020-01-06T08:30:00Z',
+    tzid: 'Europe/Berlin', rule: 'FREQ=DAILY',
+  });
+  const rows = reader([daily], '1900-01-01', '2200-12-31');
+  assert.ok(rows.length > 0 && rows.length <= 1000, `${rows.length} Vorkommen aus einem 300-Jahre-Fenster`);
+});

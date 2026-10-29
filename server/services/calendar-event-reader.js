@@ -145,12 +145,12 @@ export function expandAndResolveEventRows(database, rows, from, to, options = {}
     // Dieselbe Zone fuer das Fenster: jeder Leser hier bildet [from, to] aus
     // Haushaltstagen (#1999).
     // Jeder Leser hier fragt ein Fenster: die Schleife setzt kurz davor ein
-    // statt an DTSTART, und mit COUNT (kein Sprung moeglich) reicht die grosse
-    // Grenze bis dorthin (#2341). Ein Aufrufer kann beides ueberschreiben.
+    // statt an DTSTART (#2341). Die Grenze bleibt die des Aufrufers - mit dem
+    // Sprung haengt die Arbeit am Fenster, und GET /calendar nimmt from/to
+    // ungeprueft, eine grosse Grenze wuerde dort jedes Fenster ausrollen.
     {
       householdZone: zone,
       windowZone: zone,
-      maxIterations: MAX_EXPANSION_ITERATIONS,
       resumeAtWindow: true,
       ...options.expansion,
       includeRecurrenceIdentity: true,
