@@ -378,6 +378,8 @@ export function seriesReadingZone(database, event) {
  *        Schluesseltagen steht.
  *        resumeNear: ein Schleifentag, nahe an dem die Schleife einsetzen darf,
  *        statt ab DTSTART zu zaehlen (#1998) - nur bei einer Regel ohne COUNT.
+ *        resumeAtWindow: derselbe Sprung, mit `from` als Ziel - je Serie um
+ *        ihre Dauer und den Zonenabstand vorgezogen (#2341).
  * @returns {object[]}  Expandiertes, sortiertes Array
  */
 export function expandRecurringEvents(
@@ -388,7 +390,7 @@ export function expandRecurringEvents(
   {
     includeRecurrenceIdentity = false, maxIterations = DEFAULT_EXPANSION_ITERATIONS,
     maxOccurrencesPerSeries = null, occurrenceFilter = null,
-    householdZone = null, windowZone = null, resumeNear = null,
+    householdZone = null, windowZone = null, resumeNear = null, resumeAtWindow = false,
   } = {},
 ) {
   const result = [];
@@ -483,8 +485,20 @@ export function expandRecurringEvents(
      * begrenzt. Ebenso nicht hinter ein Tages-UNTIL: dort ist die Serie vorbei,
      * und die Schleife soll das selbst feststellen. Der Zaehler steht danach
      * auf eins, damit kein spaeteres Vorkommen als Serienanfang gilt. */
-    if (resumeNear && maxCount === null && parsedRule && resumeNear > currentDate) {
-      const sprung = resumeKeyFor(currentDate, parsedRule, resumeNear);
+
+    /* DIE FENSTERLESER SPRINGEN AUCH (#2341). Ohne Sprung lief `GET /calendar`
+     * jede Serie ab DTSTART und gab an der Iterationsgrenze auf, bevor das
+     * Fenster erreicht war: eine taegliche Serie von vor drei Jahren fehlte
+     * ganz, und jede Seite des Kalenders wurde mit dem Alter der Serien
+     * langsamer. Das Ziel liegt vor `from`, damit nichts verloren geht, was das
+     * Fenster noch sieht: ein mehrtaegiger ganztaegiger Termin, der vorher
+     * beginnt (`durationDays`), und ein Vorkommen, dessen Haushaltstag bis zu
+     * zwei Tage neben dem Schleifentag liegt (#1999) - drei Tage wie beim
+     * Countdown. */
+    const sprungZiel = resumeNear
+      ?? (resumeAtWindow ? shiftDateKey(from, -(3 + Math.max(0, durationDays))) : null);
+    if (sprungZiel && maxCount === null && parsedRule && sprungZiel > currentDate) {
+      const sprung = resumeKeyFor(currentDate, parsedRule, sprungZiel);
       const hinterEnde = parsedRule.until && new Date(`${sprung}T00:00:00Z`) > parsedRule.until;
       if (sprung > currentDate && !hinterEnde) {
         currentDate = sprung;

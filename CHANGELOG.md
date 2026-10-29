@@ -332,6 +332,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not a colour falls back to the default blue on update.
 
 ### Fixed
+- **Old daily series show up in the calendar again** (#2341). The calendar view counted every
+  repeating event from its very first day and gave up after 1000 steps, so a daily event that
+  started more than about three years ago was missing from the month entirely, and every page of
+  the calendar got slower as the household's series got older. The calendar, the overview and the
+  upcoming list now start each series just before the days they show.
 - **The dashboard and calendar are fast again with synced recurring events** (#2226). Since the
   fix for occurrences on the clock change day (#2034), every occurrence of a repeating event is
   placed in its time zone with several lookups, and each lookup set up a fresh date formatter - the

@@ -144,8 +144,16 @@ export function expandAndResolveEventRows(database, rows, from, to, options = {}
     // Die Zone kommt von hier, die Expansion kennt keine Datenbank (#1993).
     // Dieselbe Zone fuer das Fenster: jeder Leser hier bildet [from, to] aus
     // Haushaltstagen (#1999).
+    // Jeder Leser hier fragt ein Fenster: die Schleife setzt kurz davor ein
+    // statt an DTSTART, und mit COUNT (kein Sprung moeglich) reicht die grosse
+    // Grenze bis dorthin (#2341). Ein Aufrufer kann beides ueberschreiben.
     {
-      householdZone: zone, windowZone: zone, ...options.expansion, includeRecurrenceIdentity: true,
+      householdZone: zone,
+      windowZone: zone,
+      maxIterations: MAX_EXPANSION_ITERATIONS,
+      resumeAtWindow: true,
+      ...options.expansion,
+      includeRecurrenceIdentity: true,
     },
   );
   return resolveProjectedEventRows(database, expanded, options)
