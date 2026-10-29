@@ -332,6 +332,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not a colour falls back to the default blue on update.
 
 ### Fixed
+- **SMTP with encryption "None" sends without encryption** (#2326). Until now Yuvomi still switched
+  to STARTTLS whenever the mail server offered it, so an internal relay on port 25 with a self-signed
+  certificate failed with "self-signed certificate". "None" now never upgrades the connection, both
+  from the settings page and from `EMAIL_SMTP_SECURE=none`. "STARTTLS" and "SSL/TLS" are unchanged.
+- **The weather place search no longer promises postcodes** (#2353). The field said "City or
+  postcode", but the place search at Open-Meteo only finds a postcode where its place data happens
+  to list one: 01099 (Dresden) found nothing, and 10115 (Berlin) even offered New York. The field
+  now asks for a city or town.
 - **The dashboard and calendar are fast again with synced recurring events** (#2226). Since the
   fix for occurrences on the clock change day (#2034), every occurrence of a repeating event is
   placed in its time zone with several lookups, and each lookup set up a fresh date formatter - the
