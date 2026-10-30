@@ -127,10 +127,21 @@ router.get('/overview', (req, res) => {
     const participantCount = d.prepare(`SELECT COUNT(*) AS n FROM reward_participants p JOIN users u ON u.id = p.user_id WHERE p.enabled = 1 AND ${MEMBER_FILTER}`).get().n;
     const catalogCount = d.prepare('SELECT COUNT(*) AS n FROM reward_catalog WHERE is_active = 1').get().n;
     const pointedTaskCount = d.prepare('SELECT COUNT(*) AS n FROM tasks WHERE points > 0').get().n;
+    // Konsequenten: Schalter + Frage 'darf ICH eine buchen' kommen von hier,
+    // dieselbe Aufloesung wie die Absage der Route — keine zweite Regel in der
+    // Oberflaeche. canIssue ist enabled UND (Admin oder Elternteil).
+    const penRow = d.prepare("SELECT value FROM sync_config WHERE key = 'rewards_penalties_enabled'").get();
+    const penEnabled = !!penRow && penRow.value === '1';
+    let penCanIssue = false;
+    if (penEnabled) {
+      const meRow = d.prepare('SELECT role, family_role FROM users WHERE id = ?').get(actingUser(req));
+      penCanIssue = !!meRow && (meRow.role === 'admin' || ['dad', 'mom', 'parent'].includes(meRow.family_role));
+    }
     res.json({ data: {
       balances, catalog, pendingCount: pending, moneyPendingCount: moneyPending,
       isAdmin: isAdminRequest(req), me: actingUser(req),
       setup: { participantCount, catalogCount, pointedTaskCount },
+      penalties: { enabled: penEnabled, canIssue: penCanIssue },
     } });
   } catch (err) {
     log.error('GET /overview error:', err);
@@ -392,6 +403,16 @@ router.get('/ledger', (req, res) => {
              CASE WHEN ${LEDGER_TASK_VISIBLE_SQL} THEN l.reason  END AS reason,
              CASE WHEN ${LEDGER_TASK_VISIBLE_SQL} THEN l.task_id END AS task_id,
              l.redemption_id, l.created_at,
+             CASE WHEN l.type = 'penalty'
+                  AND (l.created_by = @me OR @actorIsAdmin = 1)
+                  AND NOT EXISTS (SELECT 1 FROM reward_ledger rv WHERE rv.reverses_id = l.id)
+             THEN 1 ELSE 0 END AS can_retract,
+             -- Eine Rueckbuchung ohne Grundtext: sie traegt ihren Satz aus der
+             -- Locale, aber nur wenn sie nachweislich eine Konsequenz tilgt.
+             CASE WHEN l.type = 'reversal' AND l.reason IS NULL
+                  AND EXISTS (SELECT 1 FROM reward_ledger pv
+                              WHERE pv.id = l.reverses_id AND pv.type = 'penalty')
+             THEN 1 ELSE 0 END AS retracts_penalty,
              u.display_name AS user_name, u.avatar_color AS user_color, u.avatar_data AS user_avatar,
              a.display_name AS actor_name
       FROM reward_ledger l
@@ -401,7 +422,8 @@ router.get('/ledger', (req, res) => {
       ${userId ? 'AND l.user_id = @userId' : ''}
       ORDER BY l.created_at DESC, l.id DESC
       LIMIT @limit
-    `).all({ userId, limit, me: actingUser(req), penaltyViewer: penaltyViewerFlag(req) });
+    `).all({ userId, limit, me: actingUser(req), penaltyViewer: penaltyViewerFlag(req),
+      actorIsAdmin: isAdminRequest(req) ? 1 : 0 });
 
     res.json({ data: rows });
   } catch (err) {
@@ -1018,9 +1040,11 @@ router.delete('/penalty/:id', (req, res) => {
     if (already) {
       return res.status(409).json({ error: 'This consequence was already retracted.', code: 409, reason: 'rewards_penalty_retracted' });
     }
-    d.prepare(`INSERT INTO reward_ledger (user_id, delta, type, reason, created_by, reverses_id)
-      VALUES (?, ?, 'reversal', ?, ?, ?)`)
-      .run(row.user_id, -row.delta, 'Konsequenz zurueckgenommen', actor, id);
+    // Grund NULL, nicht ein hartkodiertes 'Konsequenz zurueckgenommen': die
+    // Ledger-Zeile uebersetzt die Oberflaeche (type reversal, Vorzeichen +).
+    d.prepare(`INSERT INTO reward_ledger (user_id, delta, type, created_by, reverses_id)
+      VALUES (?, ?, 'reversal', ?, ?)`)
+      .run(row.user_id, -row.delta, actor, id);
     res.json({ data: { user_id: row.user_id, balance: getBalance(d, row.user_id) } });
   } catch (err) {
     log.error('DELETE /penalty/:id error:', err);

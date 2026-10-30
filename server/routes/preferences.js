@@ -647,6 +647,10 @@ router.get('/', (req, res) => {
         // veroeffentlicht bewusst, es teilt nichts von selbst.
         health_prevention_notify_caregivers: cfgUserGet('health_prevention_notify_caregivers', req.authUserId) === '1',
         rewards_require_approval: cfgGet('rewards_require_approval') !== '0',
+        // Konsequenzen (Migration 273): Default AUS — eine Familie ohne
+        // Strafsystem soll den Schalter nie sehen muessen (umgekehrte Logik
+        // zum approval-Schalter, der per Default an ist).
+        rewards_penalties_enabled: cfgGet('rewards_penalties_enabled') === '1',
         tasks_subtasks_expanded: cfgGet('tasks_subtasks_expanded') === '1',
         tasks_default_points: parseTaskDefaultPoints(cfgGet('tasks_default_points')),
         countdown_grace_days: parseCountdownGraceDays(cfgGet('countdown_grace_days')),
@@ -1493,6 +1497,10 @@ const { visible_meal_types, meal_type_names, currency, date_format, time_format,
         // veroeffentlicht bewusst, es teilt nichts von selbst.
         health_prevention_notify_caregivers: cfgUserGet('health_prevention_notify_caregivers', req.authUserId) === '1',
         rewards_require_approval: cfgGet('rewards_require_approval') !== '0',
+        // Konsequenzen (Migration 273): Default AUS — eine Familie ohne
+        // Strafsystem soll den Schalter nie sehen muessen (umgekehrte Logik
+        // zum approval-Schalter, der per Default an ist).
+        rewards_penalties_enabled: cfgGet('rewards_penalties_enabled') === '1',
         tasks_subtasks_expanded: cfgGet('tasks_subtasks_expanded') === '1',
         tasks_default_points: parseTaskDefaultPoints(cfgGet('tasks_default_points')),
         countdown_grace_days: parseCountdownGraceDays(cfgGet('countdown_grace_days')),
