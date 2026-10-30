@@ -13,6 +13,9 @@ import { sendDocumentDeletionConflict } from '../services/document-deletion-lock
 import { assertDocumentLinkTargetsAvailable, documentViewer, sendDocumentLinkRefusal } from '../services/document-links.js';
 import { nextDueAfterCompletion } from '../services/recurrence.js';
 import { syncTaskRewards, seriesOfTask } from '../services/rewards.js';
+import {
+  isRotationMode, pickRotationUser, setRotation, carryRotation,
+} from '../services/task-rotation.js';
 import { completionFeed, seriesHistory, syncTaskCompletion } from '../services/task-completions.js';
 import { normalizeCategoryFilter, taskCategoryWhere, taskScopeNeedsToday, taskScopeWhere } from '../services/task-scope.js';
 import { normalizeVisibility, visibilityWhere } from '../services/visibility.js';
@@ -257,6 +260,29 @@ function attachTags(tasks) {
   return tasks;
 }
 
+/**
+ * Rotation-Pool anhaengen: Modus und letzter Empfaenger stehen als Spalten
+ * schon an jeder Zeile (t.*), nur der Pool braucht eine Abfrage — eine fuer
+ * die ganze Liste, aus demselben Grund wie attachTags. Null, wenn keine
+ * Rotation laeuft: "nicht gesagt" statt leerer Liste.
+ */
+function attachRotation(tasks) {
+  if (!tasks.length) return tasks;
+  const ids = tasks.map((t) => t.id);
+  const rows = db.get().prepare(`
+    SELECT task_id, user_id FROM task_rotation_pool
+    WHERE task_id IN (${ids.map(() => '?').join(',')})
+    ORDER BY task_id, position ASC
+  `).all(...ids);
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.task_id)) map.set(r.task_id, []);
+    map.get(r.task_id).push(r.user_id);
+  }
+  for (const task of tasks) task.rotation_pool = map.get(task.id)?.length ? map.get(task.id) : null;
+  return tasks;
+}
+
 function parseAssignedTo(val) {
   if (Array.isArray(val)) return val.map(Number).filter(Boolean);
   if (val !== null && val !== undefined && val !== '') return [Number(val)].filter(Boolean);
@@ -267,6 +293,49 @@ function setAssignments(d, taskId, userIds) {
   d.prepare('DELETE FROM task_assignments WHERE task_id = ?').run(taskId);
   const ins = d.prepare('INSERT OR IGNORE INTO task_assignments (task_id, user_id) VALUES (?, ?)');
   for (const uid of userIds) ins.run(taskId, uid);
+}
+
+/**
+ * Rotation aus dem Request-Body lesen. Rotation ist an eine Serie gebunden:
+ * ohne Regel macht ein Pool keinen Sinn (kein zweites Vorkommen, das verteilt
+ * wuerde) — also 400 statt stillschweigendem Verwerfen, damit der Dialog den
+ * Fehler zeigen kann.
+ * Zurueck: { ok, mode, pool } | { ok: false, error }.
+ */
+function parseRotationInput(body, { isRecurring, assignedUserIds = [] }) {
+  const modePresent = body.rotation_mode !== undefined;
+  const poolPresent = body.rotation_pool !== undefined;
+  if (!modePresent && !poolPresent) return { ok: true, mode: undefined, pool: undefined };
+  const mode = body.rotation_mode ?? null;
+  if (mode !== null && !isRotationMode(mode)) {
+    return { ok: false, error: 'Invalid rotation_mode.' };
+  }
+  let pool = null;
+  if (poolPresent) {
+    if (!Array.isArray(body.rotation_pool) || body.rotation_pool.some((x) => !Number.isInteger(Number(x)) || Number(x) <= 0)) {
+      return { ok: false, error: 'rotation_pool must be an array of user ids.' };
+    }
+    pool = [...new Set(body.rotation_pool.map(Number))];
+    if (pool.length > 10) return { ok: false, error: 'rotation_pool allows at most 10 members.' };
+  }
+  // Ein Modus braucht einen Pool mit mindestens zwei Koepfen — sonst waere
+  // "Rotation" die alte Zuordnung in anderem Kostuem.
+  if (mode !== null) {
+    if (!isRecurring) return { ok: false, error: 'rotation_mode requires a recurring task.' };
+    if (!pool || pool.length < 2) return { ok: false, error: 'rotation_mode requires a pool of at least 2 members.' };
+  }
+  // Zuweisen darf der Rotation nur, was auch einer Aufgabe zuweisbar waere
+  // (#1207): Haushaltsmitglieder. newNonMembers meldet fehlende Konten bewusst
+  // nicht (eigene 404-Wege der Routes) — der Pool hat keinen, also prueft der
+  // Bestand hier selbst: sonst landete eine unbekannte id als FK-500.
+  if (pool) {
+    const exists = db.get().prepare('SELECT 1 FROM users WHERE id = ?');
+    const missing = pool.filter((id) => !exists.get(id));
+    if (missing.length) return { ok: false, error: `Unknown user in rotation_pool: ${missing.join(', ')}.` };
+    const strangers = newNonMembers(pool, { stored: assignedUserIds });
+    if (strangers.length) return { ok: false, error: nonMemberMessage(strangers) };
+  }
+  return { ok: true, mode: modePresent ? mode : undefined, pool: poolPresent ? pool : undefined };
 }
 
 function syncHousekeepingPaymentStatus(d, taskId, status) {
@@ -403,7 +472,7 @@ function loadSubtasks(taskId, me) {
   // bekommen sie welche, ohne dass jemand sie hier vergibt. Ohne das Anhängen
   // wären sie in der Antwort einfach nicht da, und ein PUT auf Basis dieser
   // Zeile schriebe sie still weg.
-  return attachTags(rows);
+  return attachRotation(attachTags(rows));
 }
 
 /**
@@ -1075,7 +1144,7 @@ router.get('/', (req, res) => {
     `;
 
     const rows = db.get().prepare(sql).all(...params).map(task => ({ ...task, subtasks: JSON.parse(task.subtasks || '[]') })).map(addAssignedUsers);
-    res.json({ data: attachTags(attachDocumentCounts(rows, documentViewer(req))) });
+    res.json({ data: attachRotation(attachTags(attachDocumentCounts(rows, documentViewer(req)))) });
   } catch (err) {
     log.error('GET / error:', err);
     res.status(500).json({ error: 'Internal server error.', code: 500 });
@@ -1113,6 +1182,7 @@ router.get('/:id', (req, res) => {
     // Sichtbarkeitsprüfung - und ohne Dokumentenrecht `null` (#1358).
     task.documents = loadTaskDocuments(task.id, viewer);
     attachTags([task]);
+    attachRotation([task]);
     res.json({ data: task });
   } catch (err) {
     log.error('GET /:id error:', err);
@@ -1196,6 +1266,14 @@ router.post('/', (req, res) => {
     const strangers = newNonMembers(userIds);
     if (strangers.length) return res.status(400).json({ error: nonMemberMessage(strangers), code: 400 });
 
+    // Rotation (#272). Erst nach der Mitgliederpruefung der regulaeren
+    // Zuweisung: fuer den Pool gilt dieselbe Liste, und der Fehler soll den
+    // selben Weg nehmen wie bei assigned_to.
+    const rotationIn = parseRotationInput(req.body, {
+      isRecurring: !!is_recurring, assignedUserIds: userIds,
+    });
+    if (!rotationIn.ok) return res.status(400).json({ error: rotationIn.error, code: 400 });
+
     // Sync-Ziel (#695). Unteraufgaben bekommen keines: sie gehören zu ihrer
     // Elternaufgabe, und als eigenständiges VTODO stünden sie gleichrangig
     // daneben. Ein mitgeschicktes Ziel wird dort still verworfen statt
@@ -1239,6 +1317,9 @@ router.post('/', (req, res) => {
         countdown ? 1 : 0, req.body.locked ? 1 : 0
       );
       setAssignments(db.get(), result.lastInsertRowid, userIds);
+      if (rotationIn.mode !== undefined || rotationIn.pool !== undefined) {
+        setRotation(db.get(), result.lastInsertRowid, { mode: rotationIn.mode ?? null, pool: rotationIn.pool ?? null });
+      }
       if (req.body.tags !== undefined) setTags(db.get(), result.lastInsertRowid, req.body.tags);
       if (syncTarget) {
         db.get().prepare(
@@ -1279,6 +1360,7 @@ router.post('/', (req, res) => {
 
     addAssignedUsers(task);
     attachTags([task]);
+    attachRotation([task]);
     res.status(201).json({ data: task });
     if (syncTarget) pushToCalDAV('Neue Aufgabe');
   } catch (err) {
@@ -1352,6 +1434,13 @@ router.put('/:id', (req, res) => {
     // es - auch eine Haushaltskraft an einer aelteren Aufgabe.
     const strangers = newNonMembers(userIds, { stored: assignedBefore });
     if (strangers.length) return res.status(400).json({ error: nonMemberMessage(strangers), code: 400 });
+
+    // Rotation (#272). Der Pool darf nur, was auch die Aufgabe selbst duerfte
+    // (#1207) — dieselbe Pruefung, dieselbe Fehlermeldung.
+    const rotationIn = parseRotationInput(req.body, {
+      isRecurring: !!is_recurring, assignedUserIds: userIds,
+    });
+    if (!rotationIn.ok) return res.status(400).json({ error: rotationIn.error, code: 400 });
 
     // Sperre der Aufgabe (#830). Nicht mitgeschickt heisst "nicht angefasst".
     const lockedRequested = req.body.locked !== undefined ? (req.body.locked ? 1 : 0) : null;
@@ -1448,6 +1537,20 @@ router.put('/:id', (req, res) => {
              category,
              req.params.id);
       setAssignments(db.get(), task.id, userIds);
+      // Rotation nur bei ausdruecklichem Feld schreiben (#647: nicht
+      // mitgeschickt heisst nicht angefasst); null loescht Modus und Pool.
+      if (rotationIn.mode !== undefined || rotationIn.pool !== undefined) {
+        // Nicht mitgeschicktes Feld heisst "behalten" (#647): ein Dialog, der
+        // nur den Pool tauscht, darf den Modus nicht loeschen — und ein
+        // Moduswechsel beginnt die Runde neu (last_user auf null).
+        const mode = rotationIn.mode !== undefined ? rotationIn.mode : task.rotation_mode;
+        const lastUser = mode === task.rotation_mode ? task.rotation_last_user : null;
+        setRotation(db.get(), task.id, {
+          mode,
+          pool: rotationIn.pool ?? null,
+          lastUser,
+        });
+      }
       if (req.body.tags !== undefined) setTags(db.get(), task.id, req.body.tags);
       if (syncTarget !== undefined) {
         db.get().prepare(
@@ -1482,6 +1585,7 @@ router.put('/:id', (req, res) => {
         WHERE t.id = ?
       `).get(req.params.id);
       attachTags([updated]);
+      attachRotation([updated]);
 
       // Änderung an einer gespiegelten Aufgabe auf dem CalDAV-Server nachziehen (#617).
       // Die Tags reisen als kanonischer Schlüssel mit, weil sie in einer eigenen
@@ -1762,6 +1866,11 @@ function spawnRecurrenceFollowup(task) {
   // Das Ziel erbt nur die Aufgabe selbst. Unteraufgaben gehen nie als eigenes
   // VTODO hinaus (pendingCreations), ihre Kopien unten nehmen keines mit.
   const syncTarget = recurrenceFollowupTarget(task);
+  // Rotation (Migration 272): eine Serie mit Pool verteilt die naechste
+  // Instanz an das naechste Mitglied, statt dieselbe Person auf Dauer zu
+  // belasten. Ohne Modus ist das null und alles bleibt exakt beim heutigen
+  // Verhalten — Assignment-Kopie wie zuvor.
+  const rotation = pickRotationUser(db.get(), task, seriesOfTask(db.get(), task));
 
   db.get().transaction(() => {
     const newTask = db.get().prepare(`
@@ -1773,7 +1882,7 @@ function spawnRecurrenceFollowup(task) {
     `).run(
       task.title, task.description, task.category, task.priority,
       shiftedStartDate(task.start_date, task.due_date, nextDate),
-      nextDate, task.due_time, task.assigned_to, task.created_by,
+      nextDate, task.due_time, rotation ?? task.assigned_to, task.created_by,
       task.recurrence_rule, task.points, task.visibility,
       // Ohne das Mitnehmen fiele die Serie ab der zweiten Instanz auf die
       // Fälligkeitsrechnung zurück - lautlos, weil die Folgeinstanz sonst
@@ -1806,7 +1915,15 @@ function spawnRecurrenceFollowup(task) {
       // Aufgaben sind die, die man ordnet.
       task.sort_order ?? null
     );
-    setAssignments(db.get(), newTask.lastInsertRowid, existingAssignments);
+    // Rotation: das neue Vorkommen traegt genau den einen Empfaenger, nicht die
+    // kopierte Alt-Zuordnung — und der letzte Empfaenger wandert mit, damit
+    // round_robin beim naechsten Abhaken weiterschaltet. Ohne Rotation: wie heute.
+    setAssignments(db.get(), newTask.lastInsertRowid, rotation !== null ? [rotation] : existingAssignments);
+    carryRotation(db.get(), task, newTask.lastInsertRowid);
+    if (rotation !== null) {
+      db.get().prepare('UPDATE tasks SET rotation_last_user = ? WHERE id = ?')
+        .run(rotation, newTask.lastInsertRowid);
+    }
     setTags(db.get(), newTask.lastInsertRowid, existingTags);
 
     for (const sub of existingSubtasks) {
