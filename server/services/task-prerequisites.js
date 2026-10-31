@@ -47,7 +47,7 @@ export function openPrerequisiteCountSql(taskAlias) {
 /**
  * Setzt die Vorheraufgaben-Liste einer Aufgabe (Ersetz-Semantik).
  * Warft Fehler mit .code, damit der Router in die Antwort uebersetzen kann:
- *   prerequisite_self      - die Aufgabe soll themselves Voraussetzung sein
+ *   prerequisite_self      - die Aufgabe soll ihre eigene Voraussetzung sein
  *   prerequisite_not_found - eine uebergebene id existiert nicht (oder ist archiviert)
  *   prerequisite_cycle     - die Kante schliesst einen Kreis (A blockiert B blockiert A)
  */
@@ -112,7 +112,7 @@ function findsCycle(d, taskId, proposed) {
  * Unteraufgaben uebernehmen (spawnRecurrenceFollowup ruft das in seiner
  * Transaktion auf). Ohne das Mitnehmen waere die Folgeinstanz plotzlich
  * unblockiert - dieselbe stille Verhaltensaenderung, die bei `locked` und
- * `countdown` schon Plicht war.
+ * `countdown` schon Pflicht war.
  */
 export function copyPrerequisites(d, fromTaskId, toTaskId) {
   const rows = d.prepare('SELECT prerequisite_task_id FROM task_prerequisites WHERE task_id = ?').all(fromTaskId);
