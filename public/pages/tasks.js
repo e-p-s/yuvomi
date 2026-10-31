@@ -478,6 +478,17 @@ function renderLockedBadge(task) {
 }
 
 /**
+ * Der Waehrpunkt an Karten, deren Check-off auf Bestaetigung durch einen
+ * Administrator wartet - dieselbe Bauart wie das Schloss, damit Liste und
+ * Brett dieselbe Marke zeigen.
+ */
+function renderApprovalBadge(task) {
+  if (task.approval_status !== 'pending') return '';
+  const label = esc(t('tasks.approvalPendingBadge'));
+  return `<span class="due-date" role="img" aria-label="${label}" title="${label}"><i data-lucide="hourglass" class="icon-sm" aria-hidden="true"></i></span>`;
+}
+
+/**
  * EINE Metazeile, und sie bricht nicht um.
  *
  * Die Zeile trug bis zu acht Elemente mit `flex-wrap: wrap` und wurde damit je
@@ -663,6 +674,7 @@ function renderTaskCard(task, opts = {}) {
             ${task.is_recurring ? `<span class="due-date" role="img" aria-label="${esc(t('tasks.recurring'))}"><i data-lucide="repeat" class="icon-sm" aria-hidden="true"></i></span>` : ''}
             ${task.document_count > 0 ? `<span class="due-date task-card__docs" role="img" aria-label="${esc(t('tasks.documentsCount', { count: task.document_count }))}"><i data-lucide="paperclip" class="icon-sm" aria-hidden="true"></i></span>` : ''}
             ${renderLockedBadge(task)}
+            ${renderApprovalBadge(task)}
             ${renderVisibilityBadge(task.visibility)}
             ${showCategory && task.category !== FALLBACK_CATEGORY ? `<span class="due-date task-card__category">${esc(catLabel(task.category))}</span>` : ''}
             ${renderTagBadges(task.tags, ROW_TAG_BADGES_VISIBLE, task.priority)}
@@ -1129,6 +1141,9 @@ function renderModalContent({ task = null, users = [], reminder = null } = {}) {
   const assigneePeople = withChosenPeople(users, task?.assigned_users);
   const visibility = isEdit ? (task?.visibility || 'all') : (state.defaultVisibility || 'all');
   const locked = isEdit ? !!task?.locked : (state.defaultLocked === true);
+  // Freigabepflicht: der Check-off bleibt ohne Punkte, bis ein Administrator
+  // ihn bestaetigt. Neue Aufgaben sind frei; gesetzt wird sie nur hier.
+  const requiresApproval = isEdit ? !!task?.requires_approval : false;
 
   const selectedCat = task?.category ?? FALLBACK_CATEGORY;
   const categoryOptions = state.categories.map((c) =>
@@ -1194,6 +1209,7 @@ function renderModalContent({ task = null, users = [], reminder = null } = {}) {
   }
   if (!hidesPrivacyControls('tasks') && visibility !== 'all') advancedSummary.push(t(`common.visibility.${visibility}`));
   if (!hidesPrivacyControls('tasks') && locked) advancedSummary.push(t('tasks.lockedBadge'));
+  if (!hidesPrivacyControls('tasks') && requiresApproval) advancedSummary.push(t('tasks.approvalBadge'));
   if (task?.documents?.length) advancedSummary.push(task.documents.map((d) => d.name).join(', '));
 
   const advancedLabel = advancedSummary.length
@@ -1338,6 +1354,16 @@ ${syncTargetFieldHtml(task)}
         ${formSwitchRowHtml({
           label: t('tasks.lockedToggle'), checked: locked,
           hint: t('tasks.lockedHint'), hintId: 'task-locked-hint', attrs: { id: 'task-locked', name: 'locked' },
+        })}
+      </div>
+
+      <!-- Freigabepflicht: dieselbe Frage wie bei der Sperre - wer was darf -,
+           hier ueber die Punkte. Der Check-off bleibt ohne Gutschrift, bis ein
+           Administrator ihn bestaetigt (Ablehnung oeffnet die Aufgabe neu). -->
+      <div class="form-group"${hidesPrivacyControls('tasks') ? ' hidden' : ''}>
+        ${formSwitchRowHtml({
+          label: t('tasks.approvalToggle'), checked: requiresApproval,
+          hint: t('tasks.approvalHint'), hintId: 'task-approval-hint', attrs: { id: 'task-requires-approval', name: 'requires_approval' },
         })}
       </div>
 
@@ -1552,6 +1578,11 @@ let state = {
   // Hat „Bis heute faellig" den Standard-Status selbst geweitet? Nur dann nimmt
   // das Ausschalten die Weitung zurueck - ein bewusst gewaehlter Status bleibt.
   dueTodayWidened: false,
+  // Freigabe-Warteschlange (Check-in mit Bestaetigungspflicht): der Umschalter
+  // der Admin-Zeile sendet `approval=pending` mit; die Zeile selbst ist nach
+  // dem Schliessen zu, bis die Seite neu betreten wird.
+  approvalOnly: false,
+  approvalNoticeDismissed: false,
 };
 
 /**
@@ -1680,6 +1711,9 @@ function taskQuery() {
   state.filters.category.forEach((v) => params.append('category', v));
   state.filters.tags.forEach((tag) => params.append('tag', tag));
   if (state.showFuture)          params.set('include_future', '1');
+  // Warteschlangen-Ansicht (nur fuer Admins wirksam): der Umschalter der
+  // Admin-Zeile setzt dies, der Server filtert dann auf offene Check-ins.
+  if (state.approvalOnly)       params.set('approval', 'pending');
   return params.toString() ? `?${params}` : '';
 }
 
@@ -1689,7 +1723,90 @@ async function loadTasks(container, renderOpts = {}) {
   // Aufrufer seine eigene Ansicht auf.
   if (!container) return;
   await fetchTasks();
+  // Die Warteschlange ist leer: alle Check-ins sind bestaetigt. Der Umschalter
+  // geht zurueck und die Liste kommt ungefiltert - ein Filter, der nichts mehr
+  // zeigt, aber mitlaeuft, waere ein unsichtbarer Zustand.
+  if (state.approvalOnly && (state.tasks?.length ?? 0) === 0) {
+    state.approvalOnly = false;
+    await fetchTasks();
+  }
   renderTaskList(container, renderOpts);
+}
+
+/** Anzahl der Check-ins im geladenen Bestand, die auf Bestaetigung warten. */
+function approvalPendingCount() {
+  return (state.tasks ?? []).filter((task) => task.approval_status === 'pending').length;
+}
+
+/**
+ * Die Admin-Zeile ueber der Liste: sie zeigt nur, was der Bestand traegt
+ * (Admin-Blick, mindestens ein offener Check-in, nicht geschlossen). Ihr
+ * Umschalter laedt die Liste mit `approval=pending` nach, ihr Knopf nimmt sie
+ * weg - zusammen mit dem Umschalter, damit kein unsichtbarer Filter bleibt.
+ */
+function syncApprovalNotice(container) {
+  const host = container.querySelector('.tasks-body');
+  if (!host) return;
+  let el = host.querySelector('#task-approval-notice');
+  const pending = approvalPendingCount();
+  const show = state.isAdmin && state.viewMode !== 'history'
+    && !state.approvalNoticeDismissed && pending > 0;
+  if (!show) {
+    el?.remove?.();
+    // Geschlossen heisst auch: der Umschalter ist aus - die Zeile war sein
+    // einziger sichtbarer Griff, ohne sie bliebe der Filter blind.
+    if (!show && state.approvalNoticeDismissed) state.approvalOnly = false;
+    return;
+  }
+  if (!el) {
+    el = document.createElement('div');
+    el.setAttribute('id', 'task-approval-notice');
+    el.setAttribute('role', 'status');
+    el.addEventListener('click', (ev) => {
+      if (ev.target?.closest?.('#task-approval-toggle')) {
+        state.approvalOnly = !state.approvalOnly;
+        loadTasks(container);
+        return;
+      }
+      if (ev.target?.closest?.('#task-approval-dismiss')) {
+        state.approvalNoticeDismissed = true;
+        state.approvalOnly = false;
+        syncApprovalNotice(container);
+      }
+    });
+    host.insertBefore(el, host.firstChild);
+  }
+  el.className = state.approvalOnly
+    ? 'task-approval-notice task-approval-notice--active'
+    : 'task-approval-notice';
+  el.replaceChildren();
+
+  const text = document.createElement('span');
+  text.className = 'task-approval-notice__text';
+  text.textContent = t('tasks.approvalQueueNotice', { count: pending });
+  el.appendChild(text);
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'btn btn--ghost btn--sm';
+  toggle.setAttribute('id', 'task-approval-toggle');
+  toggle.setAttribute('aria-pressed', state.approvalOnly ? 'true' : 'false');
+  toggle.textContent = t('tasks.approvalQueueToggle');
+  el.appendChild(toggle);
+
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'btn btn--ghost btn--icon btn--sm';
+  dismiss.setAttribute('id', 'task-approval-dismiss');
+  dismiss.setAttribute('aria-label', t('common.close'));
+  const x = document.createElement('i');
+  x.className = 'icon-sm';
+  x.setAttribute('data-lucide', 'x');
+  x.setAttribute('aria-hidden', 'true');
+  dismiss.appendChild(x);
+  el.appendChild(dismiss);
+
+  if (window.lucide) window.lucide.createIcons({ el });
 }
 
 /** Nur der Bestand, ohne Neuzeichnen - fuer Wege, die dazwischen noch eine Bewegung spielen. */
@@ -2779,6 +2896,7 @@ async function handleFormSubmit(e, { container = null, onChanged = () => loadTas
     recurrence_from_completion: rrule.recurrence_from_completion ? 1 : 0,
     countdown:       form.querySelector('#task-countdown')?.checked ? 1 : 0,
     locked:          form.querySelector('#task-locked')?.checked ? 1 : 0,
+    requires_approval: form.querySelector('#task-requires-approval')?.checked ? 1 : 0,
     points:          Math.max(0, Math.trunc(Number(form.points?.value)) || 0),
   };
   // Das Feld fehlt bei Unteraufgaben und bei bereits gespiegelten Aufgaben - in
@@ -3183,6 +3301,7 @@ function renderKanbanCard(task) {
         ${renderPriorityBadge(task.priority)}
         ${due ? `<span class="due-date ${due.cls}"><i data-lucide="clock" class="icon-sm" aria-hidden="true"></i> ${due.label}</span>` : ''}
         ${renderLockedBadge(task)}
+        ${renderApprovalBadge(task)}
         ${renderTagBadges(task.tags, TAG_BADGES_VISIBLE, task.priority)}
       </div>
       <div class="kanban-card__footer">
@@ -4050,11 +4169,14 @@ function renderTaskList(container, { paneQuiet = false } = {}) {
     return;
   }
   if (state.viewMode === 'kanban') {
+    syncApprovalNotice(container);
     renderKanban(container);
     return;
   }
   const listEl = container.querySelector('#task-list');
   if (!listEl) return;
+  // Die Admin-Zeile ueber der Liste zieht mit, was der Bestand traegt.
+  syncApprovalNotice(container);
   // Die Reihenfolge VOR dem Neuzeichnen: verlaesst die ausgewaehlte Zeile die
   // Ansicht, rueckt die Auswahl auf ihre Nachbarin (syncPaneAfterRender).
   const orderBefore = mdRowIds(listEl);
@@ -6739,6 +6861,9 @@ export async function render(container, { user, signal } = {}) {
 // Testfläche: nur reine Funktionen, deren Vertrag außerhalb dieser Datei zählt.
 export const __test = {
   groupBy, groupKey, formatDueDate, normalizeFilterSet, taskQuery, state,
+  // Freigabepflicht (UI): das Formular-Markup, die Marke an der Karte und die
+  // Admin-Zeile - alle drei werden gegen die Browser-Stub-Umgebung gemessen.
+  renderModalContent, renderApprovalBadge, approvalPendingCount, syncApprovalNotice,
   // Critique R21 (D15): der Satz eines zurueckgerollten Hakens.
   toggleFailedSentence,
   // E13: am Desktop haengen die Filter als Popover am Knopf (utils/filter-sheet.js).

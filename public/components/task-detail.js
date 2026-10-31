@@ -33,11 +33,11 @@ import { api } from '/api.js';
 import { t, formatTime } from '/i18n.js';
 import { dateText } from '/utils/date-format.js';
 import { openDetailView, closeDetailView, visibilityRow } from '/components/detail-view.js';
-import { closeModal, btnLoading, refocusAfterRender } from '/components/modal.js';
+import { closeModal, openModal, askOverModal, btnLoading, refocusAfterRender } from '/components/modal.js';
 import { recurrenceRow } from '/rrule-ui.js';
 import { scheduleUndoableDelete, acknowledgeCheck, isImeComposing } from '/utils/ux.js';
 import { rowActionEl } from '/utils/row-action.js';
-import { renderMarkdownLight } from '/utils/html.js';
+import { renderMarkdownLight, esc } from '/utils/html.js';
 import { splitKeepingLineEndings } from '/utils/markdown-checklist.js';
 import { errorSentence, isAlreadyDeleted } from '/utils/friendly-error.js';
 import { splitMentions, applyMention } from '/utils/mentions.js';
@@ -960,9 +960,50 @@ function taskDetailHead(task) {
   };
 }
 
+/**
+ * Der Banner der Freigabe-Leseansicht, als Entscheidung (Text und Art) - die
+ * Knoten-Bauform unten haelt daran nur das Haengen fest. Ein Check-in wartet
+ * fuer JEDE(n) Betrachter(in); der Grund der letzten Ablehnung bleibt
+ * sichtbar, solange die Aufgabe mit Freigabepflicht wieder offen ist (das
+ * Feld bleibt beim Zuruecksetzen stehen, der Server loescht es erst mit dem
+ * naechsten Antrag wieder).
+ */
+function approvalNoticeView(task) {
+  if (task.approval_status === 'pending') {
+    return { kind: 'pending', text: t('tasks.approvalPendingBanner') };
+  }
+  const note = (task.reject_note ?? '').trim();
+  if (note && task.requires_approval && task.status !== 'done' && task.approval_status !== 'approved') {
+    return { kind: 'rejected', text: note };
+  }
+  return null;
+}
+
+function approvalNoticeNode(task) {
+  const view = approvalNoticeView(task);
+  if (!view) return null;
+  const box = document.createElement('div');
+  box.className = `task-approval-banner task-approval-banner--${view.kind}`;
+  if (view.kind === 'rejected') {
+    const label = document.createElement('span');
+    label.className = 'task-approval-banner__label';
+    label.textContent = t('tasks.approvalRejectReasonLabel');
+    box.appendChild(label);
+  }
+  const text = document.createElement('p');
+  text.className = 'task-approval-banner__text';
+  text.textContent = view.text;
+  box.appendChild(text);
+  return box;
+}
+
 function renderTaskDetail(task, reminders = [], ctx) {
 
+  const approvalNotice = approvalNoticeNode(task);
   return [
+    // Der Antrag steht zuoberst: er aendert, was die Zeile darunter bedeutet
+    // („erledigt“ ohne Punkte), und darf nicht hinter Status und Ablage stehen.
+    ...(approvalNotice ? [{ node: approvalNotice, multiline: true }] : []),
     { icon: 'circle-dot', label: t('tasks.statusLabel'), value: STATUS_LABELS()[task.status] ?? task.status },
     // Eigene Zeile statt eines Ersatzes für den Status: die Ablage sagt etwas
     // ANDERES als „offen/erledigt", nicht dasselbe anders (#688).
@@ -1200,6 +1241,26 @@ export function openTaskDetail({
       variant: 'ghost',
       icon: archived ? 'archive-restore' : 'archive',
       onClick: ({ button, close }) => toggleTaskArchive(task, button, ctx, close),
+    });
+  }
+
+  // Freigabe-Warteschlange: ein Check-in wartet - nur der Admin-Blick bekommt
+  // Bestaetigung und Ablehnung angeboten (der Server prueft die Rolle nach,
+  // die Ansicht blendet die Knopfe ein, statt sie leer stehen zu lassen).
+  if (ctx.isAdmin && task.approval_status === 'pending' && !isNavModuleReadOnly('tasks')) {
+    actions.push({
+      id: 'task-detail-approve',
+      label: t('tasks.approvalApproveButton'),
+      variant: 'secondary',
+      icon: 'badge-check',
+      onClick: ({ button, close }) => resolveTaskApproval(task, 'approve', button, ctx, close),
+    });
+    actions.push({
+      id: 'task-detail-reject',
+      label: t('tasks.approvalRejectButton'),
+      variant: 'danger-outline',
+      icon: 'x',
+      onClick: ({ button, close }) => resolveTaskApproval(task, 'reject', button, ctx, close),
     });
   }
 
@@ -1563,6 +1624,90 @@ async function toggleTaskArchive(task, button, ctx, close = closeDetailView) {
   await afterConfirmedWrite(ctx, close);
 }
 
+/** Das Feld fuer den Ablehnungsgrund nimmt 500 Zeichen an (Servergrenze). */
+const REJECT_NOTE_MAX = 500;
+
+/**
+ * Die Frage nach dem Grund der Ablehnung - optional; Abbruch liefert null,
+ * Bestaetigung den (auch leeren) Text. Kein promptModal: dessen Feld ist
+ * Pflicht, der Grund hier aber optional.
+ */
+function askRejectNote() {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      closeModal({ force: true });
+      resolve(value);
+    };
+    openModal({
+      pointerDeadTime: true,
+      title: t('tasks.approvalRejectNotePrompt'),
+      size: 'sm',
+      content: `
+        <form id="task-reject-form" class="form-stack">
+          <div class="form-field">
+            <label class="sr-only" for="task-reject-note">${esc(t('tasks.approvalRejectNotePrompt'))}</label>
+            <input class="form-input" id="task-reject-note" type="text" maxlength="${REJECT_NOTE_MAX}" autocomplete="off">
+          </div>
+          <div class="modal-panel__footer">
+            <button type="button" class="btn btn--secondary" id="task-reject-cancel">${esc(t('common.cancel'))}</button>
+            <button type="submit" class="btn btn--primary" id="task-reject-ok">${esc(t('common.save'))}</button>
+          </div>
+        </form>`,
+      onClose: () => finish(null),
+      onSave(panel) {
+        const form = panel.querySelector('#task-reject-form');
+        const input = panel.querySelector('#task-reject-note');
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          finish((input?.value ?? '').trim());
+        });
+        panel.querySelector('#task-reject-cancel')?.addEventListener('click', () => finish(null));
+        setTimeout(() => input?.focus(), 50);
+      },
+    });
+  });
+}
+
+/**
+ * Bestaetigt oder lehnt einen offenen Check-in ab (Admin-Aktion, der Server
+ * prueft die Rolle nach). Nach bestaetigtem Schreibvorgang derselbe Weg wie
+ * beim Status: Ansicht abmelden, Umgebung nachladen; die Felder der Aufgabe
+ * werden mitgezogen, damit ein spaeterer Blick nicht den alten Antrag zeigt.
+ */
+async function resolveTaskApproval(task, action, button, ctx, close = closeDetailView) {
+  let note = null;
+  if (action === 'reject') {
+    // askOverModal parkt die offene Ansicht (im Blatt), damit ihr Inhalt
+    // erhalten bleibt, waehrend die Frage ueber ihr steht.
+    const answer = await askOverModal(() => askRejectNote());
+    if (answer === null) return;
+    note = String(answer).slice(0, REJECT_NOTE_MAX).trim() || null;
+  }
+  const stop = btnLoading(button);
+  const body = { action };
+  if (note) body.note = note;
+  try {
+    await api.post(`/tasks/${task.id}/approval`, body);
+  } catch (err) {
+    stop();
+    await sayWriteFailed(err, ctx, close);
+    return;
+  }
+  if (action === 'approve') {
+    task.approval_status = 'approved';
+    window.yuvomi.showToast(t('tasks.approvalApprovedToast'), 'success');
+  } else {
+    task.status = 'open';
+    task.approval_status = null;
+    task.reject_note = note;
+    window.yuvomi.showToast(t('tasks.approvalRejectedToast'), 'success');
+  }
+  await afterConfirmedWrite(ctx, close);
+}
+
 /**
  * „Zuletzt erledigt" für die Detailansicht - über die ganze Wiederholungskette,
  * nicht nur für die Instanz, die gerade offen daliegt.
@@ -1635,4 +1780,4 @@ function seriesHistoryNode(task) {
  * der sich die Nur-lesen-Regel (#467) an dieser Ansicht MESSEN laesst - alles
  * andere hier haengt an `openDetailView` und damit am echten DOM.
  */
-export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit };
+export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit, approvalNoticeView, resolveTaskApproval, REJECT_NOTE_MAX };

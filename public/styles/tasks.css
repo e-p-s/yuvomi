@@ -2569,3 +2569,53 @@ textarea.task-comment__input::placeholder {
   color: var(--color-text-tertiary);
   font-size: var(--text-sm);
 }
+
+/* Freigabepflicht (Check-in mit Bestaetigung): die Admin-Zeile ueber der Liste
+ * traegt Zahl, Umschalter und Schliessen in einer Zeile - schmales Full-Bleed-
+ * Band, damit es nicht wie eine Aufgabe aussieht, die man antippen koennte. */
+.task-approval-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--space-px) solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-light);
+  font-size: var(--text-sm);
+}
+
+.task-approval-notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-approval-notice--active {
+  border-color: var(--color-info);
+  background: var(--color-info-light);
+}
+
+/* Der Banner in der Leseansicht: pending betrifft jeden Betrachter, der
+ * Ablehnungsgrund haelt seinen Label ueber dem Text - beides ein Band, kein
+ * Metazeilen-Ton, damit es nicht zwischen Status und Ablage untergeht. */
+.task-approval-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-light);
+}
+
+.task-approval-banner--rejected {
+  background: var(--color-info-light);
+}
+
+.task-approval-banner__label {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.task-approval-banner__text {
+  margin: 0;
+}
