@@ -177,6 +177,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   characters instead of 90, spacing follows the app's scale, a failed copy shows its note on its own
   line instead of breaking around the button, and the "taking longer than usual" note no longer
   touches the line above it.
+- **Task approval (opt-in per task).** A task can require an adult's confirmation: set
+  `requires_approval` and a check-off by a non-admin books no points - the task stays
+  done and reports `approval_status: pending` until an administrator approves (which
+  books the points, measured at the check-in day for the late-completion deduction when
+  that is enabled) or rejects it with a note (which reopens the task like un-ticking,
+  recurring follow-up included). An admin who ticks it off confirms it directly. Rights
+  are the admin rule, never derived from `family_role`.
+
 
 ## [2.83.0] - 2026-10-29
 

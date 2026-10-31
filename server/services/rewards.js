@@ -283,9 +283,22 @@ export function seriesOfTask(d, task) {
  * @param {Date}   [opts.now]  Ersetzbar für Tests - Zeitpunkt der Buchung UND
  *                             der Tag, an dem der Serien-Deckel misst.
  */
-export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null, { now = new Date() } = {}) {
-  const task = d.prepare('SELECT id, points, title, recurrence_series_id FROM tasks WHERE id = ?').get(taskId);
+export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null, { now = new Date(), completedOn = null, asAdmin = false } = {}) {
+  const task = d.prepare('SELECT id, points, title, recurrence_series_id, due_date, requires_approval FROM tasks WHERE id = ?').get(taskId);
   if (!task || !Number.isInteger(task.points) || task.points <= 0) return;
+  // Freigabe-Pflicht: ein Check-in durch Nicht-Admins bucht nichts, er meldet
+  // die Aufgabe nur zur Bestaetigung an (`approval_status = 'pending'`). Der
+  // Check-in-Tag wird festgehalten - spaetere Bestaetigung bemisst den
+  // Spaetabzug daran, nicht am Bestaetigungstag. Ein Admin, der selbst abhakt,
+  // bestaetigt damit zugleich (kein Selbst-Freigabe-Stau).
+  if (task.requires_approval) {
+    const stamp = ledgerTimestamp(now);
+    if (!asAdmin) {
+      d.prepare("UPDATE tasks SET approval_status = 'pending', checkin_at = ?, reject_note = NULL, approved_by = NULL, approved_at = NULL WHERE id = ?").run(stamp, taskId);
+      return;
+    }
+    d.prepare("UPDATE tasks SET approval_status = 'approved', approved_by = ?, approved_at = ?, checkin_at = ?, reject_note = NULL WHERE id = ?").run(actingUserId || null, stamp, stamp, taskId);
+  }
   const targets = rewardTargets(d, taskId, actingUserId, doneByUserId);
   if (!targets.length) return;
   d.transaction(() => {
@@ -353,7 +366,12 @@ export function syncTaskRewards(d, taskId, oldStatus, newStatus, actingUserId, d
   const wasDone = oldStatus === 'done';
   const isDone = newStatus === 'done';
   if (isDone && !wasDone) awardForCompletion(d, taskId, actingUserId, doneByUserId, opts);
-  else if (wasDone && !isDone) reverseTaskEarnings(d, taskId, actingUserId);
+  else if (wasDone && !isDone) {
+    reverseTaskEarnings(d, taskId, actingUserId);
+    // Zuruecksetzen loescht auch einen offenen Freigabe-Antrag: ohne Buchung
+    // gibt es nichts zu bestaetigen, der naechste Check-in meldet neu an.
+    d.prepare('UPDATE tasks SET approval_status = NULL, checkin_at = NULL, approved_by = NULL, approved_at = NULL, reject_note = NULL WHERE id = ?').run(taskId);
+  }
 }
 
 /**

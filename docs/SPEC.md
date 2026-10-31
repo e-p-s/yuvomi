@@ -260,6 +260,9 @@ One pending invitation per row. The `users` row is only created when the invitat
 | points | INTEGER | NOT NULL DEFAULT 0 — reward points credited to assigned members on completion (Rewards module, migration v69) |
 | visibility | TEXT | NOT NULL DEFAULT `all` — `all` \| `assignees` \| `private`; who may see the task (migration v78) |
 | locked | INTEGER | NOT NULL DEFAULT 0 (migration v155, #830) — 1 closes the task **definition** to everyone but its creator and admins, while ticking off, commenting, and assigning oneself stay open for all. A subtask inherits its parent's lock |
+| requires_approval | INTEGER | NOT NULL DEFAULT 0 (migration v274) - 1 makes a completion by a non-admin book no points: the task still becomes `done`, `approval_status` turns `pending`, and only an administrator (never `family_role`) books it - approve - or reopens it - reject, with `reject_note`. An admin ticking it off confirms it directly |
+| approval_status | TEXT | nullable (migration v274) - `pending` (a check-off awaits confirmation) or `approved` (confirmed, by `approved_by` at `approved_at`). Rejection stores no status: the task reopens and keeps the `reject_note`. Un-ticking clears the request entirely |
+| checkin_at | TEXT | nullable (migration v274) - when the check-off that raised the request happened. A later approval measures the late-completion check (Rewards) at this day, not the approval day |
 | countdown | INTEGER | NOT NULL DEFAULT 0 (migration v150, #647) — 1 puts the task on the Countdown widget, counting down to its `due_date`. A recurring task carries the flag into the instance its completion creates, which is what makes "always another N years" (driving licence) or "N days after cleaning" (air filter) work together with `recurrence_from_completion` |
 | sort_order | INTEGER | nullable (migration v242) - the task's hand-placed rank within its category. `NULL` means "never placed": the task sorts automatically (due date, then priority) and after every placed one. A recurring task copies its rank to the instance its completion creates; a change of category sets it back to `NULL` |
 | target_caldav_account_id | INTEGER | FK → CalDAV Accounts (for the first upload of a locally created task), nullable (migration v136, #695) |
@@ -3156,7 +3159,7 @@ Upload and manage family files with per-document access control.
 | external_url | TEXT | nullable (deep link to the document in the DMS) |
 | external_meta | TEXT | nullable (JSON `{ correspondent, tags }` mirrored from the DMS for display) |
 | created_by | INTEGER | FK → Users (CASCADE delete), NOT NULL |
-| subject_user_id | INTEGER | FK → Users (SET NULL), nullable (migration v272, #1705) - the household member the document is about. Never part of the visibility rule |
+| subject_user_id | INTEGER | FK → Users (SET NULL), nullable (migration v274, #1705) - the household member the document is about. Never part of the visibility rule |
 | expires_at | TEXT | nullable, `YYYY-MM-DD` (migration v218) |
 | expiry_reminder_days | INTEGER | nullable = no reminder; 0–365 when set, range-validated in the route (migration v218). Also the day the document counts as expiring |
 

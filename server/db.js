@@ -11777,6 +11777,41 @@ const MIGRATIONS = [
       database.exec('UPDATE ics_subscriptions SET etag = NULL, last_modified = NULL');
     },
   },
+  {
+    version: 274,
+    description: 'tasks: parental approval of completion',
+    // Aufgaben-Freigabe (Haushalt opt-in pro Aufgabe): ist `requires_approval`
+    // gesetzt, bucht ein Check-in durch Nicht-Admins keine Punkte - die
+    // Aufgabe bleibt 'done' (alle Leser bleiben kompatibel), aber die Buchung
+    // haengt an der Bestaetigung durch eine Person mit Admin-Rechten
+    // (`isAdminRequest`, nie family_role; docs/DECISIONS.md Eintrag 2).
+    // `approval_status` traegt den Zustand (NULL = keine Freigabe im Spiel),
+    // `checkin_at` den Zeitpunkt des Abhakens - spaetere Bestaetigung bucht mit
+    // dem Check-in-Tag als Bemessungstag fuer den Spaetabzug. Ablehnen oeffnet
+    // die Aufgabe neu (Reopen; gebucht war nie etwas, storniert wird nichts).
+    // Bestehende Aufgaben bleiben unveraendert (Default 0).
+    up(database) {
+      const cols = database.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
+      if (!cols.includes('requires_approval')) {
+        database.exec('ALTER TABLE tasks ADD COLUMN requires_approval INTEGER NOT NULL DEFAULT 0');
+      }
+      if (!cols.includes('approval_status')) {
+        database.exec("ALTER TABLE tasks ADD COLUMN approval_status TEXT CHECK(approval_status IN ('pending', 'approved', 'rejected'))");
+      }
+      if (!cols.includes('approved_by')) {
+        database.exec('ALTER TABLE tasks ADD COLUMN approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
+      }
+      if (!cols.includes('approved_at')) {
+        database.exec('ALTER TABLE tasks ADD COLUMN approved_at TEXT');
+      }
+      if (!cols.includes('reject_note')) {
+        database.exec('ALTER TABLE tasks ADD COLUMN reject_note TEXT');
+      }
+      if (!cols.includes('checkin_at')) {
+        database.exec('ALTER TABLE tasks ADD COLUMN checkin_at TEXT');
+      }
+    },
+  },
 ];
 
 /**
