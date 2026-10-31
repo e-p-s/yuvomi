@@ -15,7 +15,9 @@ import { nextDueAfterCompletion } from '../services/recurrence.js';
 import { syncTaskRewards, seriesOfTask } from '../services/rewards.js';
 import {
   isRotationMode, pickRotationTarget, nextRotationEntry, setRotation, carryRotation,
+  rotationPoolRows, mergeRotationPool,
 } from '../services/task-rotation.js';
+import { activeAccountSql } from '../services/account-state.js';
 import { completionFeed, seriesHistory, syncTaskCompletion } from '../services/task-completions.js';
 import { normalizeCategoryFilter, taskCategoryWhere, taskScopeNeedsToday, taskScopeWhere } from '../services/task-scope.js';
 import { normalizeVisibility, visibilityWhere } from '../services/visibility.js';
@@ -273,7 +275,7 @@ function attachRotation(tasks) {
   if (!tasks.length) return tasks;
   const ids = tasks.map((t) => t.id);
   const rows = db.get().prepare(`
-    SELECT p.task_id, p.user_id, p.position, (u.deactivated_at IS NULL) AS active
+    SELECT p.task_id, p.user_id, p.position, ${activeAccountSql('u')} AS active
     FROM task_rotation_pool p
     JOIN users u ON u.id = p.user_id
     WHERE p.task_id IN (${ids.map(() => '?').join(',')})
@@ -291,6 +293,7 @@ function attachRotation(tasks) {
       ? nextRotationEntry(pool, {
         pointer: task.rotation_last_position ?? null,
         assignee: task.assigned_to ?? null,
+        lastUser: task.rotation_last_user ?? null,
       })
       : null;
     task.rotation_next_user = entry ? entry.user_id : null;
@@ -315,9 +318,17 @@ function setAssignments(d, taskId, userIds) {
  * ohne Regel macht ein Pool keinen Sinn (kein zweites Vorkommen, das verteilt
  * wuerde) - also 400 statt stillschweigendem Verwerfen, damit der Dialog den
  * Fehler zeigen kann.
+ *
+ * `existingRows` (PUT): die Pool-Zeilen des Bestands. Der Dialog sendet den
+ * Pool bei jedem Speichern mit, aber er zeigt nur die aktiven Koepfe - also
+ * fuehrt mergeRotationPool Request und Bestand zusammen: die Reihenfolge des
+ * Requests ist ausdruecklich gemeint (Hoch/Runter), ein abgewaehlter aktiver
+ * Kopf geht raus, ein deaktivierter bleibt an seinem Rang (er ist im Dialog
+ * nicht zu sehen, seine Abwahl ist keine Aussage). Ein normaler Save
+ * (nur Titel) kommt deshalb unveraendert als Bestand zurueck.
  * Zurueck: { ok, mode, pool } | { ok: false, error }.
  */
-function parseRotationInput(body, { isRecurring, assignedUserIds = [] }) {
+function parseRotationInput(body, { isRecurring, assignedUserIds = [], existingRows = null }) {
   const modePresent = body.rotation_mode !== undefined;
   const poolPresent = body.rotation_pool !== undefined;
   if (!modePresent && !poolPresent) return { ok: true, mode: undefined, pool: undefined };
@@ -330,7 +341,8 @@ function parseRotationInput(body, { isRecurring, assignedUserIds = [] }) {
     if (!Array.isArray(body.rotation_pool) || body.rotation_pool.some((x) => !Number.isInteger(Number(x)) || Number(x) <= 0)) {
       return { ok: false, error: 'rotation_pool must be an array of user ids.' };
     }
-    pool = [...new Set(body.rotation_pool.map(Number))];
+    const requested = [...new Set(body.rotation_pool.map(Number))];
+    pool = existingRows ? mergeRotationPool(existingRows, requested) : requested;
     if (pool.length > 10) return { ok: false, error: 'rotation_pool allows at most 10 members.' };
   }
   // Ein Modus braucht einen Pool mit mindestens zwei Koepfen - sonst waere
@@ -347,7 +359,13 @@ function parseRotationInput(body, { isRecurring, assignedUserIds = [] }) {
     const exists = db.get().prepare('SELECT 1 FROM users WHERE id = ?');
     const missing = pool.filter((id) => !exists.get(id));
     if (missing.length) return { ok: false, error: `Unknown user in rotation_pool: ${missing.join(', ')}.` };
-    const strangers = newNonMembers(pool, { stored: assignedUserIds });
+    // "Schon gespeichert" ist hier der Pool-Bestand, nicht die Zuweisung: ein
+    // Client, der ein GET (rotation_pool inklusive deaktiviertem Mitglied)
+    // unveraendert zurueckschickt, darf nicht an der Deaktivierung des
+    // Mitglieds scheitern - der Bestand wird behalten, nicht neu gewaehlt.
+    const strangers = newNonMembers(pool, {
+      stored: [...assignedUserIds, ...(existingRows ?? []).map((r) => r.user_id)],
+    });
     if (strangers.length) return { ok: false, error: nonMemberMessage(strangers) };
   }
   return { ok: true, mode: modePresent ? mode : undefined, pool: poolPresent ? pool : undefined };
@@ -1451,9 +1469,12 @@ router.put('/:id', (req, res) => {
     if (strangers.length) return res.status(400).json({ error: nonMemberMessage(strangers), code: 400 });
 
     // Rotation (migration 274). Der Pool darf nur, was auch die Aufgabe selbst duerfte
-    // (#1207) - dieselbe Pruefung, dieselbe Fehlermeldung.
+    // (#1207) - dieselbe Pruefung, dieselbe Fehlermeldung. Der Pool-Bestand
+    // reist als existingRows mit: der Merge haelt Positionen und deaktivierte
+    // Mitglieder durch Saves durch, die den Pool nicht anfassen (#1763).
+    const rotationRows = rotationPoolRows(db.get(), task.id);
     const rotationIn = parseRotationInput(req.body, {
-      isRecurring: !!is_recurring, assignedUserIds: userIds,
+      isRecurring: !!is_recurring, assignedUserIds: userIds, existingRows: rotationRows,
     });
     if (!rotationIn.ok) return res.status(400).json({ error: rotationIn.error, code: 400 });
 
@@ -1509,6 +1530,18 @@ router.put('/:id', (req, res) => {
       // Die Sperre selbst zu loesen ist der erste Zug, den jemand versuchen
       // wuerde, der sie umgehen will.
       if (lockedRequested !== null && lockedRequested !== task.locked) touchesDefinition = true;
+
+      // Rotation ist Definition (#830): Modus und Ablieferungsreihenfolge sind
+      // genau das, was ein Kind sonst ueber die Sperre hebt - dieselbe
+      // Vergleichsart wie bei Punkten und Faelligkeit: das aufgeloeste
+      // Ergebnis gegen den Bestand, nicht die blosse Anwesenheit des Feldes.
+      // Der gemergte Pool zaehlt: ein Dialog, der den Pool nur mitschickt,
+      // bleibt mit dem Bestand identisch und toucht nichts.
+      const modeAfter = rotationIn.mode !== undefined ? rotationIn.mode : task.rotation_mode;
+      const storedPool = rotationRows.map((r) => r.user_id).join(',');
+      const poolAfter = rotationIn.pool !== undefined ? rotationIn.pool.join(',') : storedPool;
+      if (modeAfter !== task.rotation_mode) touchesDefinition = true;
+      if (poolAfter !== storedPool) touchesDefinition = true;
 
       // Die EIGENE Zuweisung ist Interaktion - eine offene Aufgabe an sich zu
       // nehmen oder wieder abzugeben. Die FREMDE ist Definition: sonst schoebe
