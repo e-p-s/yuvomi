@@ -1095,16 +1095,15 @@ function wireTagBadgeFilter(container) {
 }
 
 /**
- * Die Rotationsmodi einer Serie — die Werte sind das Vokabular von
+ * Die Rotationsmodi einer Serie - die Werte sind das Vokabular von
  * server/services/task-rotation.js, und dabei muss es bleiben: ein eigener Name
- * hier waerte beim Speichern ein 400 des Servers. Die leere Option („ohne
- * Rotation") steht nicht in dieser Liste — sie ist der Abwaehler des Feldes,
- * kein Modus.
+ * hier waere beim Speichern ein 400 des Servers. Die leere Option („ohne
+ * Rotation") steht nicht in dieser Liste - sie ist der Abwaehler des Feldes,
+ * kein Modus. Nur die feste Reihenfolge (upstream #1763): Verteilung nach Last
+ * oder Gerechtigkeit ist dort ausdruecklich ausserhalb des Rahmens.
  */
 const ROTATION_MODES = [
   { value: 'round_robin', labelKey: 'tasks.rotationModeRoundRobin' },
-  { value: 'least_assigned', labelKey: 'tasks.rotationModeLeastAssigned' },
-  { value: 'least_recent', labelKey: 'tasks.rotationModeLeastRecent' },
 ];
 
 /**
@@ -1125,7 +1124,7 @@ function taskAdvancedTopics({ privacy = true, recurrence = false, rotation = fal
     // nennt, was dahinter IST, nicht was dort sein koennte.
     recurrence ? t('rrule.labelRepeat') : null,
     // Rotation reist mit der Wiederholung ein und aus (siehe
-    // renderRotationSection) — also nennt der Hinweis sie genau dann, wenn er
+    // renderRotationSection) - also nennt der Hinweis sie genau dann, wenn er
     // die Wiederholung nennt.
     rotation ? t('tasks.rotationLabel') : null,
     reminder ? t('reminders.sectionTitle') : null,
@@ -1138,31 +1137,31 @@ function taskAdvancedTopics({ privacy = true, recurrence = false, rotation = fal
 }
 
 /**
- * DER ROTATIONS-ABSCHNITT — eine Serien-Angabe, keine Aufgaben-Angabe.
+ * DER ROTATIONS-ABSCHNITT - eine Serien-Angabe, keine Aufgaben-Angabe.
  *
  * Rotation beantworten zwei Zahlen: ein Modus und ein Pool mit mindestens zwei
  * Koepfen (server/services/task-rotation.js: unter zwei Koepfen ist "Rotation"
  * dieselbe Person in anderem Kostuem, der Server antwortet mit 400). Beides
- * haengt an der Wiederholung — ohne zweite Instanz verteilt sich nichts. Der
+ * haengt an der Wiederholung - ohne zweite Instanz verteilt sich nichts. Der
  * Abschnitt haengt deshalb an der Wiederholungsfrage mit: er ist verborgen,
  * solange das Formular keine Regel zeigt (wireRotationGate loest ihn mit dem
- * Frequenzfeld), und ein GESETZTER Modus holt ihn zurueck — beim Bearbeiten
+ * Frequenzfeld), und ein GESETZTER Modus holt ihn zurueck - beim Bearbeiten
  * darf nichts Gesetztes versteckt sein (R16, dieselbe Regel wie beim
  * Wiederholungsfeld selbst).
  *
  * Der Pool folgt dem Personen-Picker-Muster der Zustaendigen
  * (renderUserMultiSelect): dieselbe Scheibe, derselbe Trefferflaeche. Die
- * Ablieferungsreihenfolge ist die Reihenfolge der Liste — getSelectedUserIds
+ * Ablieferungsreihenfolge ist die Reihenfolge der Liste - getSelectedUserIds
  * liest sie in Markup-Reihenfolge, also genau die, die der Nutzer sieht; der
  * Hinweis sagt es, damit die Reihenfolge keine Entdeckung ist.
  *
  * FEHLT DER KNOTEN GANZ (Ein-Personen-Haushalt), sendet der Absende-Pfad das
- * Feld nicht — und der Server laesst einen etwaig gespeicherten Stand in Ruhe,
+ * Feld nicht - und der Server laesst einen etwaig gespeicherten Stand in Ruhe,
  * statt ihn ueber einen nicht bedienbaren Weg zu loeschen.
  */
 function renderRotationSection(users = [], task = null) {
   if (users.length < 2) return '';
-  // Ein Bestandswert ausserhalb der Liste faellt auf „ohne" zurueck — wie das
+  // Ein Bestandswert ausserhalb der Liste faellt auf „ohne" zurueck - wie das
   // Statusfeld oben: der Browser wuerde sonst die erste Option zeigen, waehrend
   // die Zusammenfassung den alten Wert nennt.
   const mode = ROTATION_MODES.some((m) => m.value === task?.rotation_mode) ? task.rotation_mode : '';
@@ -1296,7 +1295,7 @@ function renderModalContent({ task = null, users = [], reminder = null } = {}) {
     privacy: !hidesPrivacyControls('tasks'),
     recurrence: recurrenceTucked,
     // Nur wenn der Abschnitt wirklich existiert (R16): der Hinweis nennt, was
-    // dahinter IST — im Ein-Personen-Haushalt baut renderRotationSection kein
+    // dahinter IST - im Ein-Personen-Haushalt baut renderRotationSection kein
     // Feld, also darf die Zeile auch keines versprechen.
     rotation: recurrenceTucked && rotationHtml !== '',
     reminder: reminderTucked,
@@ -2532,17 +2531,17 @@ function taskDocumentVisibility(panel) {
 
 /**
  * Die Verdrahtung des Rotationsabschnitts. Der Abschnitt haelt seine
- * Sichtbarkeit nicht selbst — er haelt sie gar nicht, wenn die Aufgabe nie
- * wiederkehren sollte — sondern folgt dem Frequenzfeld desselben Formulars:
+ * Sichtbarkeit nicht selbst - er haelt sie gar nicht, wenn die Aufgabe nie
+ * wiederkehren sollte - sondern folgt dem Frequenzfeld desselben Formulars:
  *
  * - Frequenz gewaehlt  => der Abschnitt darf mitreden (noch ohne Pool: erst ein
- *   Modus macht die Personenfrage zur Frage).
+ * Modus macht die Personenfrage zur Frage).
  * - Frequenz geraeumt  => der Abschnitt verschwindet, aber der Modus bleibt
- *   stehen, wenn einer gesetzt ist: ein versehentlicher Wechsel und zurueck
- *   verschluckt ihn nicht (dieselbe Regel wie der Wochentags-Haken im
- *   RRULE-Baustein). Und solange ein Modus gesetzt ist, bleibt der Abschnitt
- *   sichtbar — die Absende-Pruefung meldet die Kombination erst, statt sie
- *   still zu loeschen.
+ * stehen, wenn einer gesetzt ist: ein versehentlicher Wechsel und zurueck
+ * verschluckt ihn nicht (dieselbe Regel wie der Wochentags-Haken im
+ * RRULE-Baustein). Und solange ein Modus gesetzt ist, bleibt der Abschnitt
+ * sichtbar - die Absende-Pruefung meldet die Kombination erst, statt sie
+ * still zu loeschen.
  * - Modus gewaehlt     => der Pool tritt hervor.
  *
  * Das Frequenzfeld liegt im geteilten RRULE-Baustein; der Lauscher haengt hier,
@@ -2584,7 +2583,7 @@ function wireTaskForm(panel, { task = null, container = null, onChanged = () => 
   bindRRuleEvents(document, 'task');
   bindUserMultiSelect(panel, 'task_assigned');
   // Der Pool ist dieselbe Personenauswahl wie die Zustaendigen; seine Kaestchen
-  // brauchen keine Bindung — ohne „Niemand"-Chip tut die Checkbox genau das, was
+  // brauchen keine Bindung - ohne „Niemand"-Chip tut die Checkbox genau das, was
   // sie zeigt. Die Leere ist hier kein Zustand, sondern der Fehler, den die
   // Absende-Pruefung nennt.
   wireRotationGate(panel);
@@ -2917,7 +2916,7 @@ async function handleFormSubmit(e, { container = null, onChanged = () => loadTas
   body.due_time = dueTime || null;
   if (form.status) body.status = form.status.value;
 
-  /* ROTATION — dieselbe Regel wie auf dem Server (parseRotationInput in
+  /* ROTATION - dieselbe Regel wie auf dem Server (parseRotationInput in
    * server/routes/tasks.js), vor dem Absenden: ein Modus ohne wiederkehrende
    * Aufgabe und ein Modus mit einem Pool unter zwei Koepfen sind dort 400.
    * Der Dialog kennt beide Bedingungen und nennt sie am Feld, das der Nutzer
@@ -2926,7 +2925,7 @@ async function handleFormSubmit(e, { container = null, onChanged = () => loadTas
    * Erinnerung).
    *
    * OHNE KNOTEN sendet dieses Formular nichts: dort, wo der Abschnitt nie
-   * stand (Ein-Personen-Haushalt), bleibt der gespeicherte Stand unangetastet —
+  * stand (Ein-Personen-Haushalt), bleibt der gespeicherte Stand unangetastet - 
    * das Fehlen ist keine Abwahl. */
   const rotationModeEl = form.querySelector('#task-rotation-mode');
   if (rotationModeEl) {
@@ -6939,7 +6938,7 @@ export const __test = {
   renderModalContent,
   // Der Rotationsabschnitt mit seiner Verdrahtung: die Sichtbarkeit ist die
   // halbe Antwort (nur bei wiederkehrender Aufgabe), die Verdrahtung die andere
-  // — ein Listener, den niemand anhaengt, hat dieselbe Luecke wie keine Regel.
+  // - ein Listener, den niemand anhaengt, hat dieselbe Luecke wie keine Regel.
   renderRotationSection, wireRotationGate, ROTATION_MODES,
   // Der Erinnerungs-Abschnitt einzeln, weil er einen Zustand zu BENENNEN hat,
   // den seine Auswahlliste nicht abbildet: eine Erinnerung nach der

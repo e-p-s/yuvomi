@@ -14,7 +14,7 @@ import { assertDocumentLinkTargetsAvailable, documentViewer, sendDocumentLinkRef
 import { nextDueAfterCompletion } from '../services/recurrence.js';
 import { syncTaskRewards, seriesOfTask } from '../services/rewards.js';
 import {
-  isRotationMode, pickRotationUser, setRotation, carryRotation,
+  isRotationMode, pickRotationTarget, nextRotationEntry, setRotation, carryRotation,
 } from '../services/task-rotation.js';
 import { completionFeed, seriesHistory, syncTaskCompletion } from '../services/task-completions.js';
 import { normalizeCategoryFilter, taskCategoryWhere, taskScopeNeedsToday, taskScopeWhere } from '../services/task-scope.js';
@@ -261,25 +261,40 @@ function attachTags(tasks) {
 }
 
 /**
- * Rotation-Pool anhaengen: Modus und letzter Empfaenger stehen als Spalten
- * schon an jeder Zeile (t.*), nur der Pool braucht eine Abfrage — eine fuer
- * die ganze Liste, aus demselben Grund wie attachTags. Null, wenn keine
- * Rotation laeuft: "nicht gesagt" statt leerer Liste.
+ * Rotation-Pool anhaengen: Modus und die beiden Zeiger-Felder stehen als
+ * Spalten schon an jeder Zeile (t.*), nur der Pool braucht eine Abfrage - eine
+ * fuer die ganze Liste, aus demselben Grund wie attachTags. Null, wenn keine
+ * Rotation laeuft: "nicht gesagt" statt leerer Liste. `rotation_next_user` ist
+ * dieselbe Rechnung wie pickRotationTarget (task-rotation.js) - der Server
+ * loest sie auf, damit die Leseansicht den naechsten Kopf nennt, ohne eine
+ * zweite Quelle der Wahrheit zu besitzen.
  */
 function attachRotation(tasks) {
   if (!tasks.length) return tasks;
   const ids = tasks.map((t) => t.id);
   const rows = db.get().prepare(`
-    SELECT task_id, user_id FROM task_rotation_pool
-    WHERE task_id IN (${ids.map(() => '?').join(',')})
-    ORDER BY task_id, position ASC
+    SELECT p.task_id, p.user_id, p.position, (u.deactivated_at IS NULL) AS active
+    FROM task_rotation_pool p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.task_id IN (${ids.map(() => '?').join(',')})
+    ORDER BY p.task_id, p.position ASC
   `).all(...ids);
-  const map = new Map();
+  const byTask = new Map();
   for (const r of rows) {
-    if (!map.has(r.task_id)) map.set(r.task_id, []);
-    map.get(r.task_id).push(r.user_id);
+    if (!byTask.has(r.task_id)) byTask.set(r.task_id, []);
+    byTask.get(r.task_id).push(r);
   }
-  for (const task of tasks) task.rotation_pool = map.get(task.id)?.length ? map.get(task.id) : null;
+  for (const task of tasks) {
+    const pool = byTask.get(task.id) ?? [];
+    task.rotation_pool = pool.length ? pool.map((r) => r.user_id) : null;
+    const entry = task.rotation_mode
+      ? nextRotationEntry(pool, {
+        pointer: task.rotation_last_position ?? null,
+        assignee: task.assigned_to ?? null,
+      })
+      : null;
+    task.rotation_next_user = entry ? entry.user_id : null;
+  }
   return tasks;
 }
 
@@ -298,7 +313,7 @@ function setAssignments(d, taskId, userIds) {
 /**
  * Rotation aus dem Request-Body lesen. Rotation ist an eine Serie gebunden:
  * ohne Regel macht ein Pool keinen Sinn (kein zweites Vorkommen, das verteilt
- * wuerde) — also 400 statt stillschweigendem Verwerfen, damit der Dialog den
+ * wuerde) - also 400 statt stillschweigendem Verwerfen, damit der Dialog den
  * Fehler zeigen kann.
  * Zurueck: { ok, mode, pool } | { ok: false, error }.
  */
@@ -318,7 +333,7 @@ function parseRotationInput(body, { isRecurring, assignedUserIds = [] }) {
     pool = [...new Set(body.rotation_pool.map(Number))];
     if (pool.length > 10) return { ok: false, error: 'rotation_pool allows at most 10 members.' };
   }
-  // Ein Modus braucht einen Pool mit mindestens zwei Koepfen — sonst waere
+  // Ein Modus braucht einen Pool mit mindestens zwei Koepfen - sonst waere
   // "Rotation" die alte Zuordnung in anderem Kostuem.
   if (mode !== null) {
     if (!isRecurring) return { ok: false, error: 'rotation_mode requires a recurring task.' };
@@ -326,7 +341,7 @@ function parseRotationInput(body, { isRecurring, assignedUserIds = [] }) {
   }
   // Zuweisen darf der Rotation nur, was auch einer Aufgabe zuweisbar waere
   // (#1207): Haushaltsmitglieder. newNonMembers meldet fehlende Konten bewusst
-  // nicht (eigene 404-Wege der Routes) — der Pool hat keinen, also prueft der
+  // nicht (eigene 404-Wege der Routes) - der Pool hat keinen, also prueft der
   // Bestand hier selbst: sonst landete eine unbekannte id als FK-500.
   if (pool) {
     const exists = db.get().prepare('SELECT 1 FROM users WHERE id = ?');
@@ -1266,7 +1281,7 @@ router.post('/', (req, res) => {
     const strangers = newNonMembers(userIds);
     if (strangers.length) return res.status(400).json({ error: nonMemberMessage(strangers), code: 400 });
 
-    // Rotation (#272). Erst nach der Mitgliederpruefung der regulaeren
+    // Rotation (migration 274). Erst nach der Mitgliederpruefung der regulaeren
     // Zuweisung: fuer den Pool gilt dieselbe Liste, und der Fehler soll den
     // selben Weg nehmen wie bei assigned_to.
     const rotationIn = parseRotationInput(req.body, {
@@ -1435,8 +1450,8 @@ router.put('/:id', (req, res) => {
     const strangers = newNonMembers(userIds, { stored: assignedBefore });
     if (strangers.length) return res.status(400).json({ error: nonMemberMessage(strangers), code: 400 });
 
-    // Rotation (#272). Der Pool darf nur, was auch die Aufgabe selbst duerfte
-    // (#1207) — dieselbe Pruefung, dieselbe Fehlermeldung.
+    // Rotation (migration 274). Der Pool darf nur, was auch die Aufgabe selbst duerfte
+    // (#1207) - dieselbe Pruefung, dieselbe Fehlermeldung.
     const rotationIn = parseRotationInput(req.body, {
       isRecurring: !!is_recurring, assignedUserIds: userIds,
     });
@@ -1541,14 +1556,18 @@ router.put('/:id', (req, res) => {
       // mitgeschickt heisst nicht angefasst); null loescht Modus und Pool.
       if (rotationIn.mode !== undefined || rotationIn.pool !== undefined) {
         // Nicht mitgeschicktes Feld heisst "behalten" (#647): ein Dialog, der
-        // nur den Pool tauscht, darf den Modus nicht loeschen — und ein
-        // Moduswechsel beginnt die Runde neu (last_user auf null).
+        // nur den Pool tauscht, darf den Modus nicht loeschen - und ein
+        // Moduswechsel beginnt die Runde neu (beide Zeiger-Felder auf null).
+        // Ein reiner Pool-Tausch laesst die Zeiger dagegen stehen: die
+        // Positionen werden neu zugeteilt und der Zeiger laeuft auf der
+        // Position weiter, auf der er steht (#1763, offene Frage zwei).
         const mode = rotationIn.mode !== undefined ? rotationIn.mode : task.rotation_mode;
-        const lastUser = mode === task.rotation_mode ? task.rotation_last_user : null;
+        const sameMode = mode === task.rotation_mode;
         setRotation(db.get(), task.id, {
           mode,
           pool: rotationIn.pool ?? null,
-          lastUser,
+          lastUser: sameMode ? task.rotation_last_user : null,
+          lastPosition: sameMode ? task.rotation_last_position : null,
         });
       }
       if (req.body.tags !== undefined) setTags(db.get(), task.id, req.body.tags);
@@ -1866,11 +1885,14 @@ function spawnRecurrenceFollowup(task) {
   // Das Ziel erbt nur die Aufgabe selbst. Unteraufgaben gehen nie als eigenes
   // VTODO hinaus (pendingCreations), ihre Kopien unten nehmen keines mit.
   const syncTarget = recurrenceFollowupTarget(task);
-  // Rotation (Migration 272): eine Serie mit Pool verteilt die naechste
+  // Rotation (migration 274): eine Serie mit Pool verteilt die naechste
   // Instanz an das naechste Mitglied, statt dieselbe Person auf Dauer zu
-  // belasten. Ohne Modus ist das null und alles bleibt exakt beim heutigen
-  // Verhalten — Assignment-Kopie wie zuvor.
-  const rotation = pickRotationUser(db.get(), task, seriesOfTask(db.get(), task));
+  // belasten. Der Zeiger ist eine Position im Pool und ueberlebt Abgaenge
+  // (task-rotation.js); deaktivierten Koepfen faellt nichts zu (#1381). Ohne
+  // Modus ist das null und alles bleibt exakt beim heutigen Verhalten -
+  // Assignment-Kopie wie zuvor. Wer abhakt, zaehlt nicht: der Zeiger folgt der
+  // Serie.
+  const rotation = pickRotationTarget(db.get(), task);
 
   db.get().transaction(() => {
     const newTask = db.get().prepare(`
@@ -1882,7 +1904,7 @@ function spawnRecurrenceFollowup(task) {
     `).run(
       task.title, task.description, task.category, task.priority,
       shiftedStartDate(task.start_date, task.due_date, nextDate),
-      nextDate, task.due_time, rotation ?? task.assigned_to, task.created_by,
+      nextDate, task.due_time, rotation ? rotation.userId : task.assigned_to, task.created_by,
       task.recurrence_rule, task.points, task.visibility,
       // Ohne das Mitnehmen fiele die Serie ab der zweiten Instanz auf die
       // Fälligkeitsrechnung zurück - lautlos, weil die Folgeinstanz sonst
@@ -1916,13 +1938,15 @@ function spawnRecurrenceFollowup(task) {
       task.sort_order ?? null
     );
     // Rotation: das neue Vorkommen traegt genau den einen Empfaenger, nicht die
-    // kopierte Alt-Zuordnung — und der letzte Empfaenger wandert mit, damit
-    // round_robin beim naechsten Abhaken weiterschaltet. Ohne Rotation: wie heute.
-    setAssignments(db.get(), newTask.lastInsertRowid, rotation !== null ? [rotation] : existingAssignments);
+    // kopierte Alt-Zuordnung - und der Zeiger wandert mit, damit round_robin
+    // beim naechsten Abhaken an der richtigen Position weiterschaltet. Der
+    // Pool reist samt seiner Positionen (carryRotation): der Zeiger zeigt auf
+    // eine davon. Ohne Rotation: wie heute.
+    setAssignments(db.get(), newTask.lastInsertRowid, rotation ? [rotation.userId] : existingAssignments);
     carryRotation(db.get(), task, newTask.lastInsertRowid);
     if (rotation !== null) {
-      db.get().prepare('UPDATE tasks SET rotation_last_user = ? WHERE id = ?')
-        .run(rotation, newTask.lastInsertRowid);
+      db.get().prepare('UPDATE tasks SET rotation_last_user = ?, rotation_last_position = ? WHERE id = ?')
+        .run(rotation.userId, rotation.position, newTask.lastInsertRowid);
     }
     setTags(db.get(), newTask.lastInsertRowid, existingTags);
 

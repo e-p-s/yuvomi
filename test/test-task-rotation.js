@@ -1,11 +1,23 @@
 /**
  * Modul: Tasks-Rotation-Test
- * Zweck: Rotation fuer wiederkehrende Serien (Migration 272). Unit: die drei
- *        Strategien sind deterministisch und der Pool unter zwei Koepfen ist
- *        Aus. Integration: Abhaken einer rotierenden Serie haengt die
- *        Folgeinstanz an das naechste Mitglied — Modus und Pool reisen als Wert
- *        mit (#1603-Prinzip), ohne Rotation bleibt das Verhalten exakt das
- *        bisherige (Assignment-Kopie).
+ * Zweck: Rotation fuer wiederkehrende Serien (migration 274, upstream #1763).
+ * Nur die feste Reihenfolge: Modus, Pool, und ein Zeiger, der eine POSITION
+ * im Pool ist - kein Kopf. Die Zusicherungen:
+ * - Der Zeiger ueberlebt Abgaenge. Anna geht nach Kevins Runde; die
+ *   sichtbare Reihenfolge bleibt Kevin, Max, Kevin - nie wieder still Anna,
+ *   nie ein stiller Neustart vorn (die Acceptance aus #1763). Der alte Test
+ *   'letzter Nutzer nicht mehr im Pool -> wieder vorn' hielt genau das
+ *   Gegenteil fest und ist durch diesen Fall ersetzt.
+ * - Deaktivierte Koepfe (#1381) bekommen nichts ab.
+ * - Die erste Abloesung: hat pool[0] die laufende Instanz schon, geht die
+ *   naechste an den zweiten Kopf (Kevin, Anna, Max - nicht Kevin, Kevin).
+ * - Offene Fragen aus #1763, als Test gestellt: Hakt eine ANDERE Person ab,
+ *   rueckt der Zeiger trotzdem (Rotation folgt der Serie). Wird die
+ *   Reihenfolge mitten in der Serie geaendert, laeuft der Zeiger auf seiner
+ *   Position weiter - kein Reset.
+ * Integration: Abhaken haengt die Folgeinstanz an das naechste Mitglied -
+ * Modus, Pool und Zeiger reisen als Wert mit (#1603-Prinzip); ohne Rotation
+ * bleibt das Verhalten exakt das bisherige (Assignment-Kopie).
  * Ausführen: node --test test/test-task-rotation.js
  */
 import assert from 'node:assert/strict';
@@ -18,7 +30,7 @@ process.env.DB_PATH = ':memory:';
 process.env.TZ = 'UTC';
 
 const { MIGRATIONS, _setTestDatabase } = await import('../server/db.js');
-const { pickRotationUser, setRotation } = await import('../server/services/task-rotation.js');
+const { pickRotationUser, setRotation, nextRotationEntry } = await import('../server/services/task-rotation.js');
 const { default: tasksRouter } = await import('../server/routes/tasks.js');
 
 const DAY = 86400000;
@@ -79,133 +91,264 @@ function insertTask(fields) {
   ).run(...cols.map((c) => fields[c])).lastInsertRowid;
 }
 
-function insertRecurringSeries(title, mode, pool) {
+/** Serie mit fester Reihenfolge; assigned_to traegt pool[0], der Zeiger ist null. */
+function insertRecurringSeries(title, pool, { assignedTo = pool[0] } = {}) {
   const id = insertTask({
     title, category: 'Haushalt', priority: 'medium', status: 'open',
-    due_date: dayKey(0), assigned_to: pool[0], created_by: uid,
+    due_date: dayKey(0), assigned_to: assignedTo, created_by: uid,
     is_recurring: 1, recurrence_rule: 'FREQ=WEEKLY',
+    rotation_mode: 'round_robin',
   });
-  setRotation(db, id, { mode, pool });
-  db.prepare('INSERT INTO task_assignments (task_id, user_id) VALUES (?, ?)').run(id, pool[0]);
+  setRotation(db, id, { mode: 'round_robin', pool });
+  db.prepare('INSERT INTO task_assignments (task_id, user_id) VALUES (?, ?)').run(id, assignedTo);
   return id;
 }
 
-function completeTask(id) {
-  return call('PATCH', `/${id}/status`, { status: 'done' });
+function setPointer(taskId, { user, position }) {
+  db.prepare('UPDATE tasks SET rotation_last_user = ?, rotation_last_position = ? WHERE id = ?')
+    .run(user ?? null, position ?? null, taskId);
 }
 
-function openFollowup(title) {
+function completeTask(id, extra = {}) {
+  return call('PATCH', `/${id}/status`, { status: 'done', ...extra });
+}
+
+function followupOf(originId, title) {
   return db.prepare(
-    `SELECT t.* FROM tasks t
-     WHERE t.title = ? AND t.status = 'open' AND t.parent_task_id IS NULL
-       AND NOT EXISTS (SELECT 1 FROM task_completions c WHERE c.task_id = t.id)
-     ORDER BY t.id DESC LIMIT 1`,
-  ).get(title);
+    `SELECT * FROM tasks WHERE title = ? AND status = 'open' AND recurrence_origin_id = ?`,
+  ).get(title, originId);
 }
 
 // --------------------------------------------------------
-// Unit: pickRotationUser
+// Unit: nextRotationEntry / pickRotationUser
 // --------------------------------------------------------
 
-test('round_robin: Reihenfolge folgt dem Pool, letzte Empfaengerin zaehlt', () => {
-  const id = insertRecurringSeries('rr-basis', 'round_robin', [uid, u2, u3]);
+test('round_robin: der Zeiger ist eine Position - Nachfolger, dann Runde wieder vorn', () => {
+  const id = insertRecurringSeries('rr-basis', [u2, u3, uid], { assignedTo: u3 });
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-  // Noch keine letzte Empfaengerin: erste im Pool.
-  assert.equal(pickRotationUser(db, task), uid);
-  const mitLetztem = { ...task, rotation_last_user: u2 };
-  assert.equal(pickRotationUser(db, mitLetztem), u3);
-  // Am Pool-Ende wieder von vorn.
-  assert.equal(pickRotationUser(db, { ...task, rotation_last_user: u3 }), uid);
+  // Kein Zeiger, und die laufende Instanz gehoert nicht pool[0]: die Runde beginnt vorn.
+  assert.equal(pickRotationUser(db, task), u2);
+  // Zeiger auf der zweiten Position: der dritte Kopf ist dran.
+  assert.equal(pickRotationUser(db, { ...task, rotation_last_position: 1 }), uid);
+  // Am Pool-Ende schliesst die Runde in die erste Position - keine doppelte Runde.
+  assert.equal(pickRotationUser(db, { ...task, rotation_last_position: 2 }), u2);
 });
 
-test('round_robin: letzter Nutzer nicht mehr im Pool -> wieder vorn', () => {
-  const id = insertRecurringSeries('rr-draussen', 'round_robin', [uid, u2]);
+test('die erste Abloesung: pool[0] hat schon - die naechste geht an den zweiten Kopf', () => {
+  // Kevin, Anna, Max - nicht Kevin, Kevin. Die laufende Instanz gehoert dem
+  // ersten Kopf, ein Zeiger fehlt: das Abhaken darf nicht dieselbe Person
+  // nochmal antreten lassen.
+  const id = insertRecurringSeries('rr-erste', [u2, u3, uid]);
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-  assert.equal(pickRotationUser(db, { ...task, rotation_last_user: u3 }), uid);
+  assert.equal(pickRotationUser(db, task), u3, 'zweiter statt zweiter Erster');
 });
 
-test('Pool unter zwei Mitgliedern: keine Rotation (null)', () => {
-  const id = insertRecurringSeries('klein', 'round_robin', [uid]);
+test('ein Zeiger ueber dem Pool faellt in die erste Position, nicht in eine zweite Nullrunde', () => {
+  // Der Member hinter Position 5 ist laengst raus, der Pool ist auf zwei
+  // Koepte geschrumpft: ueberlaufener Zeiger = Runde schliessen wie jeder
+  // andere Zeiger am Ende auch.
+  const id = insertRecurringSeries('rr-ueberlauf', [u2, u3]);
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  assert.equal(pickRotationUser(db, { ...task, rotation_last_position: 5 }), u2);
+});
+
+test('rotation_last_user ist Information: die Reihenfolge liest nur die Position', () => {
+  // Der Kopf sagt "Anna war zuletzt dran", der Zeiger sagt Position 1 (Kevin).
+  // Der alte Bug war genau dieses Lesen des Kopfes - nach Annas Rauswurf gab
+  // indexOf(-1) einen Neustart vorn. Der Zeiger gewinnt.
+  const id = insertRecurringSeries('rr-info', [u2, u3, uid], { assignedTo: u3 });
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  assert.equal(
+    pickRotationUser(db, { ...task, rotation_last_user: u2, rotation_last_position: 1 }),
+    uid, 'Position 1 -> Position 2, der Kopf wird ignoriert');
+});
+
+test('Abgang aus dem Pool verschiebt den Zeiger nicht: Kevin, Max, Kevin', () => {
+  // Die Acceptance aus #1763. Pool Anna, Kevin, Max; Anna geht nach Kevins
+  // Runde. Die FKs (CASCADE am Pool) loeschen ihre Zeile - der Positionen-
+  // Zeiger bleibt, wo er steht, und die sichtbare Reihenfolge laeuft weiter.
+  const anna = mkUser('anna');
+  const kevin = mkUser('kevin');
+  const max = mkUser('max');
+  const id = insertRecurringSeries('rr-abgang', [anna, kevin, max]);
+  // Kevins Runde: der Zeiger steht auf Position 1 (Kevins Zeile).
+  setPointer(id, { user: kevin, position: 1 });
+  db.prepare('DELETE FROM task_rotation_pool WHERE task_id = ? AND user_id = ?').run(id, anna);
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  assert.equal(pickRotationUser(db, task), max, 'nach Kevin: Max, nicht wieder vorn');
+  assert.equal(
+    pickRotationUser(db, { ...task, rotation_last_position: 2, rotation_last_user: max }),
+    kevin, 'nach Max: Kevin - nie wieder still Anna');
+});
+
+test('deaktivierte Koepfe (#1381) bekommen nichts ab', () => {
+  // Das mittlere Mitglied ist deaktiviert: an ihm geht die Runde vorbei, egal
+  // wo der Zeiger steht. Die Zeile bleibt (es kann zurueckkommen), nur die
+  // Wahl ueberspringt es.
+  const a = mkUser('d-a');
+  const weg = mkUser('d-weg');
+  const b = mkUser('d-b');
+  const id = insertRecurringSeries('rr-deaktiv', [a, weg, b]);
+  db.prepare("UPDATE users SET deactivated_at = '2026-10-30T10:00:00Z' WHERE id = ?").run(weg);
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  assert.equal(pickRotationUser(db, { ...task, rotation_last_position: 0 }), b,
+    'hinter a kaeme das deaktivierte mittlere Glied - die Wahl nimmt b');
+  assert.equal(pickRotationUser(db, task), b,
+    'erste Abloesung: a haelt schon, das naechste AKTIVE Glied ist b');
+  assert.equal(pickRotationUser(db, { ...task, rotation_last_position: 2 }), a,
+    'am Ende schliesst die Runde in das erste aktive Glied');
+});
+
+test('Pool unter zwei AKTIVEN Koepfen: keine Rotation (null)', () => {
+  const id = insertRecurringSeries('klein', [u2]);
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
   assert.equal(pickRotationUser(db, task), null);
+  const p1 = mkUser('klein-1');
+  const p2 = mkUser('klein-2');
+  const id2 = insertRecurringSeries('klein-aktiv', [p1, p2]);
+  db.prepare("UPDATE users SET deactivated_at = '2026-10-30T10:00:00Z' WHERE id = ?").run(p2);
+  const t2 = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id2);
+  assert.equal(pickRotationUser(db, { ...t2, rotation_last_position: 0 }), null,
+    'ein aktiver Kopf ist keine Rotation, dieselbe Person in anderem Kostuem');
 });
 
 test('Modus null: Rotation aus, egal welcher Pool', () => {
-  const id = insertRecurringSeries('aus', null, [uid, u2]);
+  const id = insertTask({
+    title: 'aus', category: 'Haushalt', priority: 'medium', status: 'open',
+    due_date: dayKey(0), assigned_to: uid, created_by: uid,
+    is_recurring: 1, recurrence_rule: 'FREQ=WEEKLY',
+  });
+  setRotation(db, id, { mode: null, pool: [uid, u2] });
   const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
   assert.equal(pickRotationUser(db, task), null);
 });
 
-test('least_assigned: die Entlastete gewinnt, Gleichstand bricht die Pool-Position', () => {
-  const id = insertRecurringSeries('la-basis', 'least_assigned', [u2, u3]);
-  // u2 traegt zwei offene Fremd-Aufgaben, u3 keine.
-  for (let i = 0; i < 2; i++) {
-    const t = insertTask({ title: `Fremd ${i}`, status: 'open', due_date: dayKey(1), created_by: uid });
-    db.prepare('INSERT INTO task_assignments (task_id, user_id) VALUES (?, ?)').run(t, u2);
-  }
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-  assert.equal(pickRotationUser(db, task), u3);
-  // Aufgabe nur in task_assignments (ohne assigned_to) zaehlt ebenfalls.
-  const t = insertTask({ title: 'Fremd nur-assigned', status: 'open', due_date: dayKey(1), created_by: uid });
-  db.prepare('INSERT INTO task_assignments (task_id, user_id) VALUES (?, ?)').run(t, u3);
-  assert.equal(pickRotationUser(db, task), u3, 'u3 jetzt 1 vs u2 2 -> immer noch u3');
-});
-
-test('least_recent: zuletzt Erledigter wird uebersprungen, ohne Historie gewinnt die Position', () => {
-  const id = insertRecurringSeries('lr-basis', 'least_recent', [uid, u2]);
-  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-  // U2 hat gerade eben erledigt, u3 nie.
-  db.prepare(`INSERT INTO task_completions (task_id, series_id, user_id, completed_at)
-    VALUES (?, ?, ?, '2026-10-29T09:00:00Z')`).run(id, id, u2);
-  assert.equal(pickRotationUser(db, task), uid);
+test('nextRotationEntry ist die reine Rechnung unter der Liste und dem Detail', () => {
+  const rows = [
+    { user_id: 7, position: 0, active: 1 },
+    { user_id: 8, position: 2, active: 0 },
+    { user_id: 9, position: 3, active: 1 },
+  ];
+  assert.equal(nextRotationEntry(rows, { pointer: 0 }).user_id, 9, 'deaktivierte Zeile 8 wird uebersprungen');
+  assert.equal(nextRotationEntry(rows, { pointer: null, assignee: 7 }).user_id, 9,
+    'erste Abloesung: 7 haelt schon, der Naechste ist 9');
+  assert.equal(nextRotationEntry(rows, { pointer: null, assignee: null }).user_id, 7,
+    'ohne laufende Person beginnt die Runde vorn');
 });
 
 // --------------------------------------------------------
 // Integration: Abhaken mit Rotation
 // --------------------------------------------------------
 
-test('round_robin ueber zwei Abhak-Runden: 1 -> 2 -> 3', async () => {
-  const first = insertRecurringSeries('Muell rotierend', 'round_robin', [uid, u2, u3]);
+test('round_robin ueber drei Abhak-Runden: Kevin, Anna, Max (erste Abloesung inklusive)', async () => {
+  const kevin = u2; const anna = u3; const max = mkUser('max-runde');
+  const first = insertRecurringSeries('Muell rotierend', [kevin, anna, max]);
+  // Die erste Instanz haelt Kevin schon (pool[0]) - die erste Folgeinstanz
+  // darf nicht Kevin bleiben, sie geht an Anna.
   await completeTask(first);
-  const f1 = db.prepare(
-    `SELECT * FROM tasks WHERE title = 'Muell rotierend' AND status = 'open'
-     AND recurrence_origin_id = ?`).get(first);
+  const f1 = followupOf(first, 'Muell rotierend');
   assert.ok(f1, 'erste Folgeinstanz fehlt');
-  assert.equal(f1.assigned_to, uid, 'erster Empfaenger = erster im Pool (kein letzter gesetzt)');
-  assert.equal(f1.rotation_last_user, uid);
+  assert.equal(f1.assigned_to, anna, 'Kevin, Kevin? Nein: Kevin, Anna');
+  assert.equal(f1.rotation_last_position, 1, 'der Zeiger steht auf Annas Position');
+  assert.equal(f1.rotation_last_user, anna, 'der Kopf reist als Information mit');
   assert.deepEqual(
     db.prepare('SELECT user_id FROM task_assignments WHERE task_id = ? ORDER BY user_id').all(f1.id)
       .map((r) => r.user_id),
-    [uid], 'Rotation setzt genau einen Empfaenger');
+    [anna], 'Rotation setzt genau einen Empfaenger');
   assert.equal(f1.rotation_mode, 'round_robin', 'Modus reist als Wert mit');
   assert.deepEqual(
     db.prepare('SELECT user_id FROM task_rotation_pool WHERE task_id = ? ORDER BY position')
       .all(f1.id).map((r) => r.user_id),
-    [uid, u2, u3], 'Pool reist als Wert mit');
+    [kevin, anna, max], 'Pool reist als Wert mit');
 
   await completeTask(f1.id);
-  const f2 = db.prepare(
-    `SELECT * FROM tasks WHERE title = 'Muell rotierend' AND status = 'open'
-     AND recurrence_origin_id = ?`).get(f1.id);
+  const f2 = followupOf(f1.id, 'Muell rotierend');
   assert.ok(f2);
-  assert.equal(f2.assigned_to, u2);
+  assert.equal(f2.assigned_to, max);
   await completeTask(f2.id);
-  const f3 = db.prepare(
-    `SELECT * FROM tasks WHERE title = 'Muell rotierend' AND status = 'open'
-     AND recurrence_origin_id = ?`).get(f2.id);
-  assert.equal(f3.assigned_to, u3);
+  const f3 = followupOf(f2.id, 'Muell rotierend');
+  assert.equal(f3.assigned_to, kevin, 'nach Max wieder Kevin - die Runde schliesst, der Zeiger folgt');
+});
+
+test('hakt eine ANDERE Person ab, rueckt der Zeiger trotzdem weiter (#1763, Frage eins)', async () => {
+  // Rotation folgt der Serie, nicht der Person, die abhakt: der Completer
+  // kommt in der Rechnung nirgends vor. Admin (nicht im Pool) erledigt mit
+  // done_by_user_id - die Folgeinstanz geht trotzdem an das naechste Mitglied.
+  const first = insertRecurringSeries('Herkunft zaehlt', [u2, u3], { assignedTo: u2 });
+  setPointer(first, { user: u2, position: 0 });
+  const res = await completeTask(first, { done_by_user_id: uid });
+  assert.equal(res.status, 200);
+  const f = followupOf(first, 'Herkunft zaehlt');
+  assert.equal(f.assigned_to, u3, 'u2 -> u3, obwohl der Admin abhackte');
+  assert.equal(f.rotation_last_position, 1);
+});
+
+test('Reihenfolge mitten in der Serie geaendert: der Zeiger laeuft weiter, kein Reset (#1763, Frage zwei)', async () => {
+  // Kevin haelt die laufende Instanz (Zeiger auf Position 1). Die Reihenfolge
+  // wird auf [Max, Kevin, Anna] umgestellt - die Positionen werden neu
+  // zugeteilt, der Zeiger bleibt auf 1 stehen und die naechste Wahl liegt auf
+  // Position 2 (Anna). Kein Neustart auf den neuen ersten Kopf (Max).
+  const anna = u2; const kevin = u3; const max = mkUser('max-order');
+  const first = insertRecurringSeries('Ordnung mitten', [anna, kevin, max], { assignedTo: kevin });
+  setPointer(first, { user: kevin, position: 1 });
+  const upd = await call('PUT', `/${first}`, { title: 'Ordnung mitten', rotation_pool: [max, kevin, anna] });
+  assert.equal(upd.status, 200);
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(first);
+  assert.equal(task.rotation_last_position, 1, 'der Tausch laesst den Zeiger stehen');
+  assert.equal(pickRotationUser(db, task), anna, 'Zeiger 1 -> neu zugeteilte Position 2');
+  await completeTask(first);
+  const f = followupOf(first, 'Ordnung mitten');
+  assert.equal(f.assigned_to, anna, 'die Abhak-Kette nimmt denselben Schritt');
+});
+
+test('Abgang mitten in der laufenden Kette: die Folgeinstanzen folgen Kevin, Max, Kevin', async () => {
+  // Wie der Unit-Fall, aber durch die echten Routen: Abhaken, Rauswurf,
+  // Abhaken. Die FKs (CASCADE) treffen die laufende Instanz - der
+  // Positionen-Zeiger an ihrem Kopf laesst die Kette trotzdem weiterlaufen.
+  const anna = mkUser('anna-kette');
+  const kevin = mkUser('kevin-kette');
+  const max = mkUser('max-kette');
+  const first = insertRecurringSeries('Kette', [anna, kevin, max]);
+  await completeTask(first); // Anna haelt pool[0] -> erste Abloesung: Kevin
+  const f1 = followupOf(first, 'Kette');
+  assert.equal(f1.assigned_to, kevin);
+  db.prepare('DELETE FROM task_rotation_pool WHERE task_id = ? AND user_id = ?').run(f1.id, anna);
+  await completeTask(f1.id);
+  const f2 = followupOf(f1.id, 'Kette');
+  assert.equal(f2.assigned_to, max, 'nach Kevins Runde: Max');
+  await completeTask(f2.id);
+  const f3 = followupOf(f2.id, 'Kette');
+  assert.equal(f3.assigned_to, kevin, 'nach Max: Kevin - nicht still wieder vorn');
+  assert.notEqual(f3.assigned_to, anna, 'nie wieder still Anna');
+});
+
+test('deaktivierter Kopf in der Kette: die Abhak-Runde geht an ihm vorbei', async () => {
+  const weg = mkUser('kette-weg');
+  const first = insertRecurringSeries('Kette deaktiv', [u2, u3, weg]);
+  db.prepare("UPDATE users SET deactivated_at = '2026-10-30T10:00:00Z' WHERE id = ?").run(weg);
+  await completeTask(first); // u2 haelt pool[0] -> u3
+  const f1 = followupOf(first, 'Kette deaktiv');
+  assert.equal(f1.assigned_to, u3);
+  await completeTask(f1.id); // ueber das deaktivierte Glied hinweg zurueck an u2
+  const f2 = followupOf(f1.id, 'Kette deaktiv');
+  assert.equal(f2.assigned_to, u2, 'der Deaktivierte bekommt keine Instanz');
+  assert.notEqual(f2.rotation_last_user, weg);
 });
 
 test('ohne Rotation: Assignment-Kopie wie bisher (Regression)', async () => {
-  const id = insertRecurringSeries('ohne rotation', null, [uid, u2]);
+  const id = insertTask({
+    title: 'ohne rotation', category: 'Haushalt', priority: 'medium', status: 'open',
+    due_date: dayKey(0), assigned_to: uid, created_by: uid,
+    is_recurring: 1, recurrence_rule: 'FREQ=WEEKLY',
+  });
+  db.prepare('INSERT INTO task_assignments (task_id, user_id) VALUES (?, ?)').run(id, uid);
   await completeTask(id);
-  const f = db.prepare(
-    `SELECT * FROM tasks WHERE title = 'ohne rotation' AND status = 'open'
-     AND recurrence_origin_id = ?`).get(id);
+  const f = followupOf(id, 'ohne rotation');
   assert.ok(f);
   assert.equal(f.assigned_to, uid);
   assert.equal(f.rotation_mode, null);
-  assert.equal(f.rotation_pool ?? null, null, 'attachRotation: null wenn keine Rotation');
+  assert.equal(f.rotation_pool ?? null, null, 'kein Pool geschrieben');
+  assert.equal(f.rotation_next_user ?? null, null);
 });
 
 // --------------------------------------------------------
@@ -231,7 +374,15 @@ test('POST Modus ohne Pool -> 400; fremde user_id im Pool -> 400', async () => {
   assert.equal(r2.status, 400);
 });
 
-test('POST gueltig: Modus + Pool erreichbar, PUT-tausch behaelt Modus', async () => {
+test('POST Modus ausserhalb des Wortschatzes -> 400 (nur die feste Reihenfolge)', async () => {
+  const res = await call('POST', '/', {
+    title: 'p3', is_recurring: 1, recurrence_rule: 'FREQ=WEEKLY',
+    rotation_mode: 'least_assigned', rotation_pool: [uid, u2],
+  });
+  assert.equal(res.status, 400, 'die entfernten Modi sind kein Vokabular mehr (#1763)');
+});
+
+test('POST gueltig: Modus + Pool erreichbar, PUT-tausch behaelt Modus und Zeiger', async () => {
   const res = await call('POST', '/', {
     title: 'put-tausch', is_recurring: 1, recurrence_rule: 'FREQ=WEEKLY',
     rotation_mode: 'round_robin', rotation_pool: [uid, u2],
@@ -240,22 +391,29 @@ test('POST gueltig: Modus + Pool erreichbar, PUT-tausch behaelt Modus', async ()
   const task = res.body.data;
   assert.equal(task.rotation_mode, 'round_robin');
   assert.deepEqual(task.rotation_pool, [uid, u2]);
+  setPointer(task.id, { user: u2, position: 1 });
   const upd = await call('PUT', `/${task.id}`, {
     title: 'put-tausch', rotation_pool: [u2, u3],
   });
   assert.equal(upd.status, 200);
-  assert.equal(upd.body.data.rotation_mode, 'round_robin', 'Pool-Tausch(loescht den Modus nicht');
+  assert.equal(upd.body.data.rotation_mode, 'round_robin', 'Pool-Tausch loescht den Modus nicht');
   assert.deepEqual(upd.body.data.rotation_pool, [u2, u3]);
+  assert.equal(upd.body.data.rotation_last_position, 1, 'der Tausch laesst den Zeiger stehen');
   const off = await call('PUT', `/${task.id}`, { title: 'put-tausch', rotation_mode: null });
   assert.equal(off.status, 200);
   assert.equal(off.body.data.rotation_mode, null);
   assert.equal(off.body.data.rotation_pool, null, 'Modus null loescht auch den Pool');
+  assert.equal(off.body.data.rotation_last_position, null, 'und der Zeiger ist mit geloescht');
 });
 
-test('Rotation-Felder in der Liste: t.* + attachRotation', async () => {
+test('Rotation-Felder in der Liste: t.* + attachRotation (inklusive rotation_next_user)', async () => {
   const res = await call('GET', '/?status=open&limit=100');
   assert.equal(res.status, 200);
-  const withRot = res.body.data.find((t) => t.rotation_mode === 'round_robin');
+  const withRot = res.body.data.find((t) => t.title === 'Herkunft zaehlt');
   assert.ok(withRot, 'Liste liefert rotierende Aufgabe mit Modus');
   assert.ok(Array.isArray(withRot.rotation_pool));
+  assert.ok('rotation_next_user' in withRot, 'der Server loest den Nachfolger auf');
+  assert.ok(withRot.rotation_pool.includes(withRot.rotation_next_user) || withRot.rotation_next_user === null);
+  const plain = res.body.data.find((t) => t.title === 'ohne rotation');
+  assert.equal(plain.rotation_next_user ?? null, null);
 });

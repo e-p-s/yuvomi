@@ -1,23 +1,24 @@
 /**
  * Test: Rotation im Aufgaben-Dialog und in der Detailansicht
  * Zweck: Die Serverseite der Rotation haelt test:task-rotation. Hier steht, was
- *        die Oberflaeche daraus macht:
- *        - der Abschnitt „Rotation" gehoert an die wiederkehrende Aufgabe:
- *          ohne Regel verborgen, mit Regel sichtbar, und ein GESETZTER Modus
- *          holt ihn zurueck (R16: beim Bearbeiten darf nichts Gesetztes
- *          versteckt sein); im Ein-Personen-Haushalt gibt es ihn gar nicht —
- *          unter zwei Koepfen ist Rotation dieselbe Person in anderem Kostuem;
- *        - die Verdrahtung am Frequenzfeld loest den Abschnitt mit der Regel
- *          aus und wieder ein, der Pool folgt dem Modus;
- *        - das Absenden uebergibt rotation_mode und rotation_pool in der
- *          Reihenfolge der Auswahl (Reihenfolge = Ablieferungsreihenfolge), und
- *          die Server-Regeln (Modus nur mit Regel, Modus nur mit Pool >= 2)
- *          blockieren schon hier mit Meldung — der Nutzer sieht einen deutschen
- *          Satz am Dialog, nicht die englische 400-Antwort;
- *        - die Detailansicht nennt bei round_robin den naechsten Empfaenger aus
- *          rotation_pool + rotation_last_user — dieselbe Rechnung wie
- *          pickRotationUser, ohne Serveraufruf. Die anderen Modi zeigen den
- *          ehrlichen Wechsel-Hinweis statt eines erfundenen Namens.
+ * die Oberflaeche daraus macht:
+ * - der Abschnitt „Rotation" gehoert an die wiederkehrende Aufgabe:
+ * ohne Regel verborgen, mit Regel sichtbar, und ein GESETZTER Modus
+ * holt ihn zurueck (R16: beim Bearbeiten darf nichts Gesetztes
+ * versteckt sein); im Ein-Personen-Haushalt gibt es ihn gar nicht - 
+ * unter zwei Koepfen ist Rotation dieselbe Person in anderem Kostuem;
+ * - die Verdrahtung am Frequenzfeld loest den Abschnitt mit der Regel
+ * aus und wieder ein, der Pool folgt dem Modus;
+ * - das Absenden uebergibt rotation_mode und rotation_pool in der
+ * Reihenfolge der Auswahl (Reihenfolge = Ablieferungsreihenfolge), und
+ * die Server-Regeln (Modus nur mit Regel, Modus nur mit Pool >= 2)
+ * blockieren schon hier mit Meldung - der Nutzer sieht einen deutschen
+ * Satz am Dialog, nicht die englische 400-Antwort;
+ * - die Detailansicht nennt bei round_robin den naechsten Empfaenger aus
+ * rotation_next_user - der Server loest ihn an genau der Stelle auf,
+ * die auch die naechste Instanz vergibt (nextRotationEntry), die
+ * Ansicht baut also keine zweite Rechnung nach. Kein Name ohne
+ * Aufloesung: der Modus allein ist dann die ganze Antwort.
  *
  * Gefahren wird ueber die echten Wege: dasselbe Markup, das der Dialog baut,
  * dasselbe handleFormSubmit, das der Speichern-Knopf faehrt, dasselbe
@@ -39,7 +40,7 @@ const { installMiniDom } = await import('./mini-dom.js');
 const miniDomAbraeumen = installMiniDom();
 
 // Der Loader stubt die Personen-Auswahl auf leeres Markup; der Pool IST aber
-// genau diese Auswahl — also werden die Haken auf die echte Komponente gesetzt
+// genau diese Auswahl - also werden die Haken auf die echte Komponente gesetzt
 // (dasselbe Muster wie __apiStub). Ohne diese zwei Zeilen maße der Test einer
 // leeren Huelle hinterher.
 const echterPicker = await import('../public/components/user-multi-select.js');
@@ -76,9 +77,9 @@ function rotationsSection(html) {
 
 test('ohne wiederkehrende Aufgabe bleibt der Rotationsabschnitt verborgen', () => {
   const section = rotationsSection(tasks.renderModalContent({ task: null, users: MITGLIEDER }));
-  assert.ok(section, 'der Abschnitt steht im Formular (versteckt, nicht weg — der Absende-Pfad liest das Feld)');
+  assert.ok(section, 'der Abschnitt steht im Formular (versteckt, nicht weg - der Absende-Pfad liest das Feld)');
   assert.match(section, /^<div class="form-group" id="task-rotation-section" hidden/,
-    'eine Aufgabe ohne Regel verteilt nichts — die Frage gibt es hier nicht');
+    'eine Aufgabe ohne Regel verteilt nichts - die Frage gibt es hier nicht');
 });
 
 test('bei wiederkehrender Aufgabe ist der Abschnitt sichtbar, der Pool aber noch nicht', () => {
@@ -91,7 +92,7 @@ test('bei wiederkehrender Aufgabe ist der Abschnitt sichtbar, der Pool aber noch
 
 test('ein gesetzter Modus holt den Abschnitt zurueck und zeigt den Pool samt Auswahl', () => {
   // Der R16-Fall: eine Aufgabe dreht schon, auch wenn ihre Regel gerade nicht
-  // sichtbar ist — Gesetztes darf nicht versteckt sein.
+  // sichtbar ist - Gesetztes darf nicht versteckt sein.
   const section = rotationsSection(tasks.renderModalContent({
     task: wiederkehrend({ recurrence_rule: null, rotation_mode: 'round_robin', rotation_pool: [3, 1] }),
     users: MITGLIEDER,
@@ -106,7 +107,7 @@ test('ein gesetzter Modus holt den Abschnitt zurueck und zeigt den Pool samt Aus
 test('im Ein-Personen-Haushalt gibt es den Abschnitt nicht', () => {
   // Unter zwei Koepfen ist "Rotation" die alte Zuordnung in anderem Kostuem
   // (server/services/task-rotation.js). Kein Knoten heisst auch: kein Feld im
-  // Absenden — ein etwaiger Bestand bleibt, statt ueber einen nicht bedienbaren
+  // Absenden - ein etwaiger Bestand bleibt, statt ueber einen nicht bedienbaren
   // Weg geloescht zu werden.
   const html = tasks.renderModalContent({ task: wiederkehrend(), users: [MITGLIEDER[0]] });
   assert.doesNotMatch(html, /id="task-rotation-section"/);
@@ -138,7 +139,7 @@ function knoten({ hidden = false, value = '' } = {}) {
   };
 }
 
-/** Der Abschnitt als Handknoten statt als Markup — die Verdrahtung hat kein Markup. */
+/** Der Abschnitt als Handknoten statt als Markup - die Verdrahtung hat kein Markup. */
 function gate({ freq = '', mode = '', sectionHidden = true, poolHidden = true } = {}) {
   const freqKnoten = knoten({ value: freq });
   const section = knoten({ hidden: sectionHidden });
@@ -154,7 +155,7 @@ function gate({ freq = '', mode = '', sectionHidden = true, poolHidden = true } 
   try {
     tasks.wireRotationGate(panel);
   } finally {
-    // Der Lauscher haelt den Frequenzknoten in seiner Closure — das Dokument
+    // Der Lauscher haelt den Frequenzknoten in seiner Closure - das Dokument
     // kann gleich zurueck, es wird bei `fire` nicht mehr gelesen.
     globalThis.document = echtesDocument;
   }
@@ -163,7 +164,7 @@ function gate({ freq = '', mode = '', sectionHidden = true, poolHidden = true } 
 
 test('die Verdrahtung haelt die Regel ein, die das Markup beim Oeffnen zeigt', () => {
   // Ausgangslage neu (ohne Regel, ohne Modus): verborgen. Gegenprobe mit
-  // gesetztem Modus: sichtbar — ein Listener, der beim Binden nicht syncen
+  // gesetztem Modus: sichtbar - ein Listener, der beim Binden nicht syncen
   // wuerde, zeigte beim Oeffnen einer Rotationsaufgabe das Gegenteil.
   assert.equal(gate({}).section.hidden, true);
   assert.equal(gate({ mode: 'round_robin', sectionHidden: true, poolHidden: true }).section.hidden, false);
@@ -172,20 +173,20 @@ test('die Verdrahtung haelt die Regel ein, die das Markup beim Oeffnen zeigt', (
 test('Frequenz waehlen loest den Abschnitt aus, Frequenz raeumen ihn wieder ein', () => {
   const g = gate({});
   g.freq.value = 'WEEKLY'; g.freq.fire('change');
-  assert.equal(g.section.hidden, false, 'ab jetzt gibt es ein zweites Vorkommen — die Frage darf gestellt werden');
+  assert.equal(g.section.hidden, false, 'ab jetzt gibt es ein zweites Vorkommen - die Frage darf gestellt werden');
   g.freq.value = ''; g.freq.fire('change');
   assert.equal(g.section.hidden, true);
 });
 
 test('Frequenz raeumen bei gesetztem Modus laesst den Abschnitt stehen', () => {
-  // Der Modus ist Gesetztes (R16) — verschwinden liesse er sich nur durch
+  // Der Modus ist Gesetztes (R16) - verschwinden liesse er sich nur durch
   // stillschweigendes Loeschen, und das ist der Absende-Pfad nicht.
-  const g = gate({ freq: 'WEEKLY', mode: 'least_recent', sectionHidden: false, poolHidden: false });
+  const g = gate({ freq: 'WEEKLY', mode: 'round_robin', sectionHidden: false, poolHidden: false });
   g.freq.value = ''; g.freq.fire('change');
   assert.equal(g.section.hidden, false);
 });
 
-test('der Pool folgt dem Modus — mit Modus hervor, ohne wieder zurueck', () => {
+test('der Pool folgt dem Modus - mit Modus hervor, ohne wieder zurueck', () => {
   const g = gate({ freq: 'WEEKLY', sectionHidden: false });
   assert.equal(g.pool.hidden, true, 'Ausgangslage');
   g.modeSelect.value = 'round_robin'; g.modeSelect.fire('change');
@@ -203,7 +204,7 @@ const feld = (value = '') => ({ value: String(value) });
 /**
  * Formular-Attrappe. Benannte Felder liegen direkt darauf (genau so liest der
  * Handler: `form.title.value`); die Pool-Kaestchen antworten auf dieselbe
- * Selektor-Frage, die getSelectedUserIds im Browser stellt — die Antwort ist
+ * Selektor-Frage, die getSelectedUserIds im Browser stellt - die Antwort ist
  * die DOM-Reihenfolge, und genau die ist hier die Ablieferungsreihenfolge.
  */
 function attrappenFormular({ poolIds = [], byId = {}, ...named } = {}) {
@@ -235,7 +236,7 @@ function attrappenDokument(taskId = '7') {
 
 /**
  * Faehrt handleFormSubmit gegen die Attrappe und liefert zurueck, was an den
- * Server ging — und ob die Fehlerzeile sich gemeldet hat (ein stiller Abbruch
+ * Server ging - und ob die Fehlerzeile sich gemeldet hat (ein stiller Abbruch
  * waere kein Befund).
  */
 async function speichernUndSenden({ recurring, mode = '', poolIds = [], taskId = '7' }) {
@@ -288,7 +289,7 @@ async function speichernUndSenden({ recurring, mode = '', poolIds = [], taskId =
 }
 
 test('der Pool geht in der Reihenfolge der Auswahl als rotation_pool hinaus', async () => {
-  // Der Kernfall: die Auswahl-Reihenfolge IST die Ablieferungsreihenfolge —
+  // Der Kernfall: die Auswahl-Reihenfolge IST die Ablieferungsreihenfolge - 
   // sie darf beim Absenden nicht sortiert, dedupliziert oder umgekehrt werden.
   const { body, fehler } = await speichernUndSenden({
     recurring: true, mode: 'round_robin', poolIds: [2, 1, 3],
@@ -301,13 +302,13 @@ test('der Pool geht in der Reihenfolge der Auswahl als rotation_pool hinaus', as
 test('ohne Modus sendet das Formular rotation_mode null und laesst den Pool weg', async () => {
   const { body, fehler } = await speichernUndSenden({ recurring: true, mode: '', poolIds: [] });
   assert.equal(fehler, null);
-  assert.equal(body.rotation_mode, null, 'null ist die Abwahl — der Server loescht Modus und Pool');
+  assert.equal(body.rotation_mode, null, 'null ist die Abwahl - der Server loescht Modus und Pool');
   assert.equal('rotation_pool' in body, false, 'ein Pool ohne Modus waere eine Aussage ueber nichts');
 });
 
 test('ein Modus mit nur einem Kopf im Pool blockiert das Speichern mit Meldung', async () => {
   // Dieselbe Regel wie der Server (rotation_mode requires a pool of at least
-  // 2 members) — aber in der Sprache der App, am Dialog, statt als englische
+  // 2 members) - aber in der Sprache der App, am Dialog, statt als englische
   // 400 nach dem Absenden.
   const { writes, fehler } = await speichernUndSenden({ recurring: true, mode: 'round_robin', poolIds: [1] });
   assert.deepEqual(writes, [], 'nichts geht hinaus');
@@ -316,8 +317,8 @@ test('ein Modus mit nur einem Kopf im Pool blockiert das Speichern mit Meldung',
 
 test('ein Modus ohne wiederkehrende Aufgabe blockiert das Speichern mit Meldung', async () => {
   // Erreichbar ist das ueber das Frequenzfeld, solange ein Modus gesetzt ist
-  // (der Abschnitt bleibt sichtbar — siehe die gate-Tests oben).
-  const { writes, fehler } = await speichernUndSenden({ recurring: false, mode: 'least_assigned', poolIds: [1, 2] });
+  // (der Abschnitt bleibt sichtbar - siehe die gate-Tests oben).
+  const { writes, fehler } = await speichernUndSenden({ recurring: false, mode: 'round_robin', poolIds: [1, 2] });
   assert.deepEqual(writes, [], 'die Kombination waerte ein 400 des Servers');
   assert.equal(fehler, 'tasks.rotationNeedsRecurring');
 });
@@ -325,7 +326,7 @@ test('ein Modus ohne wiederkehrende Aufgabe blockiert das Speichern mit Meldung'
 test('die Absende-Pruefung haengt nicht am Modus-Fehler-Vorschau-Text', async () => {
   // Gegenprobe gegen einen Handler, der IMMER abbricht: mit legaler
   // Kombination geht die Anfrage raus (der erste Fall zaehlt nur im Paar).
-  const { writes, fehler } = await speichernUndSenden({ recurring: true, mode: 'least_assigned', poolIds: [3, 2] });
+  const { writes, fehler } = await speichernUndSenden({ recurring: true, mode: 'round_robin', poolIds: [3, 2] });
   assert.equal(writes.length, 1);
   assert.equal(writes[0].path, '/tasks/7');
   assert.equal(fehler, null);
@@ -337,50 +338,46 @@ test('die Absende-Pruefung haengt nicht am Modus-Fehler-Vorschau-Text', async ()
 
 const LESEKONTEXT = { users: MITGLIEDER };
 
-test('round_robin nennt den Nachfolger des letzten Empfaengers beim Namen', () => {
+test('round_robin nennt den Nachfolger beim Namen, den der Server geloest hat', () => {
   const row = detail.rotationDetailRow(
-    wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [1, 2, 3], rotation_last_user: 1 }),
+    wiederkehrend({
+      rotation_mode: 'round_robin', rotation_pool: [1, 2, 3],
+      rotation_last_user: 1, rotation_last_position: 0, rotation_next_user: 2,
+    }),
     LESEKONTEXT,
   );
-  // Der Stub setzt Platzhalter ein und laesst den Schluessel stehn — der Name
+  // Der Stub setzt Platzhalter ein und laesst den Schluessel stehn - der Name
   // muss im eingesetzten Text stehen, nicht nur im Muster.
   assert.equal(row.value, 'tasks.rotationNext{"mode":"tasks.rotationModeRoundRobin","name":"Ben"}');
   assert.equal(row.label, 'tasks.rotationLabel');
 });
 
-test('ohne letzten Empfaenger ist der erste Kopf des Pools dran', () => {
-  // Dieselbe Nachfolgerrechnung wie pickRotationUser: Unbekannt faellt nach
-  // vorn, ein „als naechstes" darf nicht an einem fehlenden Verlauf scheitern.
-  for (const last of [null, undefined, 99]) {
+test('die Ansicht folgt rotation_next_user, nicht einer eigenen Rechnung', () => {
+  // Der Server kennt den Positionen-Zeiger, die Luecken abgegangener
+  // Mitglieder und die deaktivierten Koepfe (#1381) - eine eigene Rechnung im
+  // Client waerte eine zweite Quelle der Wahrheit mit eigener Irrtumsmoeglich-
+  // keit. Hier: der naechste Kopf waere lokal Ben (last_user ist Anna), der
+  // Server sagt Cem - und Cem steht da.
     const row = detail.rotationDetailRow(
-      wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [1, 2], rotation_last_user: last }),
+    wiederkehrend({
+      rotation_mode: 'round_robin', rotation_pool: [1, 2, 3],
+      rotation_last_user: 1, rotation_last_position: 1, rotation_next_user: 3,
+    }),
       LESEKONTEXT,
     );
-    assert.match(row.value, /"name":"Anna"/, `rotation_last_user = ${last}`);
-  }
+  assert.match(row.value, /"name":"Cem"/, 'der Server-Pick gewinnt');
 });
 
-test('der Nachfolger folgt der Pool-Reihenfolge, nicht der Personenliste', () => {
-  // Der Pool ist die Ablieferungsreihenfolge — vertauscht er sich mit der
-  // Mitgliederliste, sagt die Zeile den falschen Namen.
+test('ohne aufloesbaren Nachfolger bleibt nur der Modus - kein erfundener Name', () => {
+  // Geloeschter Account, ferne Serie oder keine Rotation (null): ohne
+  // Anzeigename faellt die Vorhersage weg, der Modus ist die ehrliche
+  // Antwort - ein "#9" waere Raten.
+  for (const next of [null, undefined, 99]) {
   const row = detail.rotationDetailRow(
-    wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [3, 1], rotation_last_user: 3 }),
+      wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [1, 2], rotation_next_user: next }),
     LESEKONTEXT,
   );
-  assert.match(row.value, /"name":"Anna"/);
-});
-
-test('least_assigned und least_recent versprechen keinen Namen, sondern den Wechsel', () => {
-  // Beide Strategien hängen an der Datenbank (offene Aufgaben, Verlauf) — die
-  // Leseansicht rechnet nicht und erfindet nichts.
-  for (const mode of ['least_assigned', 'least_recent']) {
-    const row = detail.rotationDetailRow(
-      wiederkehrend({ rotation_mode: mode, rotation_pool: [1, 2], rotation_last_user: 1 }),
-      LESEKONTEXT,
-    );
-    assert.equal(row.value, `tasks.rotationSwitches{"mode":"tasks.rotationMode${
-      mode === 'least_assigned' ? 'LeastAssigned' : 'LeastRecent'}"}`);
-    assert.doesNotMatch(row.value, /Anna|Ben|Cem/, 'kein Name, den die Ansicht nicht belegen kann');
+    assert.equal(row.value, 'tasks.rotationModeRoundRobin', `rotation_next_user = ${next}`);
   }
 });
 
@@ -396,16 +393,6 @@ test('ohne Modus, ohne Pool oder unter zwei Koepfen bleibt die Zeile leer', () =
   }
 });
 
-test('ein nicht aufloesbares Mitglied wird nicht erfunden', () => {
-  // Geloeschter Account oder ferne Serie: ohne Anzeigename bleibt die
-  // Vorhersage weg — der Modus ist dann die ganze ehrliche Antwort.
-  const row = detail.rotationDetailRow(
-    wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [2, 9], rotation_last_user: 2 }),
-    LESEKONTEXT,
-  );
-  assert.equal(row.value, 'tasks.rotationModeRoundRobin');
-});
-
 test('ein unbekannter Modusname bleibt ohne Zeile, statt zu raten', () => {
   const row = detail.rotationDetailRow(
     wiederkehrend({ rotation_mode: 'wuerfeln', rotation_pool: [1, 2] }),
@@ -417,7 +404,7 @@ test('ein unbekannter Modusname bleibt ohne Zeile, statt zu raten', () => {
 test('die Rotationszeile steht direkt unter der Wiederholungszeile der Leseansicht', async () => {
   // Die Reihenfolge ist die Aussage: Rotation ohne Wiederholung waere ein
   // Modus ins Leere. Gemessen an der Auslieferung selbst, nicht an einem
-  // Nachbau — faellt die recurrenceRow-Zeile weg, faellt die Reihenfolge mit.
+  // Nachbau - faellt die recurrenceRow-Zeile weg, faellt die Reihenfolge mit.
   const quelle = (await import('node:fs')).readFileSync(
     new URL('../public/components/task-detail.js', import.meta.url), 'utf8',
   );

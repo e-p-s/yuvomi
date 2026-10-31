@@ -961,39 +961,31 @@ function taskDetailHead(task) {
 }
 
 /**
- * Die Rotationszeile der Leseansicht: „Rotation: Abloesung — als naechstes:
- * Leon". Der Nachfolger wird lokal aus denselben Werten gelesen, an denen der
- * Server haengt (rotation_pool in Ablieferungsreihenfolge, rotation_last_user) —
- * round_robin ist die einzige der drei Strategien, deren naechster Empfaenger
- * ohne Blick in die Datenbank feststeht. Fuer die beiden anderen steht der
- * ehrliche Satz: der Wechsel kommt, wer es ist, rechnet erst der naechste
- * Abhak-Vorgang. Keine erfundene Prognose — ein Name, der nicht da steht, ist
- * schlechter als keiner, weil ihn jemand als Zusage liest.
+ * Die Rotationszeile der Leseansicht: "Rotation: Abloesung - als naechstes:
+ * Leon". Der Nachfolger steht schon am Task (`rotation_next_user`): der Server
+ * loest ihn an genau derselben Stelle auf, die auch die naechste Instanz
+ * vergibt (nextRotationEntry in server/services/task-rotation.js) -
+ * Positionszeiger, uebersprungene Abgaenge und das Ueberspringen
+ * deaktivierter Mitglieder (#1381) stecken alle in dieser einen Rechnung. Ein
+ * zweiter Nachbau im Client waere eine zweite Quelle der Wahrheit mit eigener
+ * Irrtumsmoeglichkeit. Keine erfundene Prognose - ein Name, der nicht da
+ * steht, ist schlechter als keiner, weil ihn jemand als Zusage liest.
  */
 function rotationDetailRow(task, ctx) {
   const row = { icon: 'users', label: t('tasks.rotationLabel'), value: '' };
-  const mode = task?.rotation_mode;
+  // Nur die feste Reihenfolge (upstream #1763); ein Modus aus einer anderen
+  // Welt: eher schweigen als raten.
+  if (task?.rotation_mode !== 'round_robin') return row;
   const pool = Array.isArray(task?.rotation_pool) ? task.rotation_pool.map(Number) : [];
-  if (!mode || pool.length < 2) return row; // ohne Modus oder zu kleiner Pool: keine Rotation, keine Zeile
-  const modeLabel = {
-    round_robin: t('tasks.rotationModeRoundRobin'),
-    least_assigned: t('tasks.rotationModeLeastAssigned'),
-    least_recent: t('tasks.rotationModeLeastRecent'),
-  }[mode];
-  if (!modeLabel) return row; // ein Modus aus einer anderen Welt: eher schweigen als raten
-  let value;
-  if (mode === 'round_robin') {
-    // Dieselbe Nachfolgerrechnung wie pickRotationUser: Unbekannt oder
-    // rausgeworfenes Mitglied faellt auf den Anfang zurueck.
-    const idx = pool.indexOf(Number(task.rotation_last_user));
-    const nextId = pool[((idx === -1 ? -1 : idx) + 1) % pool.length];
-    const name = (ctx?.users ?? []).find((u) => Number(u?.id) === nextId)?.display_name;
+  if (pool.length < 2) return row; // zu kleiner Pool: keine Rotation, keine Zeile
+  const modeLabel = t('tasks.rotationModeRoundRobin');
+  const nextId = Number(task.rotation_next_user);
+  const name = Number.isInteger(nextId)
+    ? (ctx?.users ?? []).find((u) => Number(u?.id) === nextId)?.display_name
+    : null;
     // Ohne aufgelöstes Mitglied (geloeschter Account, ferne Serie) bleibt die
-    // Vorhersage weg — der Modus ist die Antwort, ein „#7" waere Raten.
-    value = name ? t('tasks.rotationNext', { mode: modeLabel, name }) : modeLabel;
-  } else {
-    value = t('tasks.rotationSwitches', { mode: modeLabel });
-  }
+  // Vorhersage weg - der Modus ist die Antwort, ein "#7" waere Raten.
+  const value = name ? t('tasks.rotationNext', { mode: modeLabel, name }) : modeLabel;
   return { ...row, value };
 }
 
@@ -1012,8 +1004,8 @@ function renderTaskDetail(task, reminders = [], ctx) {
     // faellig" als die eine Angabe ueber den Zeilen, die Personen als Avatare.
     { icon: 'calendar-clock', label: t('tasks.startDateLabel'), value: task.start_date ? dateText(task.start_date) : '' },
     recurrenceRow(task.recurrence_rule, { fromCompletion: !!task.recurrence_from_completion }),
-    // Rotation direkt unter der Wiederholung, an die sie gehoert: Modus und —
-    // bei Abloesung — der naechste Empfaenger, aus denselben Werten wie der
+    // Rotation direkt unter der Wiederholung, an die sie gehoert: Modus und - 
+    // bei Abloesung - der naechste Empfaenger, aus denselben Werten wie der
     // Server (rotationDetailRow erklaert, warum nur dort als Name).
     rotationDetailRow(task, ctx),
     { icon: 'folder', label: t('tasks.categoryLabel'), value: task.category && task.category !== FALLBACK_CATEGORY ? catLabel(task.category, ctx.categories) : '' },
