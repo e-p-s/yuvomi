@@ -636,7 +636,7 @@
         "rotationModeRoundRobin": "Lần lượt",
         "rotationPoolLabel": "Người",
         "rotationPoolHint": "Ít nhất hai người. Thứ tự danh sách là thứ tự xoay vòng.",
-        "rotationAdvancesHint": "Somebody else ticks it off: the rotation still moves on.",
+        "rotationAdvancesHint": "Người khác đánh dấu: vòng luân phiên vẫn tiếp tục.",
         "rotationMoveUp": "Đưa {{name}} lên",
         "rotationMoveDown": "Đưa {{name}} xuống",
         "rotationNeedsPool": "Xoay vòng cần ít nhất hai người.",

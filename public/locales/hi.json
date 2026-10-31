@@ -636,7 +636,7 @@
         "rotationModeRoundRobin": "बारी-बारी",
         "rotationPoolLabel": "व्यक्ति",
         "rotationPoolHint": "कम से कम दो व्यक्ति। सूची का क्रम ही रोटेशन का क्रम है।",
-        "rotationAdvancesHint": "Somebody else ticks it off: the rotation still moves on.",
+        "rotationAdvancesHint": "कोई और चिह्नित करे: रोटेशन फिर भी आगे बढ़ती है।",
         "rotationMoveUp": "{{name}} को ऊपर ले जाएँ",
         "rotationMoveDown": "{{name}} को नीचे ले जाएँ",
         "rotationNeedsPool": "रोटेशन के लिए कम से कम दो व्यक्ति आवश्यक हैं।",

@@ -654,7 +654,7 @@
         "rotationModeRoundRobin": "번갈아 하기",
         "rotationPoolLabel": "사람",
         "rotationPoolHint": "최소 두 명이어야 합니다. 목록 순서가 교대 순서입니다.",
-        "rotationAdvancesHint": "Somebody else ticks it off: the rotation still moves on.",
+        "rotationAdvancesHint": "다른 사람이 체크해도 로테이션은 다음으로 넘어갑니다.",
         "rotationMoveUp": "{{name}} 위로 이동",
         "rotationMoveDown": "{{name}} 아래로 이동",
         "rotationNeedsPool": "교대에는 최소 두 명이 필요합니다.",

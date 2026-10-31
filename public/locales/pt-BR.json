@@ -636,7 +636,7 @@
         "rotationModeRoundRobin": "Alternar",
         "rotationPoolLabel": "Pessoas",
         "rotationPoolHint": "Pelo menos duas pessoas. A ordem da lista é a ordem de rotação.",
-        "rotationAdvancesHint": "Somebody else ticks it off: the rotation still moves on.",
+        "rotationAdvancesHint": "Se outra pessoa marcar: a rotação continua avançando.",
         "rotationMoveUp": "Mover {{name}} para cima",
         "rotationMoveDown": "Mover {{name}} para baixo",
         "rotationNeedsPool": "A rotação precisa de pelo menos duas pessoas.",

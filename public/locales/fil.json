@@ -654,7 +654,7 @@
         "rotationModeRoundRobin": "Magpalitan",
         "rotationPoolLabel": "Mga tao",
         "rotationPoolHint": "Hindi bababa sa dalawang tao. Ang pagkakasunod-sunod ng listahan ang pagkakasunod ng rotasyon.",
-        "rotationAdvancesHint": "Somebody else ticks it off: the rotation still moves on.",
+        "rotationAdvancesHint": "Iba ang gumawa: patuloy pa rin ang rotation.",
         "rotationMoveUp": "Ilipat si {{name}} pataas",
         "rotationMoveDown": "Ilipat si {{name}} pababa",
         "rotationNeedsPool": "Kailangan ng rotasyon ng hindi bababa sa dalawang tao.",

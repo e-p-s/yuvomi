@@ -654,7 +654,7 @@
         "rotationModeRoundRobin": "نوبتی",
         "rotationPoolLabel": "افراد",
         "rotationPoolHint": "دست‌کم دو نفر. ترتیب فهرست همان ترتیب چرخش است.",
-        "rotationAdvancesHint": "Somebody else ticks it off: the rotation still moves on.",
+        "rotationAdvancesHint": "نفر دیگری تیک بزند: چرخش همچنان ادامه دارد.",
         "rotationMoveUp": "انتقال {{name}} به بالا",
         "rotationMoveDown": "انتقال {{name}} به پایین",
         "rotationNeedsPool": "چرخش به دست‌کم دو نفر نیاز دارد.",

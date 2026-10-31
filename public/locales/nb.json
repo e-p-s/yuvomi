@@ -636,7 +636,7 @@
         "rotationModeRoundRobin": "Turvis",
         "rotationPoolLabel": "Personer",
         "rotationPoolHint": "Minst to personer. Listerekkefølgen er rotasjonsrekkefølgen.",
-        "rotationAdvancesHint": "Somebody else ticks it off: the rotation still moves on.",
+        "rotationAdvancesHint": "Noen andre haker av: rotasjonen går videre likevel.",
         "rotationMoveUp": "Flytt {{name}} opp",
         "rotationMoveDown": "Flytt {{name}} ned",
         "rotationNeedsPool": "Rotasjon trenger minst to personer.",
