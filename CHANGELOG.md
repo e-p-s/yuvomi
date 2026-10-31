@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Late completion decay (opt-in).** A household can switch on late completion decay in the
+  rewards settings (admin-only, off by default): a task completed after its `due_date` earns one
+  point less per full overdue day, and always at least one point, so finishing still pays. The
+  reduction is fixed at booking time, later edits of the due date, the point value or the setting
+  never rewrite booked amounts, and every reduced earning keeps its `decay_days` and `base_points`
+  so the ledger shows the struck-through base and stays explainable. Switch: `tasks_late_decay_enabled`.
+
+
 ## [2.83.0] - 2026-10-29
 
 ### Added

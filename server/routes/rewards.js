@@ -376,7 +376,7 @@ router.get('/ledger', (req, res) => {
       SELECT l.id, l.user_id, l.delta, l.type,
              CASE WHEN ${LEDGER_TASK_VISIBLE_SQL} THEN l.reason  END AS reason,
              CASE WHEN ${LEDGER_TASK_VISIBLE_SQL} THEN l.task_id END AS task_id,
-             l.redemption_id, l.created_at,
+             l.redemption_id, l.created_at, l.decay_days, l.base_points,
              u.display_name AS user_name, u.avatar_color AS user_color, u.avatar_data AS user_avatar,
              a.display_name AS actor_name
       FROM reward_ledger l
