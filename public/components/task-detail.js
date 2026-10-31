@@ -983,7 +983,7 @@ function rotationDetailRow(task, ctx) {
   const name = Number.isInteger(nextId)
     ? (ctx?.users ?? []).find((u) => Number(u?.id) === nextId)?.display_name
     : null;
-    // Ohne aufgelöstes Mitglied (geloeschter Account, ferne Serie) bleibt die
+  // Ohne aufgeloestes Mitglied (geloeschter Account, ferne Serie) bleibt die
   // Vorhersage weg - der Modus ist die Antwort, ein "#7" waere Raten.
   const value = name ? t('tasks.rotationNext', { mode: modeLabel, name }) : modeLabel;
   return { ...row, value };

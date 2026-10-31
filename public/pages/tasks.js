@@ -32,6 +32,7 @@ import { isSoloHousehold, hidesPrivacyControls } from '/utils/household.js';
 import { popoverMenuHtml, installPopoverMenus, pageToolsMenuHtml, pageToolsActionEl, syncPopoverMenuItem, showPopoverMenuAt } from '/utils/popover-menu.js';
 import { filterButtonHtml, syncFilterButton, openFilterSheet, filterChipsHtml, personChipsHtml } from '/utils/filter-sheet.js';
 import { initials } from '/utils/initials.js';
+import { getReadableTextColor, safeHexColor } from '/utils/color.js';
 import { toggleRowHtml, formSwitchRowHtml } from '/settings/components.js';
 import { wireTablist } from '/utils/tablist.js';
 import { attachSegmentIndicator } from '/utils/segment-indicator.js';
@@ -1149,15 +1150,20 @@ function taskAdvancedTopics({ privacy = true, recurrence = false, rotation = fal
  * darf nichts Gesetztes versteckt sein (R16, dieselbe Regel wie beim
  * Wiederholungsfeld selbst).
  *
- * Der Pool folgt dem Personen-Picker-Muster der Zustaendigen
- * (renderUserMultiSelect): dieselbe Scheibe, derselbe Trefferflaeche. Die
- * Ablieferungsreihenfolge ist die Reihenfolge der Liste - getSelectedUserIds
- * liest sie in Markup-Reihenfolge, also genau die, die der Nutzer sieht; der
- * Hinweis sagt es, damit die Reihenfolge keine Entdeckung ist.
+ * Der Pool ist eine Reihung, keine Hakenliste (upstream #1763: "An order, not
+ * a set"): renderRotationPool zeigt die gesetzten Koepfe in der gespeicherten
+ * Ablieferungsreihenfolge, nicht in der Reihenfolge der Mitgliederliste, und
+ * jede Zeile hat die beiden Schritte hoch/runter (dieselbe Zeilenaktion wie in
+ * der Kategorieverwaltung). Die Reihenfolge der Zeilen ist die Reihenfolge der
+ * naechsten Abloesungen - der Hinweis sagt es, damit sie keine Entdeckung ist.
+ * Der zweite Hinweis nennt die Regel, die das Formular selbst nicht zeigt:
+ * die Rotation rueckt weiter, auch wenn eine andere Person abhakt (#1763).
  *
  * FEHLT DER KNOTEN GANZ (Ein-Personen-Haushalt), sendet der Absende-Pfad das
  * Feld nicht - und der Server laesst einen etwaig gespeicherten Stand in Ruhe,
- * statt ihn ueber einen nicht bedienbaren Weg zu loeschen.
+ * statt ihn ueber einen nicht bedienbaren Weg zu loeschen. Deaktivierte
+ * Mitglieder (#1381) zeigt der Pool nicht - der Server behaelt sie durch
+ * jeden Save durch (mergeRotationPool), ihr Loeschen gibt es hier bewusst nicht.
  */
 function renderRotationSection(users = [], task = null) {
   if (users.length < 2) return '';
@@ -1181,10 +1187,63 @@ function renderRotationSection(users = [], task = null) {
              unbedienbar (welche Reihenfolge sollte man ohne Rotation schon
              pflegen?), und ein Feld, das man nicht braucht, ist ein Feld zu viel. -->
         <div id="task-rotation-pool"${mode ? '' : ' hidden'}>
-          ${renderUserMultiSelect(users, pool, 'task_rotation', 'tasks.rotationPoolLabel')}
+          ${renderRotationPool(users, pool)}
           <p class="task-field-hint">${t('tasks.rotationPoolHint')}</p>
+          <p class="task-field-hint">${t('tasks.rotationAdvancesHint')}</p>
         </div>
       </div>`;
+}
+
+/**
+ * Der Pool-Editor: gesetzte Koepfe zuerst, in gespeicherter Ablieferungs-
+ * reihenfolge, dann die uebrigen Mitglieder. Dieselben Bausteine wie das
+ * Personen-Picker-Muster (Scheibe, Kaestchen, `data-ms-input` - der Absende-
+ * Pfad liest die Auswahl unveraendert in DOM-Reihenfolge), dazu pro Zeile die
+ * zwei Schritte hoch/runter als geteilte Zeilenaktion (`.row-action`, wie in
+ * der Kategorieverwaltung). Am oberen und unteren Rand der gesetzten Reihung
+ * ist der jeweilige Schritt deaktiviert - es gibt nichts vorbei.
+ */
+function renderRotationPool(users = [], pool = []) {
+  const poolIds = [...new Set(pool)];
+  const poolSet = new Set(poolIds);
+  const ordered = [
+    ...poolIds.map((id) => users.find((u) => u.id === id)).filter(Boolean),
+    ...users.filter((u) => !poolSet.has(u.id)),
+  ];
+  const checkedTotal = ordered.filter((u) => poolSet.has(u.id)).length;
+  let checkedSeen = 0;
+  const items = ordered.map((u) => {
+    const checked = poolSet.has(u.id);
+    const ordinal = checked ? checkedSeen++ : -1;
+    const inner = u.avatar_data
+      ? `<img src="${esc(u.avatar_data)}" alt="${esc(u.display_name ?? '')}" loading="lazy">`
+      : esc(initials(u.display_name));
+    const move = (dir, labelKey, disabled) => `
+        <button type="button" class="row-action rotation-pool__move" data-rotation-move="${dir}" data-user-id="${u.id}"
+                aria-label="${esc(t(labelKey, { name: u.display_name ?? '' }))}"${disabled ? ' disabled' : ''}>
+          <i data-lucide="chevron-${dir}" class="icon-md" aria-hidden="true"></i>
+        </button>`;
+    return `
+      <li class="rotation-pool__item" data-rotation-row data-user-id="${u.id}">
+        <label class="user-ms__option rotation-pool__pick">
+          <input type="checkbox" class="user-ms__checkbox" value="${u.id}"${checked ? ' checked' : ''}
+                 data-ms-input="task_rotation">
+          <span class="user-ms__avatar" style="background-color:${safeHexColor(u.avatar_color)};color:${getReadableTextColor(safeHexColor(u.avatar_color))}">
+            ${inner}
+          </span>
+          <span class="user-ms__name">${esc(u.display_name ?? '')}</span>
+        </label>
+        <span class="rotation-pool__moves">
+          ${move('up', 'tasks.rotationMoveUp', !checked || ordinal === 0)}
+          ${move('down', 'tasks.rotationMoveDown', !checked || ordinal === checkedTotal - 1)}
+        </span>
+      </li>`;
+  });
+  return `
+    <div class="user-ms" data-ms-name="task_rotation">
+      <label class="label">${t('tasks.rotationPoolLabel')}</label>
+      <ol class="rotation-pool__list">${items.join('')}</ol>
+    </div>`;
 }
 
 function renderModalContent({ task = null, users = [], reminder = null } = {}) {
@@ -2348,19 +2407,27 @@ function reminderRemindAtFromForm(form, { dueDate, dueTime = null } = {}) {
 // - „Nur ich" mit mindestens einer anderen Person als dem Ersteller: die Zugewiesenen sehen den Eintrag
 //   nicht. Die Kombination bleibt erlaubt und die
 //   Zuweisung stehen - Bestandsdaten und API-Clients fuehren sie.
-function wireVisibilityWarning(panel, selectSel, msName, warnSel, privateWarnSel, creatorId = null) {
+function wireVisibilityWarning(panel, selectSel, msName, warnSel, privateWarnSel, creatorId = null, poolMsName = null) {
   const select = panel.querySelector(selectSel);
   const warn   = panel.querySelector(warnSel);
   if (!select || !warn) return;
   const privateWarn = privateWarnSel ? panel.querySelector(privateWarnSel) : null;
   const ms = panel.querySelector(`.user-ms[data-ms-name="${msName}"]`);
+  // #1763: eine Rotation rotiert die naechste Instanz an ein Pool-Mitglied -
+  // bliebe die Warnung an den aktuellen Zustaendigen haengen, warnte sie still
+  // am Fall vorbei: ein privater Plan, der an jemanden rotiert, der ihn nicht
+  // sehen kann, ist der genaue Fehlerfall. Der Pool zaehlt bei der
+  // Privat-Warnung mit; die Zuordnungs-Warnung bleibt pro Instanz (sie meint
+  // die aktuellen Zustaendigen).
+  const poolMs = poolMsName ? panel.querySelector(`.user-ms[data-ms-name="${poolMsName}"]`) : null;
   const update = () => {
     const ids = getSelectedUserIds(panel, msName).map(Number);
     warn.hidden = !(select.value === 'assignees' && ids.length === 0);
     // Wer den Eintrag angelegt hat, sieht ihn auch als „Nur ich": gezaehlt
     // werden nur die anderen. Massgeblich ist `created_by` des Eintrags, nicht
     // wer ihn gerade bearbeitet; ein neuer gehoert dem angemeldeten Konto.
-    const others = creatorId == null ? ids : ids.filter((id) => id !== Number(creatorId));
+    const seen = poolMsName ? [...ids, ...getSelectedUserIds(panel, poolMsName).map(Number)] : ids;
+    const others = creatorId == null ? seen : seen.filter((id) => id !== Number(creatorId));
     if (privateWarn) privateWarn.hidden = !(select.value === 'private' && others.length > 0);
     // Die Sichtbarkeit steht unter „Weitere Einstellungen", die Personen
     // darueber: aufklappen, nie zuklappen.
@@ -2369,6 +2436,7 @@ function wireVisibilityWarning(panel, selectSel, msName, warnSel, privateWarnSel
   };
   select.addEventListener('change', update);
   ms?.addEventListener('click', () => setTimeout(update, 0));
+  poolMs?.addEventListener('click', () => setTimeout(update, 0));
   update();
 }
 
@@ -2568,6 +2636,66 @@ function wireRotationGate(panel) {
   sync();
 }
 
+/** Die gesetzten Zeilen des Pool-Editors, in DOM-Reihenfolge (= Ablieferungsreihenfolge). */
+function rotationCheckedRows(listEl) {
+  return [...listEl.children].filter((li) => li.querySelector('input.user-ms__checkbox')?.checked);
+}
+
+/**
+ * Eine Pool-Zeile um `delta` Plaetze innerhalb der gesetzten Reihung verschieben
+ * (dieselbe Bauart wie moveTaskRow: Verschieben im DOM, der Absende-Pfad liest
+ * die Reihenfolge danach unveraendert aus dem Markup). Ueber die Raender der
+ * Reihung hinaus gibt es nichts - false, wenn nichts zu tun war.
+ */
+function moveRotationRow(row, delta) {
+  const listEl = row.parentElement;
+  if (!listEl) return false;
+  const checked = rotationCheckedRows(listEl);
+  const idx = checked.indexOf(row);
+  const target = idx + delta;
+  if (idx === -1 || target < 0 || target >= checked.length) return false;
+  if (delta < 0) listEl.insertBefore(row, checked[target]);
+  else listEl.insertBefore(row, checked[target].nextSibling ?? null);
+  return true;
+}
+
+/** Rand-Knoepfe: oben gibt es kein hoch, unten kein runter (wie in der Kategorieverwaltung). */
+function syncRotationPoolButtons(listEl) {
+  const checked = rotationCheckedRows(listEl);
+  for (const li of listEl.children) {
+    const ordinal = checked.indexOf(li);
+    for (const dir of ['up', 'down']) {
+      const btn = li.querySelector(`[data-rotation-move="${dir}"]`);
+      if (!btn) continue;
+      const disabled = ordinal === -1 || ordinal === (dir === 'up' ? 0 : checked.length - 1);
+      if (disabled) btn.setAttribute('disabled', '');
+      else btn.removeAttribute('disabled');
+    }
+  }
+}
+
+/**
+ * Die beiden Schritte pro Zeile: Klick delegation, Tausch im DOM, Rand neu.
+ * Das Haerkchen aendert die Reihung nicht (Abwahl ist Aussage genug) - nur die
+ * Raender wandern mit.
+ */
+function wireRotationOrder(panel) {
+  const listEl = panel.querySelector('#task-rotation-pool .rotation-pool__list');
+  if (!listEl) return;
+  listEl.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('[data-rotation-move]');
+    if (!btn || btn.disabled) return;
+    const row = btn.closest('[data-rotation-row]');
+    if (!row) return;
+    if (moveRotationRow(row, btn.dataset.rotationMove === 'up' ? -1 : 1)) vibrate(15);
+    syncRotationPoolButtons(listEl);
+  });
+  listEl.addEventListener('change', (e) => {
+    if (e.target?.matches?.('.user-ms__checkbox')) syncRotationPoolButtons(listEl);
+  });
+  syncRotationPoolButtons(listEl);
+}
+
 /**
  * @param {HTMLElement} panel
  * @param {{task?: object|null, container?: HTMLElement|null,
@@ -2588,7 +2716,8 @@ function wireTaskForm(panel, { task = null, container = null, onChanged = () => 
   // Absende-Pruefung nennt.
   wireRotationGate(panel);
   wireVisibilityWarning(panel, '#task-visibility', 'task_assigned', '#task-visibility-warning', '#task-visibility-private-warning',
-    task?.created_by ?? state.currentUserId);
+    task?.created_by ?? state.currentUserId, 'task_rotation');
+  wireRotationOrder(panel);
   wireCountdownGate(panel);
 
   // Tag-Editor (#586)
@@ -6939,7 +7068,8 @@ export const __test = {
   // Der Rotationsabschnitt mit seiner Verdrahtung: die Sichtbarkeit ist die
   // halbe Antwort (nur bei wiederkehrender Aufgabe), die Verdrahtung die andere
   // - ein Listener, den niemand anhaengt, hat dieselbe Luecke wie keine Regel.
-  renderRotationSection, wireRotationGate, ROTATION_MODES,
+  renderRotationSection, renderRotationPool, moveRotationRow, wireRotationOrder,
+  wireVisibilityWarning, wireRotationGate, ROTATION_MODES,
   // Der Erinnerungs-Abschnitt einzeln, weil er einen Zustand zu BENENNEN hat,
   // den seine Auswahlliste nicht abbildet: eine Erinnerung nach der
   // Faelligkeit. Was der Abschnitt dabei sagt, ist der halbe Fix - die andere

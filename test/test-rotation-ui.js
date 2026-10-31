@@ -101,7 +101,8 @@ test('ein gesetzter Modus holt den Abschnitt zurueck und zeigt den Pool samt Aus
   assert.doesNotMatch(section, /id="task-rotation-pool"[^>]*hidden/);
   assert.match(section, /<option value="round_robin" selected>/, 'der gespeicherte Modus steht vorausgewaehlt da');
   const checked = [...section.matchAll(/<input type="checkbox"[^>]*value="(\d+)"\s+checked/g)].map((m) => m[1]);
-  assert.deepEqual(checked, ['1', '3'], 'die Haekchen folgen dem gespeicherten Pool');
+  assert.deepEqual(checked, ['3', '1'],
+    'die Zeilen folgen dem gespeicherten Pool, nicht der Mitgliederliste (#1763: An order, not a set)');
 });
 
 test('im Ein-Personen-Haushalt gibt es den Abschnitt nicht', () => {
@@ -123,6 +124,52 @@ test('ein Bestandswert ausserhalb der Liste faellt auf „ohne Rotation" zurueck
   assert.match(section, /<option value="" selected>/);
   assert.doesNotMatch(section, /<option value="[^"]+" selected>/,
     'genau eine Option traegt selected - die erste');
+});
+
+// --------------------------------------------------------
+// 1b. Der Pool ist eine Reihung, die man umsortieren kann (#1763)
+// --------------------------------------------------------
+
+test('die Zeilen stehen in gespeicherter Ablieferungsreihenfolge, nicht in Mitgliederliste', () => {
+  // Reproduktion aus der zweiten Review: der Editor zeigte die Mitglieder in
+  // Haushaltsliste - die gespeicherte Reihenfolge war im Dialog unsichtbar,
+  // und ein Speichern ohne Anfuhrung konnte sie still umdeuten. Jetzt steht
+  // die Reihung im Markup, und die Mitgliederliste ordnet sie nicht mehr um.
+  const section = rotationsSection(tasks.renderModalContent({
+    task: wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [3, 1] }),
+    users: MITGLIEDER,
+  }));
+  const rows = [...section.matchAll(/data-rotation-row data-user-id="(\d+)"/g)].map((m) => Number(m[1]));
+  assert.deepEqual(rows, [3, 1, 2], 'die beiden Gesetzten vorn, in gespeicherter Ordnung - dann der Rest');
+});
+
+test('jede Zeile hat die Schritte hoch und runter, die Raender sind zu', () => {
+  const section = rotationsSection(tasks.renderModalContent({
+    task: wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [3, 1] }),
+    users: MITGLIEDER,
+  }));
+  // Oben gibt es kein hoch, unten kein runter - wie in der Kategorieverwaltung.
+  const anNa = /data-user-id="3"[\s\S]*?<\/li>/.exec(section)?.[0] || '';
+  assert.match(anNa, /data-rotation-move="up"[^>]*disabled|disabled[^>]*data-rotation-move="up"/,
+    'der Kopf der Reihung kann nicht hoeher');
+  assert.doesNotMatch(anNa, /data-rotation-move="down"[^>]*disabled/, 'hinunter schon');
+  const kevin = /data-user-id="1"[\s\S]*?<\/li>/.exec(section)?.[0] || '';
+  assert.doesNotMatch(kevin, /data-rotation-move="up"[^>]*disabled/);
+  assert.match(kevin, /data-rotation-move="down"[^>]*disabled|disabled[^>]*data-rotation-move="down"/,
+    'der letzte Kopf kann nicht tiefer');
+  const max = /data-user-id="2"[\s\S]*?<\/li>/.exec(section)?.[0] || '';
+  assert.match(max, /data-rotation-move="up"[^>]*disabled/, 'der Nicht-Setzte hat gar keine Richtung');
+});
+
+test('der Hinweis nennt die Regel vom Abhaken durch eine andere Person', () => {
+  // Zweite Review, Punkt 6: die Regel steht im Code und im SPEC, aber das
+  // Formular, in dem man die Rotation setzt, sagte nichts davon.
+  const section = rotationsSection(tasks.renderModalContent({
+    task: wiederkehrend({ rotation_mode: 'round_robin', rotation_pool: [1, 3] }),
+    users: MITGLIEDER,
+  }));
+  assert.match(section, /tasks\.rotationAdvancesHint/,
+    'der Hinweis haengt direkt am Pool, nicht nur im Handbuch');
 });
 
 // --------------------------------------------------------
@@ -207,12 +254,17 @@ const feld = (value = '') => ({ value: String(value) });
  * Selektor-Frage, die getSelectedUserIds im Browser stellt - die Antwort ist
  * die DOM-Reihenfolge, und genau die ist hier die Ablieferungsreihenfolge.
  */
-function attrappenFormular({ poolIds = [], byId = {}, ...named } = {}) {
+function attrappenFormular({ poolIds = [], rotationRows = null, byId = {}, ...named } = {}) {
   const form = {
     querySelector: (sel) => byId[sel] ?? null,
     querySelectorAll: (sel) => (
       String(sel).includes('task_rotation')
-        ? poolIds.map((id) => ({ value: String(id) }))
+        // Live-Zeilen (der Umsortier-Test): was gesetzt ist und in welcher
+        // Reihenfolge die Kinder stehen, ist die gesendete Ablieferungsordnung.
+        ? (rotationRows
+            ? rotationRows.filter((r) => r.querySelector('input.user-ms__checkbox').checked)
+              .map((r) => ({ value: r.dataset.userId }))
+            : poolIds.map((id) => ({ value: String(id) })))
         : []
     ),
   };
@@ -239,7 +291,7 @@ function attrappenDokument(taskId = '7') {
  * Server ging - und ob die Fehlerzeile sich gemeldet hat (ein stiller Abbruch
  * waere kein Befund).
  */
-async function speichernUndSenden({ recurring, mode = '', poolIds = [], taskId = '7' }) {
+async function speichernUndSenden({ recurring, mode = '', poolIds = [], rotationRows = null, taskId = '7' }) {
   const calls = [];
   const record = (method) => async (path, body) => {
     calls.push({ method, path, body });
@@ -263,7 +315,7 @@ async function speichernUndSenden({ recurring, mode = '', poolIds = [], taskId =
   const echterToast = globalThis.window.yuvomi.showToast;
   globalThis.window.yuvomi.showToast = () => {};
   const form = attrappenFormular({
-    poolIds,
+    poolIds, rotationRows,
     title: 'Muell rausbringen', description: '', priority: 'none', category: 'household',
     start_date: '', due_date: '2026-11-02', due_time: '', points: '0', status: 'open',
     byId: {
@@ -413,4 +465,124 @@ test('die Rotationszeile steht direkt unter der Wiederholungszeile der Leseansic
     rows.indexOf('recurrenceRow(') < rows.indexOf('rotationDetailRow('),
     'die Rotationszeile muss AUF die Wiederholungszeile folgen, nicht vor ihr stehen',
   );
+});
+
+// --------------------------------------------------------
+// 5. Umsortieren: Klick trifft die Reihung, die Reihung trifft den Pool
+// --------------------------------------------------------
+
+function fakeMoveButton(row) {
+  const btn = {
+    disabled: false,
+    setAttribute(k) { if (k === 'disabled') btn.disabled = true; },
+    removeAttribute(k) { if (k === 'disabled') btn.disabled = false; },
+    closest: (sel) => (sel === '[data-rotation-row]' ? row : btn),
+  };
+  return btn;
+}
+
+function fakeRow(id, checked) {
+  const checkbox = { checked, value: String(id), matches: (sel) => sel === '.user-ms__checkbox' };
+  const row = {
+    dataset: { userId: String(id) },
+    buttons: { up: null, down: null },
+    querySelector(sel) {
+      if (sel === 'input.user-ms__checkbox') return checkbox;
+      const m = /\[data-rotation-move="(\w+)"\]/.exec(sel);
+      return m ? row.buttons[m[1]] : null;
+    },
+    closest: (sel) => (sel === '[data-rotation-row]' ? row : null),
+  };
+  row.buttons.up = fakeMoveButton(row);
+  row.buttons.down = fakeMoveButton(row);
+  row.buttons.up.dataset = { rotationMove: 'up' };
+  row.buttons.down.dataset = { rotationMove: 'down' };
+  return row;
+}
+
+function fakeList(rows) {
+  const listeners = {};
+  const list = {
+    children: rows,
+    addEventListener(name, fn) { (listeners[name] ||= []).push(fn); },
+    fire(name, ev = {}) { for (const fn of listeners[name] || []) fn(ev); },
+    insertBefore(node, ref) {
+      const at = list.children.indexOf(node);
+      if (at >= 0) list.children.splice(at, 1);
+      const idx = ref ? list.children.indexOf(ref) : -1;
+      if (idx < 0) list.children.push(node);
+      else list.children.splice(idx, 0, node);
+    },
+    order() { return list.children.filter((r) => r.querySelector('input.user-ms__checkbox').checked)
+      .map((r) => Number(r.dataset.userId)); },
+  };
+  for (const r of rows) r.parentElement = list;
+  return list;
+}
+
+test('ein Klick auf hoch tauscht die Zeilen und die Raender wandern mit', () => {
+  // Der zweite Kopf rueckt nach vorn: die Reihung, die der Absende-Pfad danach
+  // aus dem DOM liest, ist die neue Ablieferungsordnung. Vor dem Umbau gab es
+  // diese Bedienung nicht - die Reihenfolge war dem Zufall der Mitgliederliste
+  // ueberlassen.
+  const oben = fakeRow(3, true);
+  const unten = fakeRow(1, true);
+  const rest = fakeRow(2, false);
+  const list = fakeList([oben, unten, rest]);
+  const panel = { querySelector: (sel) => (sel.includes('rotation-pool__list') ? list : null) };
+  tasks.wireRotationOrder(panel);
+  assert.deepEqual(list.order(), [3, 1], 'Ausgangslage: der erste Kopf steht oben');
+  assert.equal(oben.buttons.up.disabled, true, 'oben gibt es kein hoch');
+  list.fire('click', { target: unten.buttons.up });
+  assert.deepEqual(list.order(), [1, 3], 'der zweite Kopf ist nach vorn gerueckt');
+  assert.equal(unten.buttons.up.disabled, true, 'nun ist er oben - das Rand wandert mit');
+  assert.equal(oben.buttons.up.disabled, false, 'der bisherige Kopf darf wieder hoch');
+  assert.equal(oben.buttons.down.disabled, true, 'und ganz unten gibt es kein runter');
+  list.fire('click', { target: oben.buttons.down });
+  assert.deepEqual(list.order(), [1, 3], 'ein Klick ueber den Rand hinaus verschiebt nichts');
+});
+
+test('die Reihenfolge der geordneten Zeilen ist die Reihenfolge des Pools', async () => {
+  // Das Ende der Kette: DOM-Reihenfolge -> getSelectedUserIds -> rotation_pool.
+  // Dasselbe Formular, dieselben Zeilen - nur die Ordnung hat sich bewegt.
+  const vorn = fakeRow(1, true);
+  const hinten = fakeRow(3, true);
+  const list = fakeList([vorn, hinten]);
+  const erste = await speichernUndSenden({
+    recurring: true, mode: 'round_robin', rotationRows: list.children,
+  });
+  assert.deepEqual(erste.body.rotation_pool, [1, 3], 'Markup-Reihenfolge ist die gesendete Ordnung');
+  assert.equal(tasks.moveRotationRow(hinten, -1), true);
+  const zweite = await speichernUndSenden({
+    recurring: true, mode: 'round_robin', rotationRows: list.children,
+  });
+  assert.deepEqual(zweite.body.rotation_pool, [3, 1],
+    'nach dem Tausch sendet dasselbe Formular die neue Ordnung');
+});
+
+// --------------------------------------------------------
+// 6. Die Privat-Warnung liest den Pool mit (#1763)
+// --------------------------------------------------------
+
+test('eine private Aufgabe, die an ein anderes Mitglied rotiert, warnt', () => {
+  // Der Pool rotiert die naechste Instanz an jemanden, der sie bei "Nur ich"
+  // nicht sieht.hing die Warnung nur an den Zustaendigen, bliebe sie stumm.
+  const select = { value: 'private', addEventListener() {} };
+  const warn = { hidden: true, closest: () => null };
+  const privateWarn = { hidden: true, closest: () => null };
+  const container = { addEventListener() {} };
+  const panel = {
+    querySelector: (sel) => {
+      if (sel === '#vis') return select;
+      if (sel === '#warn') return warn;
+      if (sel === '#priv') return privateWarn;
+      return container;
+    },
+    querySelectorAll: (sel) => (sel.includes('task_rotation')
+      ? [{ checked: true, value: '2' }]
+      : []),
+  };
+  tasks.wireVisibilityWarning(panel, '#vis', 'task_assigned', '#warn', '#priv', 1, 'task_rotation');
+  assert.equal(privateWarn.hidden, false,
+    'privat plus Pool mit einer anderen Person = Warnung, nicht Schweigen');
 });
