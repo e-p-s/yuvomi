@@ -48,13 +48,15 @@ echo "== 5/6 Restart + Migrationen =="
 run_ct "systemctl restart yuvomi.service && sleep 3 && systemctl is-active yuvomi.service"
 
 echo "== 6/6 Health-Check (max 60s) =="
+# /api/v1/health ist auth-pflichtig; 401/403 zeigen einen lebenden Server an.
 OK=0
 for i in $(seq 1 12); do
-  if curl -fsS --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then OK=1; break; fi
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$HEALTH_URL" || true)
+  if [[ "$CODE" == "200" || "$CODE" == "401" || "$CODE" == "403" ]]; then OK=1; break; fi
   sleep 5
 done
 if [[ $OK -eq 1 ]]; then
-  echo "HEALTH_OK"
+  echo "HEALTH_OK (HTTP $CODE)"
   curl -fsS --max-time 5 "$VERSION_URL" | head -c 200; echo
   echo "Deployment fertig. Rollback bei Bedarf:"
   echo "  cp $APP_DIR/backups/pre-deploy-$STAMP.db $APP_DIR/data/yuvomi.db && systemctl restart yuvomi"
