@@ -17,7 +17,7 @@ DRY=0
 
 run_remote() {
   # sshpass sitzt auf dem Worker; Passwort aus der Cred-Karte (Wiki cred-030)
-  sshpass -p "$PROXNAS_PW" ssh -o ConnectTimeout=8 -o BatchMode=yes "$SSH_USER@$PROXNAS" "$@"
+  sshpass -p "$PROXNAS_PW" ssh -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new "$SSH_USER@$PROXNAS" "$@"
 }
 run_ct() { run_remote "pct exec $CT -- bash -c '$1'"; }
 
