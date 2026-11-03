@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **A recurring task can hand itself along.** A series like "take out the bin" used to hang on the
+  same person forever; a rotation pool of at least two people now gives each follow-up instance to
+  the next member in a fixed order (#1763, migration 277). The order chosen in the pool is the order
+  the task is handed along in. The series remembers a position, not a person: a member who leaves the
+  pool does not restart it at the first person - Kevin's round stays Kevin's, then Max, then Kevin
+  again - and a deactivated account (#1381) is skipped while it cannot sign in. If the running
+  instance already belongs to the first member, the first hand-over goes to the second one (Kevin,
+  Anna, Max - not Kevin, Kevin). The detail view names the next member up from the same calculation
+  that hands out the next instance, and a task without rotation behaves exactly as before.
 - **Late completion decay (opt-in).** Households can have late completions pay less: administrators
   switch it on in the rewards settings, off by default. A task ticked off after its due day earns one
   point less for each day it is past due, and always at least one point - finishing still pays. What a
@@ -65,15 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layout. Options (calendar limit, task filters, shopping-list selection, etc.) follow the desktop
   arrangement, so only the order and visibility are separate. "Same as desktop" removes the phone
   arrangement and goes back to following the desktop. (#2109)
-- **A recurring task can hand itself along.** A series like "take out the bin" used to hang on the
-  same person forever; a rotation pool of at least two people now gives each follow-up instance to
-  the next member in a fixed order (#1763, migration 277). The order chosen in the pool is the order
-  the task is handed along in. The series remembers a position, not a person: a member who leaves the
-  pool does not restart it at the first person - Kevin's round stays Kevin's, then Max, then Kevin
-  again - and a deactivated account (#1381) is skipped while it cannot sign in. If the running
-  instance already belongs to the first member, the first hand-over goes to the second one (Kevin,
-  Anna, Max - not Kevin, Kevin). The detail view names the next member up from the same calculation
-  that hands out the next instance, and a task without rotation behaves exactly as before.
 
 ### Deprecated
 - **`min_quantity` on a pantry item (`/api/v1/pantry`) is deprecated and will be removed in the
@@ -191,15 +191,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overview tile next to your events and tasks, with the person's name, and opens directly in the
   viewer. Archived documents stay out, and the tile follows the Documents module switch and your
   rights.
-- **A recurring task can hand itself along.** A series like "take out the bin" used to hang on the
-  same person forever; a rotation pool of at least two people now gives each follow-up instance to
-  the next member in a fixed order (#1763, migration 274). The order chosen in the pool is the order
-  the task is handed along in. The series remembers a position, not a person: a member who leaves the
-  pool does not restart it at the first person - Kevin's round stays Kevin's, then Max, then Kevin
-  again - and a deactivated account (#1381) is skipped while it cannot sign in. If the running
-  instance already belongs to the first member, the first hand-over goes to the second one (Kevin,
-  Anna, Max - not Kevin, Kevin). The detail view names the next member up from the same calculation
-  that hands out the next instance, and a task without rotation behaves exactly as before.
 
 ### Changed
 - **A document's lead time now also decides when it shows as expiring.** The "expiring" chip and
