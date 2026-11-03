@@ -35,7 +35,7 @@ echo "prod = $FORK_SHA"
 echo "== 2/6 Backup auf CT135 (DB + Baum) =="
 STAMP=$(date +%Y%m%dT%H%M)
 run_ct "cp $APP_DIR/data/yuvomi.db $APP_DIR/backups/pre-deploy-$STAMP.db && test -s $APP_DIR/backups/pre-deploy-$STAMP.db && echo DB_BACKUP_OK"
-run_ct "tar -C $APP_DIR --exclude=node_modules --exclude=data -czf $APP_DIR/backups/pre-deploy-$STAMP.tar.gz . && test -s $APP_DIR/backups/pre-deploy-$STAMP.tar.gz && echo TREE_BACKUP_OK"
+run_ct "tar -C $APP_DIR --exclude=node_modules --exclude=data --exclude=backups -czf /root/pre-deploy-$STAMP.tar.gz . && test -s /root/pre-deploy-$STAMP.tar.gz && mv /root/pre-deploy-$STAMP.tar.gz $APP_DIR/backups/ && echo TREE_BACKUP_OK"
 [[ $DRY -eq 1 ]] && { echo "DRY-RUN: hier wurde abgebrochen, nichts veraendert."; exit 0; }
 
 echo "== 3/6 Upload (Baum ohne node_modules/data/.env) =="
