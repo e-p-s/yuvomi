@@ -322,6 +322,7 @@ Join table for multi-person task assignment (migration v32). Existing `assigned_
 | PRIMARY KEY | | (task_id, user_id) |
 
 ### Task Rotation Pool (migration v277, #1763)
+### Task Rotation Pool (migration v274, #1763)
 Join table holding the ordered pool of members a recurring series rotates through: `round_robin` means the next occurrence goes to the next member in this order ("An order, not a set"). Written as a whole per save (`rotation_pool` on POST/PUT), but merged against the stored pool by `mergeRotationPool()`: the request orders the members it names, while members already stored keep their rank against members the request does not show - the dialog renders only active members, so a plain title save that echoes the visible list back neither drops the deactivated row nor moves the pointer; only adds, reorders and removals the request actually expresses change the pool (a client that round-trips the full GET, deactivated row included, changes nothing at all). A mode requires a recurring task, at least two pool rows and household members only - anything else answers 400 and the dialog blocks the same combination before submitting. Like `recurrence_series_id` (#1603), mode, pool rows **with their positions**, and both pointer fields travel as values onto every follow-up instance, so the rotation survives deleting an earlier occurrence.
 
 | Column | Type | Constraint |

@@ -1318,6 +1318,7 @@ router.post('/', (req, res) => {
     if (strangers.length) return res.status(400).json({ error: nonMemberMessage(strangers), code: 400 });
 
     // Rotation (migration 277). Erst nach der Mitgliederpruefung der regulaeren
+    // Rotation (migration 277). Erst nach der Mitgliederpruefung der regulaeren
     // Zuweisung: fuer den Pool gilt dieselbe Liste, und der Fehler soll den
     // selben Weg nehmen wie bei assigned_to.
     const rotationIn = parseRotationInput(req.body, {
@@ -1487,6 +1488,7 @@ router.put('/:id', (req, res) => {
     const strangers = newNonMembers(userIds, { stored: assignedBefore });
     if (strangers.length) return res.status(400).json({ error: nonMemberMessage(strangers), code: 400 });
 
+    // Rotation (migration 277). Der Pool darf nur, was auch die Aufgabe selbst duerfte
     // Rotation (migration 277). Der Pool darf nur, was auch die Aufgabe selbst duerfte
     // (#1207) - dieselbe Pruefung, dieselbe Fehlermeldung. Der Pool-Bestand
     // reist als existingRows mit: der Merge haelt Positionen und deaktivierte
@@ -1937,6 +1939,7 @@ function spawnRecurrenceFollowup(task) {
   // Das Ziel erbt nur die Aufgabe selbst. Unteraufgaben gehen nie als eigenes
   // VTODO hinaus (pendingCreations), ihre Kopien unten nehmen keines mit.
   const syncTarget = recurrenceFollowupTarget(task);
+  // Rotation (migration 277): eine Serie mit Pool verteilt die naechste
   // Rotation (migration 277): eine Serie mit Pool verteilt die naechste
   // Instanz an das naechste Mitglied, statt dieselbe Person auf Dauer zu
   // belasten. Der Zeiger ist eine Position im Pool und ueberlebt Abgaenge
