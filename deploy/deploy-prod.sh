@@ -27,6 +27,7 @@ echo "== 1/6 Staging: prod-Zweig sauber auspacken =="
 git -C "$LOCAL_DIR" rev-parse --verify prod >/dev/null
 [[ -z "$(git -C "$LOCAL_DIR" status --porcelain)" ]] || { echo "FAIL: Arbeitsverzeichnis ist nicht sauber."; exit 1; }
 rm -rf "$STAGE"
+git -C "$LOCAL_DIR" worktree prune
 git -C "$LOCAL_DIR" worktree add --detach "$STAGE" prod >/dev/null
 FORK_SHA=$(git -C "$STAGE" rev-parse --short HEAD)
 echo "prod = $FORK_SHA"
