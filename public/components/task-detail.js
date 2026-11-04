@@ -1033,6 +1033,36 @@ function approvalNoticeNode(task) {
   return box;
 }
 
+/**
+ * Die Rotationszeile der Leseansicht: "Rotation: Abloesung - als naechstes:
+ * Leon". Der Nachfolger steht schon am Task (`rotation_next_user`): der Server
+ * loest ihn an genau derselben Stelle auf, die auch die naechste Instanz
+ * vergibt (nextRotationEntry in server/services/task-rotation.js) -
+ * Positionszeiger, uebersprungene Abgaenge und das Ueberspringen
+ * deaktivierter Mitglieder (#1381) stecken alle in dieser einen Rechnung. Ein
+ * zweiter Nachbau im Client waere eine zweite Quelle der Wahrheit mit eigener
+ * Irrtumsmoeglichkeit. Keine erfundene Prognose - ein Name, der nicht da
+ * steht, ist schlechter als keiner, weil ihn jemand als Zusage liest.
+ */
+function rotationDetailRow(task, ctx) {
+  const row = { icon: 'users', label: t('tasks.rotationLabel'), value: '' };
+  // Nur die feste Reihenfolge (upstream #1763); ein Modus aus einer anderen
+  // Welt: eher schweigen als raten.
+  if (task?.rotation_mode !== 'round_robin') return row;
+  const pool = Array.isArray(task?.rotation_pool) ? task.rotation_pool.map(Number) : [];
+  if (pool.length < 2) return row; // zu kleiner Pool: keine Rotation, keine Zeile
+  const modeLabel = t('tasks.rotationModeRoundRobin');
+  const nextId = Number(task.rotation_next_user);
+  const name = Number.isInteger(nextId)
+    ? (ctx?.users ?? []).find((u) => Number(u?.id) === nextId)?.display_name
+    : null;
+  // Ohne aufgeloestes Mitglied (geloeschter Account, ferne Serie) bleibt die
+  // Vorhersage weg - der Modus ist die Antwort, ein "#7" waere Raten.
+  const value = name ? t('tasks.rotationNext', { mode: modeLabel, name }) : modeLabel;
+  return { ...row, value };
+}
+
+
 function renderTaskDetail(task, reminders = [], ctx) {
 
   const approvalNotice = approvalNoticeNode(task);
@@ -1820,4 +1850,4 @@ function seriesHistoryNode(task) {
  * der sich die Nur-lesen-Regel (#467) an dieser Ansicht MESSEN laesst - alles
  * andere hier haengt an `openDetailView` und damit am echten DOM.
  */
-export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit, approvalNoticeView, resolveTaskApproval, REJECT_NOTE_MAX, taskDetailHead, createdByHint };
+export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit, approvalNoticeView, resolveTaskApproval, REJECT_NOTE_MAX, taskDetailHead, createdByHint, rotationDetailRow };
