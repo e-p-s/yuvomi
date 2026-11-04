@@ -11990,13 +11990,21 @@ const MIGRATIONS = [
                                     CHECK(unit IN ('points', 'money')),
           allowance_date TEXT,
           currency      TEXT
-                                    CHECK((unit = 'money') = (currency IS NOT NULL))
+                                    CHECK((unit = 'money') = (currency IS NOT NULL)),
+          -- Spaetabzug-Auditfelder (Migration 278): der Rebuild muss sie
+          -- mitnehmen, sonst verliert die Tabelle sie bei einer frischen DB
+          -- (dort laeuft 278 vor 279, 279 sieht keinen 'penalty'-CREATE und
+          -- baut neu — ohne diese Spalten waeren decay_days/base_points weg).
+          decay_days    INTEGER,
+          base_points   INTEGER
         );
         INSERT INTO reward_ledger_new
           (id, user_id, delta, type, reason, task_id, redemption_id, created_by,
-           created_at, series_id, reverses_id, unit, allowance_date, currency)
+           created_at, series_id, reverses_id, unit, allowance_date, currency,
+           decay_days, base_points)
         SELECT id, user_id, delta, type, reason, task_id, redemption_id, created_by,
-               created_at, series_id, reverses_id, unit, allowance_date, currency
+               created_at, series_id, reverses_id, unit, allowance_date, currency,
+               decay_days, base_points
         FROM reward_ledger;
         DROP TABLE reward_ledger;
         ALTER TABLE reward_ledger_new RENAME TO reward_ledger;
