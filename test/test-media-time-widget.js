@@ -19,10 +19,8 @@ register('./test-browser-loader.mjs', import.meta.url);
 
 global.window ??= { yuvomi: null };
 // Echte de-Template fuer die Zeile (der Loader-Stub uebersetzt ueber
-// globalThis.__tDict). Der Stub-Platzhalter-Ersatz ist auf die Vorlage des
-// Intervall-Satzes kalibriert und laeuft hier ins Leerzeichen hinter der Zahl -
-// die Assertions vergleichen deshalb gegen das Template selbst, nicht gegen
-// seine eingesetzte Form.
+// globalThis.__tDict). Der Stub setzt Platzhalter wie im Original ein, die
+// Assertions vergleichen gegen die eingesetzte Form ("noch 45 von 60 Min").
 const escT = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 globalThis.__tDict = {
   'dashboard.mediaTimeRest': 'noch {{remaining}} von {{quota}} Min',
@@ -52,7 +50,7 @@ test('Kachel: Zeile je Kind mit Rest, Balken und Route auf die Medienzeit-Seite'
   assert.match(html, /role="progressbar"/, 'der Balken ist eine Progressbar');
   assert.match(html, /aria-valuemax="60"/, 'die Skala kommt aus dem Kontingent');
   assert.match(html, /data-route="\/media-time\?user_id=7"/, 'Eltern springen aufs Kind voraus');
-  assert.ok(html.includes(escT('noch {{remaining}} von {{quota}} Min')), 'der Rest steht als Satz in der Zeile');
+  assert.ok(html.includes(escT('noch 45 von 60 Min')), 'der Rest steht als eingesetzter Satz in der Zeile');
 });
 
 test('Kachel: Anpassung und Begruendung stehen in der Zeile, der Ton spricht an der Zahl', () => {
@@ -60,7 +58,7 @@ test('Kachel: Anpassung und Begruendung stehen in der Zeile, der Ton spricht an 
     manager: true, failed: 0,
     children: [row({ adjusted_min: 15, reason: 'Geburtstag', remaining_min: 5 })],
   }, '1x2');
-  assert.ok(html.includes(escT('+{{minutes}} Min heute')), 'die Anpassung nennt, dass der Tag nicht beim Basiswert liegt');
+  assert.ok(html.includes(escT('+15 Min heute')), 'die Anpassung nennt, dass der Tag nicht beim Basiswert liegt');
   assert.match(html, /Geburtstag/, 'die Begruendung sehen Kinder ohne Klick');
   assert.match(html, /media-time-widget-row--nearing/, 'unter einem Viertel uebrig: der Ton der Zahl');
 });
