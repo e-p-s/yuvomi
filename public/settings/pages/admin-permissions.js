@@ -54,6 +54,7 @@ const MODULE_ACCENT = {
   housekeeping: 'var(--module-housekeeping)',
   waste: 'var(--module-waste)',
   rewards: 'var(--module-rewards)',
+  media_time: 'var(--module-media-time)',
   health: 'var(--module-health)',
 };
 

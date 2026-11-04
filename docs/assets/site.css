@@ -168,6 +168,7 @@
   --m-calendar: var(--f-time);
   --m-schedule: var(--f-time);
   --m-reminders: var(--f-time);
+  --m-media-time: var(--f-time);
   --m-meals: var(--f-kitchen);
   --m-recipes: var(--f-kitchen);
   --m-shopping: var(--f-kitchen);

@@ -188,15 +188,22 @@ function moduleRows(md) {
 }
 
 const NUMBER_WORDS = {
-  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20,
-  sechzehn: 16, siebzehn: 17, achtzehn: 18, neunzehn: 19, zwanzig: 20,
+  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, twentyone: 21, 'twenty-one': 21,
+  sechzehn: 16, siebzehn: 17, achtzehn: 18, neunzehn: 19, zwanzig: 20, einundzwanzig: 21,
 };
 
 /** Das Zahlwort aus der Ueberschrift ueber der Modultabelle. */
 function claimedModuleWord(md) {
-  const heading = md.split('\n').find((l) => /^## /.test(l) && new RegExp(`\\b(${Object.keys(NUMBER_WORDS).join('|')})\\b`, 'i').test(l));
+  // \b ist ein Uebergang Wort/Nichtwort: an `twenty-one` gaebe es hinter `twenty`
+  // eine falsche Grenze und der Treffer bliebe bei 20 stehen. Der Rand darf
+  // deshalb auch ein Bindestrich sein (Zahlwort 'twenty-one' = 21).
+  const words = Object.keys(NUMBER_WORDS).join('|');
+  const heading = md.split('\n').find((l) => /^## /.test(l) && new RegExp(`(?<![A-Za-z-])(${words})(?![A-Za-z])`, 'i').test(l));
   if (!heading) return null;
-  const hit = Object.entries(NUMBER_WORDS).find(([w]) => new RegExp(`\\b${w}\\b`, 'i').test(heading));
+  // Laengste zuerst: `twenty-one` enthaelt `twenty`, und der treffer muss 21 sein.
+  const hit = [...Object.entries(NUMBER_WORDS)]
+    .sort((a, b) => b[0].length - a[0].length)
+    .find(([w]) => new RegExp(`(?<![A-Za-z-])${w}(?![A-Za-z])`, 'i').test(heading));
   return hit ? { word: hit[0], value: hit[1], heading: heading.trim() } : null;
 }
 
@@ -342,7 +349,9 @@ function pageGroups(html, lang) {
   const grid = html.slice(from, html.indexOf('id="modToggle"', from)).replace(/<!--[\s\S]*?-->/g, ' ');
   return grid.split(/data-t="grp_/).slice(1).map((chunk) => ({
     label: stripTags(unescapeJs(dictValue(block, `grp_${chunk.slice(0, chunk.indexOf('"'))}`) || '')),
-    names: [...chunk.matchAll(/class="(?:feat-row|mod-card)"[\s\S]*?data-t="(f_[a-z]+_k|m_[a-z]+_t)"/g)]
+    // Der Unterstrich im Mittelfeld: `m_media_time_t` (Medienzeit) ist ein
+    // Schluessel wie jeder andere; ein [a-z]+-Muster liesse ihn still fehlen.
+    names: [...chunk.matchAll(/class="(?:feat-row|mod-card)"[\s\S]*?data-t="(f_[a-z0-9_]+_k|m_[a-z0-9_]+_t)"/g)]
       .map((m) => stripTags(unescapeJs(dictValue(block, m[1]) || m[1]))),
   }));
 }
@@ -423,13 +432,13 @@ test('der Gruppen-Guard erkennt den Schaden, gegen den er gebaut ist', () => {
     return groupFindings(md.replace(from, to), html, 'en');
   };
   // Kontakte zusaetzlich zur gemeinsamen Zeile auch bei Menschen.
-  const f1 = swap('<b>People</b> - Health · Birthdays<br>', '<b>People</b> - Health · Contacts · Birthdays<br>');
+  const f1 = swap('<b>People</b> - Health · Birthdays<br>', '<b>People</b> - Health · Birthdays<br><b>People</b> - Health · Contacts · Birthdays<br>');
   assert.ok(hit(f1, /Gruppe "People"/) && hit(f1, /Gruppenzeile nennt "contacts", die Tabelle nicht/), f1.join(' | '));
   // Der Stand vor der Re-Critique vom 2026-10-24: Notizen und Kontakte getrennt
   // in ihren Menuegruppen, 21 Namen fuer 20 Tabellenzeilen.
-  const split = groupFindings(md.replace('Notes &amp; Contacts · Schedule<br>', 'Notes · Schedule<br>')
+  const split = groupFindings(md.replace('Notes &amp; Contacts · Media Time · Schedule<br>', 'Notes · Media Time · Schedule<br>')
     .replace('<b>People</b> - Health · Birthdays<br>', '<b>People</b> - Health · Contacts · Birthdays<br>'), html, 'en');
-  assert.ok(hit(split, /21 Namen in den Gruppenzeilen, die Tabelle hat 20 Zeilen/), split.join(' | '));
+  assert.ok(hit(split, /22 Namen in den Gruppenzeilen, die Tabelle hat 21 Zeilen/), split.join(' | '));
   // Die gemeinsame Zeile verliert ihre zweite Haelfte.
   assert.ok(hit(swap('Notes &amp; Contacts · Schedule<br>', 'Notes · Schedule<br>'), /Tabellenzeile "Notes & Contacts" steht in keiner Gruppenzeile/));
   // Ein Modul fehlt in den Gruppenzeilen, steht aber in der Tabelle.

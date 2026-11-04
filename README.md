@@ -26,7 +26,7 @@
     <a href="README.de.md" hreflang="de">Auf&nbsp;Deutsch</a>
   </p>
 
-  <p><b>20</b>&nbsp;modules&nbsp;&nbsp;·&nbsp; <b>27</b>&nbsp;languages&nbsp;&nbsp;·&nbsp; <b>0</b>&nbsp;trackers&nbsp;&nbsp;·&nbsp; <b>1</b>&nbsp;SQLite&nbsp;file&nbsp;&nbsp;·&nbsp; <b>256&nbsp;MB</b>&nbsp;RAM&nbsp;minimum</p>
+  <p><b>21</b>&nbsp;modules&nbsp;&nbsp;·&nbsp; <b>27</b>&nbsp;languages&nbsp;&nbsp;·&nbsp; <b>0</b>&nbsp;trackers&nbsp;&nbsp;·&nbsp; <b>1</b>&nbsp;SQLite&nbsp;file&nbsp;&nbsp;·&nbsp; <b>256&nbsp;MB</b>&nbsp;RAM&nbsp;minimum</p>
 
   <picture>
     <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark-mobile.webp" width="200">
@@ -90,15 +90,15 @@ the app offers it, or on iPhone and iPad choose Share, then Add to Home Screen.
 
 [More on yuvomi.cloud](https://yuvomi.cloud/#family)
 
-## The twenty modules
+## The twenty-one modules
 
 Switch off what your household doesn't need, and it disappears from everyone's menu. Inventory,
 Waste collection and Schedule start switched off.
 
 <details>
 <summary>
-All 20 modules, one line each<br>
-<b>Plan</b> - Tasks · Calendar · Rewards · Notes &amp; Contacts · Schedule<br>
+All 21 modules, one line each<br>
+<b>Plan</b> - Tasks · Calendar · Rewards · Media Time · Notes &amp; Contacts · Schedule<br>
 <b>Household</b> - Kitchen (Meals · Recipes · Shopping · Pantry) · Housekeeping · Waste collection · Documents · Inventory<br>
 <b>People</b> - Health · Birthdays<br>
 <b>Finance</b> - Budget<br>
@@ -110,6 +110,7 @@ All 20 modules, one line each<br>
 | **Tasks** | Kanban board with deadlines, subtasks, recurring chores, comments and a history of who ticked off what. |
 | **Calendar** | Two-way Google and CalDAV sync, Outlook push, subscriptions, holidays and per-event visibility. |
 | **Rewards** | Points from tasks, a parent-approved catalog, an auditable ledger and pocket money per child. |
+| **Media Time** | Screen time for the kids: daily quotas, devices and apps, exceptions and point exchanges. |
 | **Notes &amp; Contacts** | Markdown sticky notes with tappable checklists, plus contacts with CardDAV sync and vCard import/export. |
 | **Schedule** | Rotating shifts and fixed weekly timetables, shown as an overlay in the calendar. Off by default. |
 | **Meals** | Weekly drag-and-drop planner with a recipe sidebar and direct export to the shopping list. |

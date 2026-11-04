@@ -36,6 +36,7 @@ const NAV_TO_MODULE = Object.freeze({
   housekeeping: 'housekeeping',
   waste: 'waste',
   rewards: 'rewards',
+  'media-time': 'media_time',
   health: 'health',
 });
 

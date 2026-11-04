@@ -26,7 +26,7 @@
     <a href="README.md" hreflang="en">English&nbsp;(maßgeblich)</a>
   </p>
 
-  <p><b>20</b>&nbsp;Module&nbsp;&nbsp;·&nbsp; <b>27</b>&nbsp;Sprachen&nbsp;&nbsp;·&nbsp; <b>0</b>&nbsp;Tracker&nbsp;&nbsp;·&nbsp; <b>1</b>&nbsp;SQLite&#8209;Datei&nbsp;&nbsp;·&nbsp; ab&nbsp;<b>256&nbsp;MB</b>&nbsp;RAM</p>
+  <p><b>21</b>&nbsp;Module&nbsp;&nbsp;·&nbsp; <b>27</b>&nbsp;Sprachen&nbsp;&nbsp;·&nbsp; <b>0</b>&nbsp;Tracker&nbsp;&nbsp;·&nbsp; <b>1</b>&nbsp;SQLite&#8209;Datei&nbsp;&nbsp;·&nbsp; ab&nbsp;<b>256&nbsp;MB</b>&nbsp;RAM</p>
 
   <picture>
     <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/screenshots/de/dashboard-dark-mobile.webp" width="200">
@@ -91,15 +91,15 @@ und iPad Teilen und dann Zum Home-Bildschirm wählen.
 
 [Mehr auf yuvomi.cloud](https://yuvomi.cloud/#family)
 
-## Die zwanzig Module
+## Die einundzwanzig Module
 
 Schaltet ab, was euer Haushalt nicht braucht, und es verschwindet für alle aus dem Menü. Inventar,
 Entsorgung und Schichtplan sind anfangs aus.
 
 <details>
 <summary>
-Alle 20 Module, je in einer Zeile<br>
-<b>Planen</b> - Aufgaben · Kalender · Belohnungen · Notizen &amp; Kontakte · Schichtplan<br>
+Alle 21 Module, je in einer Zeile<br>
+<b>Planen</b> - Aufgaben · Kalender · Belohnungen · Medienzeit · Notizen &amp; Kontakte · Schichtplan<br>
 <b>Haushalt</b> - Küche (Mahlzeiten · Rezepte · Einkauf · Vorrat) · Haushaltshilfe · Entsorgung · Dokumente · Inventar<br>
 <b>Menschen</b> - Gesundheit · Geburtstage<br>
 <b>Finanzen</b> - Budget<br>
@@ -111,6 +111,7 @@ Alle 20 Module, je in einer Zeile<br>
 | **Aufgaben** | Kanban-Board mit Fristen, Unteraufgaben, Wiederholungen, Kommentaren und einem Verlauf, wer was abgehakt hat. |
 | **Kalender** | Zwei-Wege-Sync mit Google und CalDAV, Outlook-Push, Kalender-Abos, Feiertage und Sichtbarkeit je Termin. |
 | **Belohnungen** | Punkte aus Aufgaben, ein elterlich freigegebener Katalog, ein nachvollziehbares Konto und Taschengeld je Kind. |
+| **Medienzeit** | Bildschirmzeit der Kinder: Kontingente, Geraete, Ausnahmen und Punkte-Tausch. |
 | **Notizen &amp; Kontakte** | Markdown-Haftnotizen mit antippbaren Checklisten, dazu Kontakte mit CardDAV-Sync und vCard-Import/-Export. |
 | **Schichtplan** | Rotierende Schichten und feste Wochenpläne, als Ebene im Kalender eingeblendet. Standardmäßig aus. |
 | **Mahlzeiten** | Wochenplaner per Drag-and-drop mit Rezept-Seitenleiste und direktem Export in die Einkaufsliste. |

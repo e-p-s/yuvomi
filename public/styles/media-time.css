@@ -1,0 +1,289 @@
+/* ============================================================
+   Medienzeit - eigene Seite im geteilten Vokabular
+   ------------------------------------------------------------
+   Die Seite traegt ihre eigene Akzent-Quelle (--module-media-time aus
+   tokens.css) und ihr Fortschritts-Vokabular als mt-progress-Parallelpfad zu
+   rw-progress (rewards.css): dieselbe Grammatik (ScaleX-Fuellung,
+   --mt-progress), damit die Seite ohne rewards.css steht. Die Balken-Regel
+   (Sichtbarkeit, action="none", kein Klick-Handler) bleibt: der Balken antwortet
+   nicht, er zeigt.
+   ============================================================ */
+
+.media-time-page {
+  --module-accent: var(--module-media-time);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.media-time-toolbar {
+  margin-bottom: 0;
+}
+
+.media-time-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.media-time-content {
+  display: block;
+}
+
+.media-time-content__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--layout-reading);
+  width: 100%;
+  margin-inline: auto;
+}
+
+/* Sektionen */
+.mt-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.mt-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.mt-section__note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* Kind-Picker */
+.mt-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.mt-picker .label {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.mt-picker .input {
+  min-width: 220px;
+}
+
+/* Kopf-Karte */
+.mt-card {
+  gap: var(--space-4);
+}
+
+.mt-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.mt-card__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Status-Chips: der Zustand ist die Aussage, der Chip traegt sie. */
+.mt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-3);
+}
+
+.mt-chip--ok {
+  color: var(--color-success-ink);
+  border-color: color-mix(in srgb, var(--color-success) var(--tint-hint), transparent);
+  background: var(--color-fill-well);
+}
+
+.mt-chip--nearing {
+  color: var(--color-warning-ink);
+  border-color: color-mix(in srgb, var(--color-warning) var(--tint-hint), transparent);
+  background: var(--color-fill-well);
+}
+
+.mt-chip--exceeded {
+  color: var(--color-danger-ink);
+  border-color: color-mix(in srgb, var(--color-danger) var(--tint-hint), transparent);
+  background: var(--color-fill-well);
+}
+
+.mt-chip--quiet {
+  color: var(--module-accent);
+  border-color: color-mix(in srgb, var(--module-accent) var(--tint-hint), transparent);
+  background: var(--color-fill-well);
+}
+
+/* Balken (rw-progress-Parallelpfad): gefuellt wird per transform, nie per
+   Breite, damit die Uebergangszeit nie ein Reflow bezahlt. action="none": der
+   Balken ist Sichtbarkeit, keine Bedienung. */
+.mt-progress__track {
+  position: relative;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.mt-progress__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--module-accent);
+  transform: scaleX(var(--mt-progress, 0));
+  transform-origin: left center;
+  transition: transform var(--duration-xl) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-progress__fill {
+    transition: none;
+  }
+}
+
+.mt-progress__label {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* Meta-Zeile */
+.mt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  align-items: center;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.mt-meta__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.mt-meta__label {
+  color: var(--color-text-secondary);
+}
+
+.mt-meta__value {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.mt-meta__quiet {
+  display: inline-flex;
+}
+
+/* Einrichtungsschritte (renderSetupHints-Muster) */
+.mt-setup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mt-setup-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.mt-setup-step__mark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.mt-setup-step--done {
+  color: var(--color-success);
+}
+
+/* Geraete */
+.mt-device-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mt-token {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* Formulare der Regeln */
+.mt-quiet-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.mt-quiet-form .label {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.mt-quiet__time {
+  width: auto;
+}
+
+.mt-rate__field {
+  max-width: 160px;
+}
+
+.mt-hardcap-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mt-row-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 639px) {
+  .mt-picker .input {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}

@@ -333,6 +333,9 @@ export const MODULE_ICON = {
   documents:        'folder-lock',
   inventory:        'package',
   rewards:          'award',
+  // Medienzeit: die Sanduhr - die Sanduhr-Familie ist noch frei, und
+  // `timer` fuehrt bereits das Fasten.
+  media_time:       'hourglass',
   contacts:         'book-user',
   birthdays:        'cake',
   health:           'heart-pulse',

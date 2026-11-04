@@ -38,7 +38,7 @@ function arrayLiteral(source, name) {
 function objectKeys(source, name) {
   const match = source.match(new RegExp(`${name}\\s*=\\s*(?:Object\\.freeze\\()?\\{([\\s\\S]*?)\\}`));
   assert.ok(match, `${name} nicht gefunden`);
-  return [...match[1].matchAll(/^\s*([A-Za-z_][\w-]*)\s*:/gm)].map((m) => m[1]);
+  return [...match[1].matchAll(/^\s*'?([A-Za-z_][\w-]*)'?\s*:/gm)].map((m) => m[1]);
 }
 
 // --------------------------------------------------------------------------
@@ -189,6 +189,7 @@ const README_HEADINGS = {
   documents: 'Documents',
   health: 'Health',
   rewards: 'Rewards',
+  media_time: 'Media Time',
   housekeeping: 'Housekeeping',
   waste: 'Waste collection',
 };
@@ -235,7 +236,7 @@ function navModuleKeys(source) {
   assert.notEqual(start, -1, 'navItems() nicht gefunden');
   const end = source.indexOf('\n}', start);
   assert.notEqual(end, -1, 'Ende von navItems() nicht gefunden');
-  return [...source.slice(start, end).matchAll(/module:\s*'([a-z-]+)'/g)].map((m) => m[1]);
+  return [...source.slice(start, end).matchAll(/module:\s*'([a-z_-]+)'/g)].map((m) => m[1]);
 }
 
 test('jedes rechteverwaltete Modul hat einen Eintrag in navItems()', () => {

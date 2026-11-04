@@ -841,6 +841,9 @@
   --module-settings:  var(--_family-neutral);
   --module-reminders: var(--_family-time);
   --module-rewards:   var(--_family-work);
+  /* Medienzeit: Azur wie Kalender und Erinnerungen - Bildschirmzeit ist
+   * eine Zeitfrage. Die Farbe unterscheidet sich ueber das Sanduhr-Symbol. */
+  --module-media-time: var(--_family-time);
 
   /* KONVENTION "Akzent-Text auf akzent-getöntem Grund" (Chips, Badges,
    * Initialen-Avatare): der rohe Akzent scheitert dort, weil der Grund eine

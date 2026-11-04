@@ -150,6 +150,12 @@ const ROUTES = [
   // Konsequenzen ist ein eigener Ort (Chris, 2026-11-04): eigener Einstieg im
   // Belohnungen-Menue, eigene Adresse, eigener Titel - wie der Verlauf.
   { path: '/rewards/consequences', page: '/pages/rewards.js', requiresAuth: true, module: 'rewards', titleKey: 'nav.rewardsConsequences' },
+  // Medienzeit: eine Seite mit Unterpfaden - wie der Verlauf der Belohnungen
+  // eigene Adresse, dieselbe Seite, dasselbe Modul.
+  { path: '/media-time', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
+  { path: '/media-time/devices', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
+  { path: '/media-time/rules', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
+  { path: '/media-time/exchange', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
 ];
 
 // Settings ist eine Sektion mit einer Wurzel und je einer exakten Route pro
@@ -702,6 +708,8 @@ function topLevelSection(path) {
   if (typeof path === 'string' && (path === '/schedule' || path.startsWith('/schedule/'))) return '/schedule';
   // Der Verlauf der Belohnungen (R24 S8-F1) markiert "Belohnungen".
   if (path === '/rewards/history' || path === '/rewards/consequences') return '/rewards';
+  // Die Unterpfade der Medienzeit (devices, rules, exchange) markieren "Medienzeit".
+  if (typeof path === 'string' && path.startsWith('/media-time/')) return '/media-time';
   return path ?? '/';
 }
 
@@ -4362,6 +4370,7 @@ function navItems({ catalog = false } = {}) {
     { path: '/calendar',  label: t('nav.calendar'),  module: 'calendar',  section: NAV_SECTION.plan },
     { path: '/tasks',     label: t('nav.tasks'),     module: 'tasks',     section: NAV_SECTION.plan },
     { path: '/rewards',   label: t('nav.rewards'),   module: 'rewards',   section: NAV_SECTION.plan },
+    { path: '/media-time', label: t('nav.mediaTime'), module: 'media_time', section: NAV_SECTION.plan },
     { path: '/notes',     label: t('nav.notes'),     module: 'notes',     section: NAV_SECTION.plan },
     { path: '/schedule',  label: t('nav.schedule'),  module: 'schedule',  section: NAV_SECTION.plan },
     // Haushalt — Kitchen-Gruppe zuerst, dann die übrigen Haushalts-Module

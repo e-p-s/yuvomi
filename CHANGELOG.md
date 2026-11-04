@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   completion earned stands with the booking: later changes of the due date, the point value or the
   setting never rewrite booked amounts, and for every late earning the ledger shows the base it came
   from and how many days it was late.
+- **Media Time (screen time) as its own module.** Screen time now has a real
+  entry point: a Media Time page under Plan with four tabs - Today (remaining
+  minutes as a bar, charged vs. exempt vs. unknown split, quiet-time signal,
+  tracker online state), Devices (pair a Windows or Android tracker, the token
+  shows once and only its hash is stored, app inventory per device), Rules
+  (household switch, quiet hours, the points-to-minutes rate, the daily hard
+  cap, per-app exceptions with household defaults) and Exchange (bought minutes
+  with their history). Children see their own day and can buy extra minutes
+  with points; parents manage everything. Off by default until switched on in
+  the household settings.
+
 - **Rewards tabs as a side rail (opt-in, device-local).** A new switch under
   Settings -> Device ("Belohnungs-Reiter als Seitenleiste") pulls the three
   entry points out of the header: on desktop (>=1024px) they stand in a left

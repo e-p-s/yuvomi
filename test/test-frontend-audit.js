@@ -21696,6 +21696,7 @@ test('R17 E6: die Zwei-Felder-Zeile steht einmal in layout.css, kein Modulblatt 
 const ALIAS_PENDING = new Set([
   '../public/pages/tasks.js', '../public/pages/documents.js',
   '../public/pages/rewards.js', '../public/pages/calendar.js', '../public/pages/setup.js',
+  '../public/pages/media-time.js',
   '../public/pages/join.js', '../public/pages/login.js', '../public/pages/reset-password.js',
   '../public/pages/forgot-password.js', '../public/components/user-multi-select.js',
   '../public/components/tag-manager.js',

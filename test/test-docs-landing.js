@@ -332,8 +332,8 @@ function pageModuleNames(html) {
   const en = dictBlock(html, 'en');
   const grid = body.slice(from, to);
   const keys = [
-    ...[...grid.matchAll(/class="feat-row[\s\S]*?data-t="(f_[a-z]+_k)"/g)].map((m) => m[1]),
-    ...[...grid.matchAll(/class="mod-card[\s\S]*?data-t="(m_[a-z]+_t)"/g)].map((m) => m[1]),
+    ...[...grid.matchAll(/class="feat-row[\s\S]*?data-t="(f_[a-z0-9_]+_k)"/g)].map((m) => m[1]),
+    ...[...grid.matchAll(/class="mod-card[\s\S]*?data-t="(m_[a-z0-9_]+_t)"/g)].map((m) => m[1]),
   ];
   return keys.map((k) => stripTags(unescapeJs(dictValue(en, k) || k)));
 }
@@ -372,7 +372,11 @@ test('die Modulzahl der Proof-Leiste ist die Zahl der README-Module, die die Sei
   const { missing, extra, shown } = moduleCoverage(names, readmeModuleNames());
   assert.deepEqual({ missing, extra }, { missing: [], extra: [] },
     'Seite und README-Modultabelle zeigen verschiedene Module (eine Zeile "A & B" darf als A und B erscheinen).');
-  assert.equal(shown, claimed, `Die Proof-Leiste behauptet ${claimed} Module, die Seite zeigt ${shown} README-Module.`);
+  // Die Seite fuehrt Notizen und Kontakte als zwei Karten fuer eine README-Zeile;
+  // die Proof-Leiste nennt die Zeilenzahl der kanonischen Tabelle, nicht die Kartenzahl.
+  assert.equal(claimed, readmeModuleNames().length,
+    `Die Proof-Leiste behauptet ${claimed} Module, die README-Tabelle hat ${readmeModuleNames().length} Zeilen.`);
+  assert.ok(shown >= claimed, `Die Seite zeigt ${shown} README-Module, die Leiste behauptet ${claimed}.`);
 });
 
 test('der Modulzahl-Guard erkennt den Schaden, gegen den er gebaut ist', () => {
@@ -1641,6 +1645,7 @@ const PAGE_MODULE = {
   f_tasks: 'tasks', m_cal: 'calendar', m_sched: 'schedule', m_notes: 'notes', m_contacts: 'contacts',
   f_meals: 'meals', m_recipes: 'recipes', m_shop: 'shopping', m_pantry: 'pantry',
   m_house: 'housekeeping', m_waste: 'waste', m_docs: 'documents', m_inv: 'inventory', m_rewards: 'rewards',
+  m_media_time: 'media_time',
   f_health: 'health', m_bday: 'birthdays', f_budget: 'budget',
   m_family: null, m_rem: null, m_api: null, m_backup: null,
 };
@@ -1671,7 +1676,7 @@ function pageGroups(html) {
   assert.ok(from > 0 && to > from, 'Modulraster (#modGrid bis #modToggle) nicht gefunden - Markup umgebaut?');
   return body.slice(from, to).split('class="mod-group-head" data-t="grp_').slice(1).map((chunk) => ({
     group: chunk.match(/^(\w+)"/)[1],
-    keys: [...chunk.matchAll(/data-t="((?:f|m)_[a-z]+)_t"/g)].map((m) => m[1]),
+    keys: [...chunk.matchAll(/data-t="((?:f|m)_[a-z0-9_]+)_t"/g)].map((m) => m[1]),
   }));
 }
 
@@ -1790,7 +1795,7 @@ test('der Menuegruppen-Guard erkennt den Schaden, gegen den er gebaut ist', () =
     + '</div><button id="modToggle">';
   const healthy = page([
     // R19 (Ulas 2026-10-16): Belohnungen unter Planen, Schichtplan am Ende.
-    ['plan', ['f_tasks', 'm_cal', 'm_rewards', 'm_notes', 'm_sched']],
+    ['plan', ['f_tasks', 'm_cal', 'm_rewards', 'm_media_time', 'm_notes', 'm_sched']],
     ['household', ['f_meals', 'm_recipes', 'm_shop', 'm_pantry', 'm_house', 'm_waste', 'm_docs', 'm_inv']],
     ['people', ['f_health', 'm_contacts', 'm_bday']],
     ['finance', ['f_budget']],

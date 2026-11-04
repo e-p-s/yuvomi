@@ -23,6 +23,7 @@ export const BUILT_IN_MODULES = Object.freeze([
   { id: 'calendar', labelKey: 'nav.calendar' },
   { id: 'tasks', labelKey: 'nav.tasks' },
   { id: 'rewards', labelKey: 'nav.rewards' },
+  { id: 'media_time', labelKey: 'nav.mediaTime' },
   { id: 'notes', labelKey: 'nav.notes' },
   { id: 'schedule', labelKey: 'nav.schedule' },
   { id: 'contacts', labelKey: 'nav.contacts' },
@@ -136,7 +137,7 @@ const KITCHEN_CHILD_ID_SET = new Set(KITCHEN_CHILD_IDS);
 // Aufgaben, obwohl er das seltenste Ziel der Gruppe ist. Die Reihenfolge
 // INNERHALB der Gruppe ist die von BUILT_IN_MODULES bzw. der Routerliste; eine
 // eigene `module_order` des Nutzers bleibt davon unberuehrt.
-const PLAN_MODULE_IDS = new Set(['calendar', 'tasks', 'rewards', 'notes', 'schedule']);
+const PLAN_MODULE_IDS = new Set(['calendar', 'tasks', 'rewards', 'media_time', 'notes', 'schedule']);
 // Ehemals ein einziger „Zuhause"-Sammeltopf (8 Module) — aufgeteilt in semantische
 // Gruppen ≤5, damit die Sidebar-Sektion eine Bedeutung trägt statt „nicht Plan/Übersicht".
 const HOUSEHOLD_MODULE_IDS = new Set(['kitchen', 'meals', 'recipes', 'shopping', 'housekeeping', 'waste', 'documents', 'inventory']);
