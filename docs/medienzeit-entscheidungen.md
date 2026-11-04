@@ -1,6 +1,7 @@
 # Medienzeit: Die 8 offenen Entscheidungen - einfach erklaert
 
-Stand: 04.11.2026. Entscheidungsvorlage fuer Chris. Grundlage: docs/medienzeit-konzept.md
+Stand: 04.11.2026. Entscheidungsvorlage fuer Chris - ANTWORTEN DES NUTZERS sind am Ende
+in der Ankreuzliste eingetragen (04.11.). Punkt 3erklaert und nachgefragt. Grundlage: docs/medienzeit-konzept.md
 (Abschnitt 8), docs/medienzeit-android-tracker.md, docs/medienzeit-windows-agent.md.
 Grundprinzip: Yuvomi zaehlt und motiviert ("Treuhänder-Modell", Anreiz statt Zwang); echte
 Sperre kann nur die Heimnetz-Integration. Beispiel-Familie: Kind Leo, 30 Min/Tag erlaubt,
@@ -104,11 +105,11 @@ Mehrwert ist das gemeinsame "alle offline", nicht die Technik.
 
 | # | Entscheidung                                                    | Antwort (Ja/Nein/Wahl) |
 |---|-----------------------------------------------------------------|----------------------|
-| 1 | v1 nur Zaehlen (e+a), Heimnetz-Sperre spaeter?                  | [ ]                  |
-| 2 | Tauschkurs pro Kind (statt ein Kurs fuer alle)?                 | [ ]                  |
-| 3 | Kind darf selbst zumachen, Entsperren nur durch Eltern?         | [ ]                  |
-| 4 | max_daily_minutes ist hart, Punkte kommen nicht drueber?        | [ ]                  |
-| 5 | Geschwister-Gruppenkontingent: erst spaeter, nicht v1?          | [ ]                  |
-| 6 | Rohzeiten speichern (Paket + Start/Ende, ~90 Tage)?             | [ ]                  |
-| 7 | Erst Fork-only, Upstream-PR spaeter?                            | [ ]                  |
-| 8 | Globale Haushalts-Ruhezeit als Sichtbarkeit fuer alle?          | [ ]                  |
+| 1 | v1 nur Zaehlen (e+a), Heimnetz-Sperre spaeter?                  | JA - nur zaehlen     |
+| 2 | Tauschkurs pro Kind (statt ein Kurs fuer alle)?                 | NEIN - ein Kurs fuer alle |
+| 3 | Kind darf selbst zumachen, Entsperren nur durch Eltern?         | noch offen (erklaert am 04.11.) |
+| 4 | max_daily_minutes ist hart, Punkte kommen nicht drueber?        | optional - Schalter hart/kaufbar |
+| 5 | Geschwister-Gruppenkontingent: erst spaeter, nicht v1?          | JA - spaeter         |
+| 6 | Rohzeiten speichern (Paket + Start/Ende, ~90 Tage)?             | JA - Rohzeit + Aggregat |
+| 7 | Erst Fork-only, Upstream-PR spaeter?                            | NEIN PR - nur Upstream-Aenderungen bei uns einpflegen (Merge-Konvention) |
+| 8 | Globale Haushalts-Ruhezeit als Sichtbarkeit fuer alle?          | JA - fuer alle sichtbar |
