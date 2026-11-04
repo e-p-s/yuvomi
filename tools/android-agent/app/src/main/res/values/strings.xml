@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yuvomi Medienzeit</string>
+
+    <!-- Schritt 1: Erklaerseite -->
+    <string name="step1_title">Was Yuvomi erfasst - und was nicht</string>
+    <string name="step1_body">Yuvomi zaehlt Bildschirmzeit pro App dafuer, dass dein Kind sein Tageskontingent sehen kann.\n\nErfasst wird NUR:\n• Paketname der App (z. B. com.example.schulmanager)\n• Start- und Endzeit der Nutzung\n\nErfasst wird NICHT:\n• kein Bildschirminhalt, keine URLs, keine Nachrichten\n• kein Zugriff auf Dateien, Kameras oder Kontakte\n\nDeshalb braucht Yuvomi auch KEIN „Bildschirminhalt lesen" (Accessibility) - es reicht die System-Statistik „welche App war wann vorne". Die Zeiten gehen nur an EUREN selbst gehosteten Yuvomi-Server, nie an Dritte.</string>
+    <string name="step1_next">Verstanden, weiter</string>
+
+    <!-- Schritt 2: Usage-Zugriff -->
+    <string name="step2_title">App-Nutzung erlauben</string>
+    <string name="step2_body">Damit Yuvomi die Bildschirmzeit zaehlen kann, musst du in den Systemeinstellungen den „Nutzungszugriff" fuer Yuvomi Medienzeit einschalten.\n\nGrund: nur so liefert Android die Liste „welche App war wann im Vordergrund". Es werden weiterhin nur Paketname + Zeitraum gelesen, kein Inhalt.\n\nOhne diese Freigabe erfasst Yuvomi bewusst NICHTS (der Server zeigt dann „Tracker ohne Freigabe" statt 0 Minuten - damit niemand fuer eine fehlende Berechtigung Verantwortung uebernimmt).</string>
+    <string name="step2_open">Einstellungen oeffnen</string>
+    <string name="step2_recheck">Erneut pruefen</string>
+    <string name="step2_granted">Freigabe erteilt ✓</string>
+    <string name="step2_missing">Noch keine Freigabe - Schalter in den Einstellungen an-tippen.</string>
+
+    <!-- Schritt 3: Batterie -->
+    <string name="step3_title">Hintergrund zulassen</string>
+    <string name="step3_body">Android und die Hersteller (Samsung, Xiaomi &amp; Co.) beenden Apps im Hintergrund gern. Damit die Zeiten lueckenlos ankommen, sollte Yuvomi von der Batterie-Optimierung ausgenommen werden.\n\nFalls du das ablehnst: Die Daten fehlen dann moeglicherweise - der Server meldet „Tracker offline" statt still 0 Minuten.</string>
+    <string name="step3_open">Batterie-Einstellungen oeffnen</string>
+    <string name="step3_skip">Trotzdem fortfahren</string>
+
+    <!-- Schritt 4: Pairing -->
+    <string name="step4_title">Mit Yuvomi-Server verbinden</string>
+    <string name="step4_body">Adresse deines Yuvomi-Servers und das Geräte-Token aus der Eltern-Ansicht („Geraet koppeln") hier eintragen. Der QR-Code dort kann die App nicht scannen? Einfach abtippen.\n\nBeides wird verschluesselt auf dem Geraet gespeichert und nie mitgesendet, ausser an deinen Server.</string>
+    <string name="step4_hint">Token nur einmalig hier eintragen - er wird nicht erneut angezeigt.</string>
+    <string name="step4_server_label">Server (z. B. http://yuvomi.local:3000)</string>
+    <string name="step4_token_label">Geraete-Token</string>
+    <string name="step4_pair">Verbinden</string>
+
+    <!-- Schritt 5: Fertig -->
+    <string name="step5_title">Tracker ist bereit</string>
+    <string name="step5_body">Der Dienst „Medienzeit wird erfasst" laeuft ab jetzt dauerhaft und meldet alle Minute. Ohne Netzwerk puffert das Geraet bis zu 7 Tage (Nachmeldungen akzeptiert der Server bis 24 h, aelter als „backfill").</string>
+    <string name="step5_start">Erfassung starten</string>
+    <string name="step5_repair">Geraet neu koppeln</string>
+
+    <!-- Status -->
+    <string name="status_no_sync_yet">Noch keine Verbindung zum Server.</string>
+    <string name="status_last_sync">Letzte Meldung vor %1$d Minute(n).</string>
+    <string name="status_running">Erfassung laeuft (Foreground-Dienst).</string>
+    <string name="status_paired">Gekoppelt.</string>
+    <string name="status_not_paired">Nicht gekoppelt - Schritt „Verbinden" erneut durchlaufen.</string>
+    <string name="status_quota_ok">Kontingent: erlaubt.</string>
+    <string name="status_quota_nearing">Kontingent: fast aufgebraucht.</string>
+    <string name="status_quota_unknown">Kontingent-Status noch nicht abgerufen.</string>
+    <string name="status_privacy_note">Erfasst: Paketname + Zeitraum. Kein Inhalt, keine URLs.</string>
+
+    <!-- Benachrichtigungen -->
+    <string name="channel_tracker">Medienzeit-Erfassung</string>
+    <string name="channel_tracker_desc">Dauerhafte Anzeige, dass die Bildschirmzeit erfasst wird.</string>
+    <string name="channel_alert">Hinweise</string>
+    <string name="channel_alert_desc">Kontingent-Hinweise (kein Block - Anreizsystem).</string>
+    <string name="notification_starting">Medienzeit-Tracker startet…</string>
+    <string name="notification_tracking">Medienzeit wird erfasst</string>
+    <string name="notification_offline">Puffert offline - keine Serververbindung</string>
+    <string name="notification_reconnect">Geraete-Token abgelaufen - neu koppeln</string>
+    <string name="notification_quota_exceeded">Kontingent erreicht - Hinweis, keine Sperre</string>
+    <string name="notification_quiet">Ruhezeit - Hinweis, keine Sperre</string>
+
+    <!-- Pairing-Meldungen -->
+    <string name="pairing_saved">Verbindung gespeichert.</string>
+    <string name="pairing_bad_url">Adresse muss mit http:// oder https:// beginnen.</string>
+    <string name="pairing_bad_token">Bitte das Geraete-Token eintragen.</string>
+    <string name="tracker_started">Erfassung gestartet ✓</string>
+
+    <!-- OEM -->
+    <string name="oem_link_label">Hersteller-Hinweise (Samsung, Xiaomi …)</string>
+    <string name="oem_open_failed">Hinweis-Seite konnte nicht geoeffnet werden.</string>
+</resources>

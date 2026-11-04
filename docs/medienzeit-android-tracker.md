@@ -363,3 +363,16 @@ Unbekannte Pakete: 200 statt 4xx (Fail-open), Kennzeichnung nur in classificatio
     nur als Kontext warum (c)/MDM die einzige echte Sperre ist): developer.android.com/reference/kotlin/android/app/admin/DevicePolicyManager ,
     developer.android.com/work/dpc/device-management
 16. AppOpsManager.OPSTR_GET_USAGE_STATS (Prüfpfad): developer.android.com/reference/kotlin/android/app/AppOpsManager
+
+## Umsetzung: tools/android-agent/
+
+Die Konzeptpunkte A–I sind als lauffähiges Kotlin-Projekt unter `tools/android-agent/`
+umgesetzt (Gradle, minSdk 26 / target 34, Package `de.eps.yuvomi.tracker`):
+queryEvents-Replay nach Abschnitt C ("global single foreground", 12-h-Lookback, Clipping,
+<2,5-s-Merge, "unbekannt" != 0 auf Android R+), Berechtigungs-Onboarding nach B
+(AppOps-Check + ACTION_USAGE_ACCESS_SETTINGS mit onResume-Re-Check, Batterie-Ausnahme,
+OEM-Hinweisseite als Asset), Offline-Puffer (Room `pending_sessions`) und Sync nach I
+(`POST /tracker/sync` mit Bearer-Geräte-Token und quota.state-Hinweis ohne Block,
+60-s-Heartbeat im specialUse-FGS + WorkManager-15-min-Kette, `exceptions_version`
+als Cache-Invalidierung). Server und Deploy bleiben unverändert; Bauen/Prüfschritte
+stehen in `tools/android-agent/README.md`.

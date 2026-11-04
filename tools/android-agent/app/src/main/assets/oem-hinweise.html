@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hersteller-Hinweise: damit der Tracker laeuft</title>
+<style>
+  body { font-family: sans-serif; margin: 1.5em; line-height: 1.5; max-width: 40em; }
+  h2 { margin-top: 1.4em; }
+  .why { background: #eef4fb; padding: 0.8em 1em; border-left: 4px solid #1E3A5F; }
+</style>
+</head>
+<body>
+<h1>Warum diese Seite?</h1>
+<p class="why">Android-Hersteller beenden Apps im Hintergrund aggressiver als Google es
+vorsieht. Diese Einstellungen kann keine App selbst setzen - sie muessen einmalig von Hand
+gesetzt werden. Nach OTA-Updates werden sie gern zurueckgesetzt: wenn der Server
+"Tracker offline" meldet, hier erneut nachsehen.</p>
+
+<h2>Samsung (One UI)</h2>
+<ul>
+  <li><b>Schlafende Apps:</b> Einstellungen &rarr; Batterieverbrauch (Geraetepflege) &rarr;
+      Hintergrundaktivitaeten &rarr; "Schlaffende Apps" &rarr; Yuvomi Medienzeit dort <b>nicht</b> eintragen,
+      falls vorhanden &rarr; "Nie schlafen" / Ausnahmen hinzufuegen.
+      Hintergrund: Samsung beendet Apps nach ca. 3 Tagen ohne Nutzung im Vordergrund, wenn sie in dieser Liste stehen.</li>
+  <li><b>Autostart:</b> Einstellungen &rarr; Batterieverbrauch &rarr; Hintergrundaktivitaeten &rarr;
+      "Autostart" &rarr; Yuvomi Medienzeit aktivieren.</li>
+  <li><b>Batterie-Optimierung:</b> auf "Nicht optimiert" stellen (fuehrt der Onboarding-Schritt hin).</li>
+</ul>
+
+<h2>Xiaomi / Redmi / POCO (HyperOS / MIUI)</h2>
+<ul>
+  <li><b>Autostart:</b> Einstellungen &rarr; Apps &rarr; Autostart &rarr; Yuvomi Medienzeit erlauben.
+      Ohne Autostart startet der Tracker nach Neustart NICHT (der Boot-Receiver wird von MIUI blockiert).</li>
+  <li><b>Akku-Sparer:</b> Einstellungen &rarr; Akku &rarr; Yuvomi Medienzeit &rarr; "Keine Einschraenkungen".</li>
+  <li><b>Hintergrund-Apps sperren:</b> Recently-Apps &rarr; Yuvomi-Karte herunterwischen &rarr;
+      Schloss-Symbol antippen (geschuetzt vor "Alle schliessen").</li>
+</ul>
+
+<h2>Andere Hersteller (Huawei, OPPO, vivo, Realme)</h2>
+<ul>
+  <li>Prinzip ueberall gleich: Autostart erlauben + Batterie-"keine Einschraenkung" +
+      App in den Recently-Apps sperren.</li>
+  <li>isbadbatteryapps.com listet die genauen Menuepfade je Modell (externe Referenz).</li>
+</ul>
+
+<h2>Was der Tracker ohne diese Einstellungen tut</h2>
+<p>Er verliert nichts an Daten, die bereits gemessen wurden (der Offline-Puffer bleibt),
+aber der Upload kann sich verspaeten und der Dienst kann sterben. Der Server zeigt dann
+"Tracker offline" statt still 0 Minuten - das Kind verliert also keine Punkte durch
+Hersteller-Eigenheiten. Perfekte Erfassung gibt es ohne Device-Owner/MDM nicht; Yuvomi
+ist ein Melde-, kein Vollzugssystem.</p>
+</body>
+</html>

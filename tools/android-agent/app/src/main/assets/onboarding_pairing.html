@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wie funktioniert das Geraet-Pairing?</title>
+<style>body{font-family:sans-serif;margin:1.5em;line-height:1.5;max-width:40em}</style>
+</head>
+<body>
+<h1>Geraet koppeln</h1>
+<p>Im Yuvomi-Web (Eltern-Ansicht) unter "Kinder &rarr; Geraet koppeln" entstehen zwei Werte:</p>
+<ul>
+  <li><b>Server-Adresse:</b> z. B. <code>http://yuvomi.local:3000</code> (LAN) oder deine
+      HTTPS-Domain. Adressen im privaten Netz duerfen http:// sein - es verlassen ja nur
+      Paketnamen und Zeiten euer Netzwerk nicht.</li>
+  <li><b>Geraete-Token:</b> ein einmal angezeigtes, kurzlebiges Schreibrecht
+      (Scope "media:write"). Es kann jederzeit widerrufen werden; danach verlangt die App
+      eine neue Kopplung.</li>
+</ul>
+<h1>Wo speichert die App das?</h1>
+<p>Verschluesselt in EncryptedSharedPreferences im privaten App-Speicher. Das Token
+wird niemals geloggt (auch nicht im Fehlerfall) und fliesst nur als
+"Authorization: Bearer"-Header an die von dir eingetragene Server-Adresse.</p>
+<h1>Was passiert nach Revoke?</h1>
+<p>Der Server antwortet 401. Die App loescht das Token, behaelt aber den Offline-Puffer:
+nach neuer Kopplung werden die Zeiten nachgetragen (bis 24 h regulaer, danach "backfill").</p>
+</body>
+</html>

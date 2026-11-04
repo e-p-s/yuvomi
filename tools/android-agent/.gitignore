@@ -1,0 +1,10 @@
+# Gradle / Android Studio
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+captures/
+.kotlin/
+# Wrapper wird bei Bedarf erzeugt (README): gradle wrapper --gradle-version 8.7

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warum Batterie-Ausnahme?</title>
+<style>body{font-family:sans-serif;margin:1.5em;line-height:1.5;max-width:40em}</style>
+</head>
+<body>
+<h1>Warum die Yuvomi von der Batterie-Optimierung ausnehmen?</h1>
+<p>Android pausiert Apps im Hintergrund aggressiv (Doze-Modus), sobald das Display aus
+und das Geraet ruhig ist. Netzwerk und Wecker werden dann zurueckgehalten.</p>
+
+<h2>Das betrifft uns nur beim Upload, nicht bei der Messung</h2>
+<p>Bildschirm aus = keine relevante Nutzungszeit. Die Messung laeuft weiter, nur der
+Upload kann sich spaeter erledigen. Der Server akzeptiert Nachmeldungen bis 24 h;
+aeltere bucht er als "backfill" (in der Historie sichtbar als spaet gemeldet).</p>
+
+<h2>Wenn du die Ausnahme NICHT setzt</h2>
+<ul>
+  <li>Uploads verspaeten sich bis ins naechste Wartungsfenster (Daten bleiben erhalten).</li>
+  <li>Manche Hersteller beenden den Dienst ganz - der Server zeigt dann "Tracker offline",
+      niemals stillschweigend 0 Minuten.</li>
+</ul>
+<p>Die Ausnahme ist also Komfort und Zuverlaessigkeit, keine Voraussetzung fuer den
+Datenschutz: Yuvomi sendet nur Paketnamen + Zeitraeume, und nur an euren eigenen Server.</p>
+</body>
+</html>

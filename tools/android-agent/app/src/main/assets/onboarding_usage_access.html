@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warum der Nutzungszugriff?</title>
+<style>body{font-family:sans-serif;margin:1.5em;line-height:1.5;max-width:40em}</style>
+</head>
+<body>
+<h1>Warum "App-Nutzung" (Usage Access)?</h1>
+<p>Android fragt Berechtigungen wie "Standort" mit einem Dialog ab. Der
+Nutzungszugriff ist anders: er ist ein Schalter in den Systemeinstellungen, den nur
+du als Elternteil an-tippen kannst. Keine App kann sich ihn selbst geben - das ist
+gut so, denn er ist ein sensibler Leserechte-Schalter.</p>
+
+<h2>Was genau gelesen wird</h2>
+<p>Die System-Statistik liefert Ereignis-Listen der Form:</p>
+<pre>15:03:11  com.example.schulmanager   Vordergrund
+15:31:47  com.example.schulmanager   Hintergrund</pre>
+<p>Mehr nicht. Kein Text, kein Bild, keine URL, kein Inhalt. Yuvomi liest diese Ereignisse und
+berechnet daraus Sitzungen (Paket, Start, Ende) und meldet sie an euren Server.</p>
+
+<h2>Warum nicht "Bildschirminhalt lesen" (Accessibility)?</h2>
+<p>Der Accessibility-Dienst koennte in Echtzeit sehen, welche App vorne ist - dafuer
+muesste er aber den gesamten Bildschirminhalt lesen duerfen. Das ist fuer eine
+Familien-App, die nur Zeilen zaehlt, ein unnoetiges Hochprivileg. UsageStats ist die
+"schmalere API": sie liefert genau das, was wir brauchen, und nichts anderes.</p>
+
+<h2>Ohne Freigabe</h2>
+<p>Ohne Freigabe werden KEINE Nutzungsdaten erfasst - auch keine Nullen. Der Server
+zeigt dann "Tracker ohne Freigabe", damit niemand fuer eine fehlende Berechtigung
+Verantwortung traegt.</p>
+</body>
+</html>
