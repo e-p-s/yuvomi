@@ -75,3 +75,18 @@ erweitern (Migration v282, append-only).
 - docs.rs/win_event_hook, docs.rs/wineventhook (Rust-Pfad)
 - Vollständige Liste (24 URLs) im Transkript
   `/root/.hermes/cache/delegation/live/deleg_4e921562/task-0.log`
+
+## Umsetzung: tools/windows-agent/
+
+Der Agent liegt als lauffaehiges C#/.NET-8-Projekt unter `tools/windows-agent/`
+(WinForms-Tray, asInvoker, Einzelinstanz-Mutex). Umgesetzt nach diesem Dokument:
+`ForegroundTracker` (SetWinEventHook EVENT_SYSTEM_FOREGROUND OUTOFCONTEXT auf dediziertem
+Pump-Thread + 1s-Poll-Fallback, Null-Handle-Absicherung), `IdleTracker`
+(GetLastInputInfo, Schwelle Default 60 s), `MessageWindow` (WTSRegisterSessionNotification,
+Lock/Unlock/Logoff als scharfe Session-Grenze), `PowerWatcher` (PowerModeChanged: Suspend
+schliesst die Session sofort + Clock-Resync), `SessionAggregator`
+(session_key = SHA256(deviceGuid|package|started_at), Merge kleiner Luecken), `ApiClient`
+(sync/heartbeat gegen die Android-Endpunkte, Offline-Puffer outbox.jsonl mit Backoff
+5 s..5 min, "keine Antwort = erlaubt") und `AutostartInstaller` (HKCU Run-Key +
+schtasks-Task, beides). Der Watchdog-Zwilling ist bewusst noch nicht implementiert
+(README, Bekannte Grenzen). Bauen/Pairing/Test: `tools/windows-agent/README.md`.
