@@ -49,7 +49,7 @@ echo "== 5/6 Restart + Migrationen =="
 # Service-Worker-Cache-Name (sw.js rendert ihn aus der Umgebungsvariable) und
 # die Clients holen sich beim naechsten Oeffnen das neue Buendel statt dem
 # Cache-First-Stand des alten Service Workers.
-run_ct "grep -q '^APP_BUILD_REVISION=' $APP_DIR/.env 2>/dev/null && sed -i 's|^APP_BUILD_REVISION=.*|APP_BUILD_REVISION=$FORK_SHA|' $APP_DIR/.env || echo APP_BUILD_REVISION=$FORK_SHA >> $APP_DIR/.env"
+run_ct "cp $APP_DIR/.env $APP_DIR/backups/pre-deploy-$STAMP.env && grep -v ^APP_BUILD_REVISION= $APP_DIR/backups/pre-deploy-$STAMP.env > $APP_DIR/.env.tmp && mv $APP_DIR/.env.tmp $APP_DIR/.env; echo APP_BUILD_REVISION=$FORK_SHA >> $APP_DIR/.env"
 run_ct "systemctl restart yuvomi.service && sleep 3 && systemctl is-active yuvomi.service"
 
 echo "== 6/6 Health-Check (max 60s) =="
