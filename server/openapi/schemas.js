@@ -273,6 +273,13 @@ const taskProperties = {
   rotation_last_position: { type: ['integer', 'null'], minimum: 0, description: 'The pointer: the pool position that received the last occurrence, null before the first hand-over.' },
   rotation_pool: { type: ['array', 'null'], items: { type: 'integer' }, description: 'Member ids in delivery order, deactivated members included, null when the task does not rotate.' },
   rotation_next_user: { type: ['integer', 'null'], description: 'The member the next occurrence goes to, by the same rule that hands it out; null when rotation is off or no member can take it.' },
+  requires_approval: { type: 'integer', minimum: 0, maximum: 1, description: '1 makes a completion by a non-admin await a parent approval (opt-in per task); 0 completes as before.' },
+  approval_status: { type: ['string', 'null'], enum: ['pending', 'approved', 'rejected', null], description: 'Check-off awaiting confirmation (`pending`), confirmed, or reopened after a rejection; null while no approval is in play.' },
+  approved_by: { type: ['integer', 'null'], description: 'Administrator who confirmed the pending completion.' },
+  approved_at: { type: ['string', 'null'], description: 'When the approval landed (ISO timestamp).' },
+  reject_note: { type: ['string', 'null'], description: 'Reason the administrator gave when reopening the task after a rejection.' },
+  checkin_at: { type: ['string', 'null'], description: 'When the task was ticked off; a later approval books with this day as the assessment day for late decay.' },
+  checkin_by_user_id: { type: ['integer', 'null'], description: 'Who ticked it off; the follow-up of a series goes to this person, not the former assignee.' },
 };
 
 const taskRequired = [
