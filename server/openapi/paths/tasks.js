@@ -133,10 +133,30 @@ export function tasksPaths() {
       patch: op({ summary: 'Update task status', operationId: 'updateTaskStatus', tag: 'Tasks', params: [idParam()], stateChanging: true, requestBody: jsonBody('#/components/schemas/TaskStatusInput'), responses: typedResponses(200, 'Status changed', 'TaskStatusResponse', { 400: BAD_REQUEST, 403: { $ref: '#/components/responses/Forbidden' }, 404: NO_TASK }), description: 'Body: { status, done_by_user_id? }. Sending `archived` files the task away without touching its status - use PATCH /archive instead. Deliberately open on a locked task: ticking one off is the interaction the lock exists to preserve. `done_by_user_id` names who actually did the task (#1205), which is not necessarily the caller - on a shared tablet it rarely is. It has to be a household member (400 otherwise), it only applies to the transition into `done` and is ignored on any other status change, and it decides where the points go: a named member who takes part in rewards receives them instead of the assignees, a named member who does not take part means no points at all rather than crediting someone who did not do it. Omit it and nothing changes: the history shows the caller and the assignees rule applies. The naming is as idempotent as the completion itself - correcting it means reopening the task and ticking it off again. A paired wall display reaches this route too, and only this one of the writing routes (#1209): for it the field is required rather than optional, only the transition into `done` is allowed, and the task has to be visible to the whole household, which answers 404 rather than 403 so an invisible task is not confirmed to exist. Returns `{ data: { id, status, archived_at, next_due_date } }`. `next_due_date` (YYYY-MM-DD) is the due date of the next occurrence still pending - not done and not archived, so one that is `in_progress` counts - when this call completed a recurring task, and `null` in every other case: a task without recurrence, a series that has ended, a status change that is not a transition into `done`, and the `archived` shortcut, which omits the field.' + ' When the task carries `requires_approval: 1`, a completion by a non-admin does not finish the task: it stores the check-off and answers 200 with `data.approval_status: "pending"`, points and the follow-up appear only once an administrator confirms it through POST /tasks/{id}/approval. An admin completing an approval-required task confirms it in the same step.' }),
     },
     '/api/v1/tasks/{id}/approval': {
-      post: op({ summary: 'Confirm or decline a pending task approval', operationId: 'approveTaskCompletion', tag: 'Tasks', params: [idParam()], stateChanging: true,
+      post: op({
+        summary: 'Confirm or reject a pending task approval',
+        operationId: 'decideTaskApproval',
+        tag: 'Tasks',
+        params: [idParam()],
+        stateChanging: true,
         requestBody: jsonBody(null),
-        responses: typedResponses(200, 'Approval decided', 'TaskResponse', { 400: BAD_REQUEST, 403: apiError('`task_approval_admin_only` (403, only administrators decide approvals)'), 404: NO_TASK, 409: apiError('`task_approval_not_pending` (409, the task was never checked off, or an earlier decision already settled it)') }),
-        description: 'Body: { action, note? } with `action` one of `approve` or `reject`. Only administrators reach this route; anyone else answers 403 with reason `task_approval_admin_only`. `approve` books the completion as a normal tick-off: points and the follow-up of a recurring series fire now, assessed against the stored check-off day (a late confirmation on a decayed task still pays the reduced value, because the assessment day is when the child ticked, not when the parent confirmed). `reject` reopens the task (status `open`), records `reject_note` on the task and in the history, and books nothing. `note` is trimmed to 500 characters and kept only on a rejection. A task without a pending approval answers 409 rather than silently doing nothing, so a second device that confirmed in the meantime is visible rather than guessed. Returns the refreshed task.' }),
+        responses: typedResponses(200, 'Approval decided; the refreshed task', 'TaskResponse', {
+          400: BAD_REQUEST,
+          403: APPROVAL_ADMIN_ONLY,
+          404: NO_TASK,
+          409: apiError('The task has no pending approval (reason `task_approval_not_pending`) - it was decided already, or was never checked off.'),
+        }),
+        description: 'Body: { action, note? } with `action` `approve` or `reject` (anything else is 400 without a reason). '
+          + 'Administrators only - every other caller, including a paired display, answers 403 with reason `task_approval_admin_only`. '
+          + 'A task that is not `approval_status: "pending"` answers 409, so a second device that decided in the meantime is visible rather than silently accepted. '
+          + 'A task that does not exist or is not visible answers 404 (reason `tasks_task_not_found`), an archived one too. '
+          + '`approve` confirms the stored check-off (`approval_status: "approved"`, `approved_by`, `approved_at`) and books the points now, as a normal tick-off does: '
+          + 'a late completion still pays the decayed value, because a late approval is assessed against the check-off day (`checkin_at`), not the confirmation day, '
+          + 'and the follow-up of a recurring series is spawned as with any completion. '
+          + '`reject` reopens the task (status `open`, approval fields cleared) and keeps the reason in `reject_note` - trimmed to 500 characters, '
+          + 'and nothing was booked, so nothing is reversed. The follow-up instance of a recurring series is taken back, the same rule as un-ticking a task by hand. '
+          + 'Returns `{ data: Task }` with the fields after the decision.',
+      }),
     },
     '/api/v1/tasks/{id}/archive': {
       patch: op({ summary: 'Archive or restore a task', tag: 'Tasks', params: [idParam()], stateChanging: true, requestBody: jsonBody(null), description: 'Archives the task by default. Send `{ "archived": false }` to bring it back. The status is left untouched: a task that was done stays done, and no reward booking changes. Filing a task removes it from everyone\'s view, so on a locked task this is the creator and administrators only.' }),

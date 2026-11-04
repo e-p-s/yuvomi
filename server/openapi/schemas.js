@@ -342,6 +342,7 @@ const taskInputProperties = {
   locked: { type: 'boolean', description: 'Read as true or false, so 0 and 1 work as well.' },
   rotation_mode: { type: ['string', 'null'], enum: ['round_robin', null], description: 'Requires a recurring task and a pool of at least 2 household members (400 otherwise). Null clears mode, pool and pointer. Omitted on update, the rotation stays.' },
   rotation_pool: { type: 'array', maxItems: 10, items: { type: 'integer', minimum: 1 }, description: 'Member ids, the list order is the delivery order. On update it is merged with the stored pool: a deactivated member left out keeps its place.' },
+  requires_approval: { type: 'boolean', description: 'Read as true or false, so 0 and 1 work as well. 1 makes a check-off by a member who is not an administrator wait for an administrator (POST /tasks/{id}/approval) before points are booked and the follow-up of a series is spawned; an administrator completing such a task confirms it directly. Changing it is a change to the task definition, so on a locked task only its creator and administrators may send it. Omitted on update, the setting stays.' },
   sync_target: {
     type: ['string', 'null'],
     description: '`caldav:<accountId>|<listUrl>` from `GET /tasks/sync-targets`, or null or empty for local only. Ignored on a subtask, and on update once the task is on the server.',
