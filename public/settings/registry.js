@@ -657,6 +657,7 @@ export const SETTINGS_SECTIONS = freezeEntries([
     options: [
       'settings.rewardsApprovalLabel',
       'settings.rewardsLateDecayLabel',
+      'settings.rewardsPenaltiesLabel',
       'settings.rewardsDefaultPointsLabel',
     ],
     adminOnly: true,
