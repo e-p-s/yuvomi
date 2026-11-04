@@ -9,11 +9,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        // --- Einzelinstanz-Check (Mutex) ---
+        // Single-Instance-Mutex: CreatedNew=true heisst, wir sind die erste Instanz.
         using var mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
         if (!createdNew)
         {
-            // Zweite Instanz: still beenden (Autostart-Doppelung Run-Key + Task).
+            // Zweite Instanz: nicht 'using' zurueckgeben (sonst fuehrt das Release beim
+            // Dispose zum Freigeben eines Mutex, dem wir nie gehoerten) - einfach beenden.
             return;
         }
 
@@ -24,6 +25,10 @@ internal static class Program
             AgentPaths.EnsureRoot();
             var cfg = AgentConfig.Load();
             var device = DeviceIdentity.Load(cfg);
+            // Token steht nach dem Pairing in der lokalen config.json - dort hat ihn der
+            // Erststart in device.json uebernommen; hier wieder auf null setzen, damit der
+            // Speicher nur eine massgebliche Token-Quelle traegt (device.json, dpapi).
+            cfg.DeviceToken = "";
             using var api = new ApiClient(cfg, device);
             using var coordinator = BuildCoordinator(cfg, device, api, out var power);
 
@@ -53,7 +58,8 @@ internal static class Program
     private static AgentCoordinator BuildCoordinator(AgentConfig cfg, DeviceIdentity device,
         ApiClient api, out PowerWatcher power)
     {
-        // PowerWatcher braucht die Session-Grenzen des Coordinators -> zykisch aufloesen.
+        // PowerWatcher braucht die Session-Grenzen des Coordinators -> Zykik per
+        // Null-pruefendem Lambda aufloesen (der Handler feuert erst nach Start()).
         AgentCoordinator? coord = null;
         power = new PowerWatcher(reason => coord?.OnSessionBoundary("power:" + reason));
         coord = new AgentCoordinator(cfg, device, api, power);
