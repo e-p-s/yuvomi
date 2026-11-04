@@ -732,7 +732,8 @@
         "subtasksAllDone": "\"{{title}}\" dan semua subtugas selesai.",
         "seriesDoneNamed": "\"{{title}}\" selesai - berikutnya: {{date}}",
         "kanbanRestore": "Pulihkan",
-        "errorTagGone": "Tag ini sudah tidak ada."
+        "errorTagGone": "Tag ini sudah tidak ada.",
+        "createdByDetail": "Dibuat oleh {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} item dihapus.",
@@ -3548,7 +3549,9 @@
         "backupDbKeyConfigHint": "Kunci berasal dari konfigurasimu. Simpan dengan aman di sana: tanpanya, cadanganmu tidak bisa dibuka.",
         "backupDbKeyPlainHint": "Basis data tidak dienkripsi, jadi cadangan berisi datamu dalam bentuk yang bisa dibaca. Dengan DB_ENCRYPTION_KEY milikmu sendiri, Yuvomi mengenkripsinya saat dijalankan berikutnya.",
         "rewardsPenaltiesLabel": "Izinkan konsekuensi",
-        "rewardsPenaltiesHint": "Orang tua dapat mengurangi poin karena perilaku buruk (kamar berantakan, berteriak, tidur terlambat). Alasan wajib dan tetap terlihat oleh anak dan orang tua; saudara tidak melihatnya."
+        "rewardsPenaltiesHint": "Orang tua dapat mengurangi poin karena perilaku buruk (kamar berantakan, berteriak, tidur terlambat). Alasan wajib dan tetap terlihat oleh anak dan orang tua; saudara tidak melihatnya.",
+        "taskCreatedByVisibleLabel": "Tampilkan pembuat",
+        "taskCreatedByVisibleHint": "Tampilan detail tugas menyebut orang yang membuat tugas, jika tugas punya pembuat. Jika dimatikan, tidak menampilkan apa pun."
     },
     "login": {
         "tagline": "Selamat datang kembali. Rumah Anda dalam satu tempat.",

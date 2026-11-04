@@ -732,7 +732,8 @@
         "subtasksAllDone": "'{{title}}'와 모든 하위 작업을 완료했습니다.",
         "seriesDoneNamed": "'{{title}}' 완료 - 다음: {{date}}",
         "kanbanRestore": "복원",
-        "errorTagGone": "이 태그는 더 이상 존재하지 않습니다."
+        "errorTagGone": "이 태그는 더 이상 존재하지 않습니다.",
+        "createdByDetail": "만든 사람: {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}}개 항목이 삭제되었습니다.",
@@ -3548,7 +3549,9 @@
         "backupDbKeyConfigHint": "키는 설정에서 가져옵니다. 그곳에 안전하게 보관하세요. 키가 없으면 백업을 열 수 없습니다.",
         "backupDbKeyPlainHint": "데이터베이스가 암호화되어 있지 않아 백업에 데이터가 읽을 수 있는 형태로 들어 있습니다. 자체 DB_ENCRYPTION_KEY를 설정하면 Yuvomi가 다음 시작 시 암호화합니다.",
         "rewardsPenaltiesLabel": "결과 허용",
-        "rewardsPenaltiesHint": "부모는 잘못된 행동(어지러운 방, 고함, 늦은 잠자리)에 포인트를 차감할 수 있습니다. 이유는 필수이며 아이와 부모에게만 보입니다. 형제는 볼 수 없습니다."
+        "rewardsPenaltiesHint": "부모는 잘못된 행동(어지러운 방, 고함, 늦은 잠자리)에 포인트를 차감할 수 있습니다. 이유는 필수이며 아이와 부모에게만 보입니다. 형제는 볼 수 없습니다.",
+        "taskCreatedByVisibleLabel": "만든 사람 표시",
+        "taskCreatedByVisibleHint": "작업 상세 화면은 작업을 만든 사람이 기록되어 있으면 그 사람을 표시합니다. 끄면 아무것도 표시되지 않습니다."
     },
     "login": {
         "tagline": "다시 오신 것을 환영합니다. 우리 집의 모든 일을 한곳에서.",

@@ -852,7 +852,8 @@
         "doneSubtasksOpen_many": "„{{title}}” zrobione - wciąż otwartych {{count}} podzadań.",
         "seriesDoneNamed": "„{{title}}” zrobione - następny raz: {{date}}",
         "kanbanRestore": "Przywróć",
-        "errorTagGone": "Ten tag już nie istnieje."
+        "errorTagGone": "Ten tag już nie istnieje.",
+        "createdByDetail": "Utworzył(a): {{name}}"
     },
     "shopping": {
         "importMealsPreviewMeals_few": "{{count}} posiłki",
@@ -3776,7 +3777,9 @@
         "backupDbKeyConfigHint": "Klucz pochodzi z Twojej konfiguracji. Przechowuj go tam bezpiecznie: bez niego nie otworzysz kopii zapasowych.",
         "backupDbKeyPlainHint": "Baza danych nie jest zaszyfrowana, więc kopie zapasowe zawierają Twoje dane w czytelnej postaci. Z własnym DB_ENCRYPTION_KEY Yuvomi zaszyfruje ją przy następnym uruchomieniu.",
         "rewardsPenaltiesLabel": "Zezwól na konsekwencje",
-        "rewardsPenaltiesHint": "Rodzice mogą odejmować punkty za złe zachowanie (nieposprzątany pokój, krzyki, późne chodzenie spać). Powód jest obowiązkowy i pozostaje widoczny dla dziecka i rodziców; rodzeństwo go nie widzi."
+        "rewardsPenaltiesHint": "Rodzice mogą odejmować punkty za złe zachowanie (nieposprzątany pokój, krzyki, późne chodzenie spać). Powód jest obowiązkowy i pozostaje widoczny dla dziecka i rodziców; rodzeństwo go nie widzi.",
+        "taskCreatedByVisibleLabel": "Pokaż twórcę",
+        "taskCreatedByVisibleHint": "Widok szczegółów zadania podaje osobę, która je utworzyła, jeśli zadanie ma twórcę. Wyłączony nic nie pokazuje."
     },
     "login": {
         "tagline": "Witaj ponownie. Twój dom w jednym miejscu.",

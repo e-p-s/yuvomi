@@ -714,7 +714,8 @@
         "subtasksAllDone": "‘{{title}}’ en alle subtaken klaar.",
         "seriesDoneNamed": "‘{{title}}’ klaar - volgende keer: {{date}}",
         "kanbanRestore": "Herstellen",
-        "errorTagGone": "Dit label bestaat niet meer."
+        "errorTagGone": "Dit label bestaat niet meer.",
+        "createdByDetail": "Gemaakt door {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} artikel verwijderd.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "De sleutel komt uit je configuratie. Bewaar hem daar veilig: zonder hem kunnen je back-ups niet worden geopend.",
         "backupDbKeyPlainHint": "De database is niet versleuteld, dus back-ups bevatten je gegevens leesbaar. Met een eigen DB_ENCRYPTION_KEY versleutelt Yuvomi hem bij de volgende start.",
         "rewardsPenaltiesLabel": "Gevolgen toestaan",
-        "rewardsPenaltiesHint": "Ouders kunnen punten inkorten bij wangedrag (rommelige kamer, geschreeuw, te laat naar bed). De reden is verplicht en blijft zichtbaar voor het kind en de ouders; broers/zussen zien die niet."
+        "rewardsPenaltiesHint": "Ouders kunnen punten inkorten bij wangedrag (rommelige kamer, geschreeuw, te laat naar bed). De reden is verplicht en blijft zichtbaar voor het kind en de ouders; broers/zussen zien die niet.",
+        "taskCreatedByVisibleLabel": "Maker weergeven",
+        "taskCreatedByVisibleHint": "De taakdetailview noemt de persoon die de taak maakte, als de taak een maker heeft. Uitgezet toont het niets."
     },
     "login": {
         "tagline": "Welkom terug. Je huishouden op één plek.",

@@ -714,7 +714,8 @@
         "subtasksAllDone": "Đã hoàn thành \"{{title}}\" và mọi việc con.",
         "seriesDoneNamed": "Đã hoàn thành \"{{title}}\" - lần tới: {{date}}",
         "kanbanRestore": "Khôi phục",
-        "errorTagGone": "Thẻ này không còn tồn tại."
+        "errorTagGone": "Thẻ này không còn tồn tại.",
+        "createdByDetail": "Tạo bởi {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "Đã xóa {{count}} mục.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "Khóa đến từ cấu hình của bạn. Hãy giữ nó an toàn ở đó: nếu không có nó, các bản sao lưu của bạn không thể mở được.",
         "backupDbKeyPlainHint": "Cơ sở dữ liệu chưa được mã hóa, nên các bản sao lưu chứa dữ liệu của bạn ở dạng đọc được. Với DB_ENCRYPTION_KEY của riêng bạn, Yuvomi sẽ mã hóa nó ở lần khởi động tiếp theo.",
         "rewardsPenaltiesLabel": "Cho phép hệ quả",
-        "rewardsPenaltiesHint": "Cha mẹ có thể trừ điểm vì cư xử chưa tốt (phòng bừa bộn, la hét, đi ngủ muộn). Lý do là bắt buộc và vẫn hiện với trẻ và cha mẹ; anh chị em không thấy."
+        "rewardsPenaltiesHint": "Cha mẹ có thể trừ điểm vì cư xử chưa tốt (phòng bừa bộn, la hét, đi ngủ muộn). Lý do là bắt buộc và vẫn hiện với trẻ và cha mẹ; anh chị em không thấy.",
+        "taskCreatedByVisibleLabel": "Hiển thị người tạo",
+        "taskCreatedByVisibleHint": "Màn hình chi tiết công việc nêu tên người tạo công việc nếu công việc có người tạo. Tắt thì không hiển thị gì."
     },
     "login": {
         "tagline": "Chào mừng bạn trở lại. Ngôi nhà của bạn ở cùng một nơi.",

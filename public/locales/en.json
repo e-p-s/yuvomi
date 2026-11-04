@@ -714,7 +714,8 @@
         "subtasksAllDone": "“{{title}}” and all subtasks done.",
         "seriesDoneNamed": "“{{title}}” done - next due {{date}}",
         "kanbanRestore": "Restore",
-        "errorTagGone": "This tag no longer exists."
+        "errorTagGone": "This tag no longer exists.",
+        "createdByDetail": "Created by {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} item deleted.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "The key comes from your configuration. Keep it safe there: without it, your backups cannot be opened.",
         "backupDbKeyPlainHint": "The database is not encrypted, so backups contain your data in readable form. With a DB_ENCRYPTION_KEY of your own, Yuvomi encrypts it on the next start.",
         "rewardsPenaltiesLabel": "Allow consequences",
-        "rewardsPenaltiesHint": "Parents can deduct points for misbehaviour (untidy room, yelling, late bedtime). The reason is mandatory and stays visible to the child and parents; siblings do not see it."
+        "rewardsPenaltiesHint": "Parents can deduct points for misbehaviour (untidy room, yelling, late bedtime). The reason is mandatory and stays visible to the child and parents; siblings do not see it.",
+        "taskCreatedByVisibleLabel": "Show creator",
+        "taskCreatedByVisibleHint": "The task detail view names the person who created the task, when the task carries a creator. Left off, it shows nothing."
     },
     "login": {
         "tagline": "Welcome back. Your home in one place.",

@@ -44,6 +44,7 @@ import { splitMentions, applyMention } from '/utils/mentions.js';
 import { refresh as refreshReminders } from '/reminders.js';
 import { parseRemindAtAsUtc } from '/utils/reminder-offset.js';
 import { isNavModuleReadOnly } from '/permissions.js';
+import { cachedPreference } from '/settings/preferences-cache.js';
 import { pathAccess } from '/utils/module-access.js';
 import { installPopoverMenus, showPopoverMenuAt } from '/utils/popover-menu.js';
 import { zonedDateKey } from '/utils/timezone.js';
@@ -949,15 +950,50 @@ function taskReminderSummary(reminders) {
  * Der Kopf der Aufgaben-Leseansicht (components/detail-view.js
  * `detailHeadEl`): wann sie faellig ist, in den Worten der Liste ("Heute
  * faellig", "Ueberfaellig · 11.08."), und wer sie hat - als Avatare mit Namen.
+ *
+ * Darunter, in words of the list: wer die Aufgabe angelegt hat. Sichtbar nur,
+ * wenn der Haushalt den Schalter gesetzt hat (`task_created_by_visible`,
+ * Default AUS - eine Familie ohne Wunsch nach dieser Auskunft sieht nichts)
+ * UND die Aufgabe einen Ersteller traegt. Die Loesung auf den Namen ist dieselbe
+ * wie bei den Zugewiesenen: `users`, das der Aufrufer mitgibt - die Ansicht
+ * raet keinen Namen.
  */
-function taskDetailHead(task) {
+function taskDetailHead(task, ctx = {}) {
   const due = formatDueDate(task.due_date, task.due_time, task.status === 'done' || isArchived(task));
+  const facts = [];
+  const creator = createdByHint(task, ctx);
+  if (creator) facts.push(creator);
   return {
     subtitle: due?.label ?? '',
     subtitleLabel: t('tasks.dueDateLabel'),
     people: task.assigned_users ?? [],
     peopleLabel: t('tasks.assignedLabel'),
+    facts,
   };
+}
+
+/**
+ * "Angelegt von <Name>" als Fact-Zeile des Kopfes, sonst null.
+ *
+ * DER SCHALTER WIRD FESTGELESEN, nicht nachgeladen: diese Ansicht zeichnet
+ * ihren Kopf in einem Schwung, und ein Text, der nach dem Oeffnen
+ * einspringt, verschiebt alles darunter. Der Wert kommt aus dem
+ * Praeferenz-Cache (settings/preferences-cache.js), den Router-Start und
+ * Settings-Besuche fuellen; war dort nie eine Antwort, bleibt die Anzeige aus -
+ * die Richtung des Defaults (aus), nicht ein geratenes An.
+ */
+function createdByHint(task, ctx) {
+  const creatorId = task?.created_by;
+  if (creatorId == null) return null;
+  const show = ctx.showCreatedBy
+    ?? cachedPreference('task_created_by_visible', false);
+  if (show !== true) return null;
+  const person = (ctx.users ?? []).find((u) => String(u.id) === String(creatorId));
+  const name = (person?.display_name ?? task.created_by_name ?? '').trim();
+  // Ohne Aufloesung kein Name: "Angelegt von" allein beantwortet die Frage
+  // nicht, und eine erfundene waere schlimmer als keine.
+  if (!name) return null;
+  return t('tasks.createdByDetail', { name });
 }
 
 /**
@@ -1323,7 +1359,7 @@ export function openTaskDetail({
     title: task.title,
     key: `task:${task.id}`,
     size: 'lg',
-    head: taskDetailHead(task),
+    head: taskDetailHead(task, ctx),
     // DIE DETAILSPALTE (Liste + Detail, utils/master-detail.js): dieselbe
     // Ansicht, nur in der rechten Spalte statt im Sheet. Bearbeiten fuehrt dort
     // ins eigene Formular-Modal (`edit.standalone`), weil die Spalte ein
@@ -1784,4 +1820,4 @@ function seriesHistoryNode(task) {
  * der sich die Nur-lesen-Regel (#467) an dieser Ansicht MESSEN laesst - alles
  * andere hier haengt an `openDetailView` und damit am echten DOM.
  */
-export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit, approvalNoticeView, resolveTaskApproval, REJECT_NOTE_MAX };
+export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit, approvalNoticeView, resolveTaskApproval, REJECT_NOTE_MAX, taskDetailHead, createdByHint };

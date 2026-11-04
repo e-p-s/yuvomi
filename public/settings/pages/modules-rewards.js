@@ -46,6 +46,16 @@ function renderPage(container, preferences) {
           descriptionId: 'rewards-penalties-hint',
           attrs: { id: 'rewards-penalties-enabled', 'aria-describedby': 'rewards-penalties-hint' },
         })}
+        <!-- ERSTELLER-ANZEIGE (Default AUS): die Aufgaben-Leseansicht nennt den
+             Anlegenden nur, wenn der Haushalt den Schalter setzt und die Aufgabe
+             einen Ersteller traegt. Ohne Schalter zeigt sie nichts. -->
+        ${settingSwitchRowHtml({
+          label: t('settings.taskCreatedByVisibleLabel'),
+          checked: preferences.task_created_by_visible === true,
+          description: t('settings.taskCreatedByVisibleHint'),
+          descriptionId: 'task-created-by-visible-hint',
+          attrs: { id: 'task-created-by-visible', 'aria-describedby': 'task-created-by-visible-hint' },
+        })}
         <!-- EIN SPEICHERMODELL AUF DER SEITE (Re-Critique 2026-09-27, A7 P2-8):
              der Schalter daneben speichert sofort, also tut es das Zahlenfeld
              auch - beim Verlassen und mit Enter. Ein eigener Speichern-Knopf nur
@@ -111,6 +121,22 @@ function bindEvents(container, preferences) {
       window.yuvomi?.showToast(errorSentence(error, 'settings.preferenceSaveFailed'), 'danger');
     } finally {
       penaltyToggle.disabled = false;
+    }
+  });
+  // Ersteller-Anzeige ist opt-in (Standard aus) - `=== true`, damit ein
+  // fehlender Wert den Schalter aus laesst (dasselbe Muster wie der Penalty).
+  const createdByToggle = container.querySelector('#task-created-by-visible');
+  createdByToggle?.addEventListener('change', async () => {
+    createdByToggle.disabled = true;
+    try {
+      await savePreferences({ task_created_by_visible: createdByToggle.checked });
+      preferences.task_created_by_visible = createdByToggle.checked;
+      window.yuvomi?.showToast(t('settings.rewardsSaved'), 'success');
+    } catch (error) {
+      createdByToggle.checked = !createdByToggle.checked;
+      window.yuvomi?.showToast(errorSentence(error, 'settings.preferenceSaveFailed'), 'danger');
+    } finally {
+      createdByToggle.disabled = false;
     }
   });
 

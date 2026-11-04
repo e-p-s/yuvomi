@@ -680,6 +680,10 @@ router.get('/', (req, res) => {
         // keitstag 1 Punkt weniger, mindestens 1 - Standard aus, Haushalte
         // schalten ihn bewusst ein.
         tasks_late_decay_enabled: cfgGet('tasks_late_decay_enabled') === '1',
+        // Ersteller-Anzeige an der Aufgabe: Default AUS - eine Familie ohne
+        // Wunsch nach dieser Auskunft soll den Schalter nie sehen muessen
+        // (dieselbe umgekehrte Logik wie bei den Konsequenzen).
+        task_created_by_visible: cfgGet('task_created_by_visible') === '1',
         // Standard-Erinnerungsliste fuer neue Aufgaben (per-user, #695) -
         // dieselbe Form wie calendar_default_target, damit beide Dialoge ihr
         // Ziel gleich benennen.
@@ -751,7 +755,7 @@ router.put('/', (req, res) => {
   try {
     database = db.get();
     database.exec('BEGIN');
-    const { visible_meal_types, meal_type_names, currency, date_format, time_format, week_start, region, timezone, timezone_hint_dismissed, language, app_name, dashboard_widgets, dashboard_today_glance, dashboard_widgets_phone, dashboard_widgets_default, dashboard_today_glance_default, disabled_modules, hidden_modules, module_order, mobile_nav_order, housekeeping_payment_tasks, budget_mode, calendar_default_duration, calendar_default_reminders, calendar_default_assign_me, calendar_default_target, health_cycle_enabled, health_cycle_enabled_user, health_prevention_notify_caregivers, rewards_require_approval, rewards_penalties_enabled, tasks_subtasks_expanded, tasks_default_points, tasks_default_target, tasks_default_visibility, tasks_default_locked, tasks_late_decay_enabled, schedule_hidden_templates, countdown_grace_days, weather_provider, weather_lat, weather_lon, weather_city, weather_units, weather_auto_locate, weather_user, holiday_country, holiday_subdivision, holiday_group, holiday_show_public, holiday_show_school, holiday_public_color, holiday_school_color } = req.body;
+    const { visible_meal_types, meal_type_names, currency, date_format, time_format, week_start, region, timezone, timezone_hint_dismissed, language, app_name, dashboard_widgets, dashboard_today_glance, dashboard_widgets_phone, dashboard_widgets_default, dashboard_today_glance_default, disabled_modules, hidden_modules, module_order, mobile_nav_order, housekeeping_payment_tasks, budget_mode, calendar_default_duration, calendar_default_reminders, calendar_default_assign_me, calendar_default_target, health_cycle_enabled, health_cycle_enabled_user, health_prevention_notify_caregivers, rewards_require_approval, rewards_penalties_enabled, tasks_subtasks_expanded, tasks_default_points, tasks_default_target, tasks_default_visibility, tasks_default_locked, tasks_late_decay_enabled, task_created_by_visible, schedule_hidden_templates, countdown_grace_days, weather_provider, weather_lat, weather_lon, weather_city, weather_units, weather_auto_locate, weather_user, holiday_country, holiday_subdivision, holiday_group, holiday_show_public, holiday_show_school, holiday_public_color, holiday_school_color } = req.body;
 
     // Welche Quickstart-Vorlagen der Schichtplan-Schnellstart zeigt - wie
     // disabled_modules haushaltweit und admin-only, nicht wie hidden_modules
@@ -1253,6 +1257,18 @@ router.put('/', (req, res) => {
       cfgSet('rewards_penalties_enabled', rewards_penalties_enabled ? '1' : '0');
     }
 
+    // Ersteller-Anzeige an der Aufgabe: Default AUS - dieselbe Haushaltsschalter-
+    // Form wie rewards_penalties_enabled, Admin-only, echtes Bool als Antwort.
+    if (task_created_by_visible !== undefined) {
+      if (!isAdminRequest(req)) {
+        return res.status(403).json({ error: 'Admin access required.', code: 403 });
+      }
+      if (typeof task_created_by_visible !== 'boolean') {
+        return res.status(400).json({ error: 'task_created_by_visible must be a boolean', code: 400 });
+      }
+      cfgSet('task_created_by_visible', task_created_by_visible ? '1' : '0');
+    }
+
     if (tasks_subtasks_expanded !== undefined) {
       if (!isAdminRequest(req)) {
         return res.status(403).json({ error: 'Admin access required.', code: 403 });
@@ -1563,6 +1579,10 @@ router.put('/', (req, res) => {
         // keitstag 1 Punkt weniger, mindestens 1 - Standard aus, Haushalte
         // schalten ihn bewusst ein.
         tasks_late_decay_enabled: cfgGet('tasks_late_decay_enabled') === '1',
+        // Ersteller-Anzeige an der Aufgabe: Default AUS - eine Familie ohne
+        // Wunsch nach dieser Auskunft soll den Schalter nie sehen muessen
+        // (dieselbe umgekehrte Logik wie bei den Konsequenzen).
+        task_created_by_visible: cfgGet('task_created_by_visible') === '1',
         // Standard-Erinnerungsliste fuer neue Aufgaben (per-user, #695) -
         // dieselbe Form wie calendar_default_target, damit beide Dialoge ihr
         // Ziel gleich benennen.

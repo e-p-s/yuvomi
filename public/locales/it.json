@@ -714,7 +714,8 @@
         "subtasksAllDone": "«{{title}}» e tutte le sottoattività fatte.",
         "seriesDoneNamed": "«{{title}}» fatto - prossima volta: {{date}}",
         "kanbanRestore": "Ripristina",
-        "errorTagGone": "Questa etichetta non esiste più."
+        "errorTagGone": "Questa etichetta non esiste più.",
+        "createdByDetail": "Creata da {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} articolo eliminato.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "La chiave proviene dalla tua configurazione. Conservala lì al sicuro: senza di essa, i tuoi backup non si possono aprire.",
         "backupDbKeyPlainHint": "Il database non è cifrato, quindi i backup contengono i tuoi dati in forma leggibile. Con una DB_ENCRYPTION_KEY tua, Yuvomi lo cifra al prossimo avvio.",
         "rewardsPenaltiesLabel": "Consenti conseguenze",
-        "rewardsPenaltiesHint": "I genitori possono sottrarre punti per cattiva condotta (camera in disordine, grida, nanna tardi). Il motivo è obbligatorio e resta visibile al bambino e ai genitori; i fratelli non lo vedono."
+        "rewardsPenaltiesHint": "I genitori possono sottrarre punti per cattiva condotta (camera in disordine, grida, nanna tardi). Il motivo è obbligatorio e resta visibile al bambino e ai genitori; i fratelli non lo vedono.",
+        "taskCreatedByVisibleLabel": "Mostra creatore",
+        "taskCreatedByVisibleHint": "La vista dettagli del compito indica chi l'ha creato, quando il compito ha un creatore. Se disattivata, non mostra nulla."
     },
     "login": {
         "tagline": "Bentornato. La tua casa in un unico posto.",

@@ -714,7 +714,8 @@
         "subtasksAllDone": "«{{title}}» og alle deloppgaver utført.",
         "seriesDoneNamed": "«{{title}}» utført - neste gang: {{date}}",
         "kanbanRestore": "Gjenopprett",
-        "errorTagGone": "Denne etiketten finnes ikke lenger."
+        "errorTagGone": "Denne etiketten finnes ikke lenger.",
+        "createdByDetail": "Opprettet av {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} vare slettet.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "Nøkkelen kommer fra konfigurasjonen din. Ta godt vare på den der: uten den kan sikkerhetskopiene dine ikke åpnes.",
         "backupDbKeyPlainHint": "Databasen er ikke kryptert, så sikkerhetskopiene inneholder dataene dine i lesbar form. Med en egen DB_ENCRYPTION_KEY krypterer Yuvomi den ved neste oppstart.",
         "rewardsPenaltiesLabel": "Tillat konsekvenser",
-        "rewardsPenaltiesHint": "Foreldre kan trekke poenger for uønsket atferd (urerom, skriking, sengetid for seint). Årsaken er obligatorisk og vises for barnet og foreldrene; søsken ser den ikke."
+        "rewardsPenaltiesHint": "Foreldre kan trekke poenger for uønsket atferd (urerom, skriking, sengetid for seint). Årsaken er obligatorisk og vises for barnet og foreldrene; søsken ser den ikke.",
+        "taskCreatedByVisibleLabel": "Vis oppretter",
+        "taskCreatedByVisibleHint": "Oppgavedetaljene navngir personen som opprettet oppgaven, når oppgaven har en oppretter. Avlåst viser den ingenting."
     },
     "login": {
         "tagline": "Velkommen tilbake. Hjemmet ditt samlet på ett sted.",

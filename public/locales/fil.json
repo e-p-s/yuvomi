@@ -732,7 +732,8 @@
         "subtasksAllDone": "Tapos na ang \"{{title}}\" at lahat ng subtask.",
         "seriesDoneNamed": "Tapos na ang \"{{title}}\" - susunod: {{date}}",
         "kanbanRestore": "I-restore",
-        "errorTagGone": "Wala na ang tag na ito."
+        "errorTagGone": "Wala na ang tag na ito.",
+        "createdByDetail": "Ginawa ni {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} ang item na natanggal.",
@@ -3548,7 +3549,9 @@
         "backupDbKeyConfigHint": "Galing sa iyong configuration ang susi. Itago ito roon nang ligtas: kung wala ito, hindi mabubuksan ang mga backup mo.",
         "backupDbKeyPlainHint": "Hindi naka-encrypt ang database, kaya nababasa ang data mo sa mga backup. Gamit ang sarili mong DB_ENCRYPTION_KEY, ie-encrypt ito ng Yuvomi sa susunod na pagsisimula.",
         "rewardsPenaltiesLabel": "Payagan ang mga parusa",
-        "rewardsPenaltiesHint": "Ang mga magulang ay pwedeng magbawas ng puntos masamang pag-uugali (magulong kwarto, sigawan, late matulog). Kinakailangan ang dahilan at nakikita ng bata at magulang; hindi ito nakikita ng kapatid."
+        "rewardsPenaltiesHint": "Ang mga magulang ay pwedeng magbawas ng puntos masamang pag-uugali (magulong kwarto, sigawan, late matulog). Kinakailangan ang dahilan at nakikita ng bata at magulang; hindi ito nakikita ng kapatid.",
+        "taskCreatedByVisibleLabel": "Ipakita ang gumawa",
+        "taskCreatedByVisibleHint": "Sinasabi ng detail view ng gawin kung sino ang gumawa nito kung may likha ang gawin. Kapaka nakalagay na off, walang ipinapakita."
     },
     "login": {
         "tagline": "Maligayang pagbabalik. Ang iyong tahanan sa iisang lugar.",

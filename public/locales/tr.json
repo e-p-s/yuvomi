@@ -714,7 +714,8 @@
         "subtasksAllDone": "\"{{title}}\" ve tüm alt görevler tamamlandı.",
         "seriesDoneNamed": "\"{{title}}\" tamamlandı - sıradaki: {{date}}",
         "kanbanRestore": "Geri yükle",
-        "errorTagGone": "Bu etiket artık yok."
+        "errorTagGone": "Bu etiket artık yok.",
+        "createdByDetail": "Oluşturan: {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} ürün silindi.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "Anahtar yapılandırmandan geliyor. Orada güvenle sakla: o olmadan yedeklerin açılamaz.",
         "backupDbKeyPlainHint": "Veritabanı şifreli değil, bu yüzden yedekler verilerini okunabilir biçimde içerir. Kendi DB_ENCRYPTION_KEY değerinle Yuvomi onu bir sonraki başlatmada şifreler.",
         "rewardsPenaltiesLabel": "Sonuçlara izin ver",
-        "rewardsPenaltiesHint": "Ebeveynler kötü davranış için (dağınık oda, bağırma, geç yatma) puan düşebilir. Neden zorunludur ve çocukla ebeveynlere görünür kalır; kardeşler görmez."
+        "rewardsPenaltiesHint": "Ebeveynler kötü davranış için (dağınık oda, bağırma, geç yatma) puan düşebilir. Neden zorunludur ve çocukla ebeveynlere görünür kalır; kardeşler görmez.",
+        "taskCreatedByVisibleLabel": "Oluşturanı göster",
+        "taskCreatedByVisibleHint": "Görev ayrıntısı görünümü, görev bir oluşturucu taşıyorsa onu oluşturan kişiyi söyler. Kapalıyken hiçbir şey göstermez."
     },
     "login": {
         "tagline": "Tekrar hoş geldin. Evin tek bir yerde.",

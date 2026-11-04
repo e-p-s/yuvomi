@@ -777,7 +777,8 @@
         "doneSubtasksOpen_many": "„{{title}}“ hotovo - stále otevřených dílčích úkolů: {{count}}.",
         "seriesDoneNamed": "„{{title}}“ hotovo - příště: {{date}}",
         "kanbanRestore": "Obnovit",
-        "errorTagGone": "Tento štítek už neexistuje."
+        "errorTagGone": "Tento štítek už neexistuje.",
+        "createdByDetail": "Vytvořil {{name}}"
     },
     "shopping": {
         "importMealsPreviewMeals_few": "{{count}} jídla",
@@ -3649,7 +3650,9 @@
         "backupDbKeyConfigHint": "Klíč pochází z tvé konfigurace. Uchovej ho tam v bezpečí: bez něj nepůjde tvé zálohy otevřít.",
         "backupDbKeyPlainHint": "Databáze není šifrovaná, takže zálohy obsahují tvá data v čitelné podobě. S vlastním DB_ENCRYPTION_KEY ji Yuvomi při příštím spuštění zašifruje.",
         "rewardsPenaltiesLabel": "Povolit důsledky",
-        "rewardsPenaltiesHint": "Rodiče mohou strhnout body za neposlušnost (nepořádek, křik, pozdě do postele). Důvod je povinný a zůstává viditelný dítěti a rodičům; sourozenci ho nevidí."
+        "rewardsPenaltiesHint": "Rodiče mohou strhnout body za neposlušnost (nepořádek, křik, pozdě do postele). Důvod je povinný a zůstává viditelný dítěti a rodičům; sourozenci ho nevidí.",
+        "taskCreatedByVisibleLabel": "Zobrazit tvůrce",
+        "taskCreatedByVisibleHint": "Detail úkolu uvádí osobu, která úkol vytvořila, pokud úkol tvůrce nese. Vypnuto nic nezobrazí."
     },
     "login": {
         "tagline": "Vítejte zpět. Váš domov na jednom místě.",

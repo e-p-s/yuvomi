@@ -732,7 +732,8 @@
         "subtasksAllDone": "„{{title}}“ und alle Teilaufgaben erledigt.",
         "seriesDoneNamed": "„{{title}}“ erledigt - nächstes Mal am {{date}}",
         "kanbanRestore": "Wiederherstellen",
-        "errorTagGone": "Dieses Stichwort gibt es nicht mehr."
+        "errorTagGone": "Dieses Stichwort gibt es nicht mehr.",
+        "createdByDetail": "Angelegt von {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} Artikel gelöscht.",
@@ -3548,7 +3549,9 @@
         "backupDbKeyConfigHint": "Der Schlüssel kommt aus deiner Konfiguration. Bewahre ihn dort sicher auf: ohne ihn lassen sich deine Backups nicht öffnen.",
         "backupDbKeyPlainHint": "Die Datenbank ist nicht verschlüsselt, Backups enthalten deine Daten also lesbar. Mit einem eigenen DB_ENCRYPTION_KEY verschlüsselt Yuvomi sie beim nächsten Start.",
         "rewardsPenaltiesLabel": "Konsequenzen erlauben",
-        "rewardsPenaltiesHint": "Eltern können auf Fehlverhalten Punkte abziehen (schlechtes Zimmer, Geschrei, zu spät ins Bett). Der Grund ist Pflicht und bleibt für das Kind und die Eltern sichtbar; Geschwister sehen ihn nicht."
+        "rewardsPenaltiesHint": "Eltern können auf Fehlverhalten Punkte abziehen (schlechtes Zimmer, Geschrei, zu spät ins Bett). Der Grund ist Pflicht und bleibt für das Kind und die Eltern sichtbar; Geschwister sehen ihn nicht.",
+        "taskCreatedByVisibleLabel": "Ersteller anzeigen",
+        "taskCreatedByVisibleHint": "Die Aufgabendetailseite nennt die Person, die die Aufgabe angelegt hat, wenn sie einen Ersteller trägt. Aus gelassen zeigt sie nichts."
     },
     "login": {
         "tagline": "Willkommen zurück. Dein Zuhause an einem Ort.",

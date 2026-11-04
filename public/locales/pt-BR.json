@@ -714,7 +714,8 @@
         "subtasksAllDone": "\"{{title}}\" e todas as subtarefas concluídos.",
         "seriesDoneNamed": "\"{{title}}\" concluído - próxima vez: {{date}}",
         "kanbanRestore": "Restaurar",
-        "errorTagGone": "Esta etiqueta não existe mais."
+        "errorTagGone": "Esta etiqueta não existe mais.",
+        "createdByDetail": "Criada por {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} item excluído.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "A chave vem da sua configuração. Guarde-a lá com segurança: sem ela, seus backups não podem ser abertos.",
         "backupDbKeyPlainHint": "O banco de dados não está criptografado, então os backups contêm seus dados de forma legível. Com uma DB_ENCRYPTION_KEY própria, o Yuvomi o criptografa na próxima inicialização.",
         "rewardsPenaltiesLabel": "Permitir consequências",
-        "rewardsPenaltiesHint": "Os pais podem descontar pontos por mau comportamento (quarto bagunçado, gritos, dormir tarde). O motivo é obrigatório e continua visível para a criança e os pais; os irmãos não o veem."
+        "rewardsPenaltiesHint": "Os pais podem descontar pontos por mau comportamento (quarto bagunçado, gritos, dormir tarde). O motivo é obrigatório e continua visível para a criança e os pais; os irmãos não o veem.",
+        "taskCreatedByVisibleLabel": "Mostrar criador",
+        "taskCreatedByVisibleHint": "A visualização de detalhes da tarefa mostra quem a criou, quando a tarefa tem criador. Desligada, não mostra nada."
     },
     "login": {
         "tagline": "Bem-vindo de volta. Sua casa em um só lugar.",

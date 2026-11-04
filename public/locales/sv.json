@@ -714,7 +714,8 @@
         "subtasksAllDone": "”{{title}}” och alla deluppgifter klara.",
         "seriesDoneNamed": "”{{title}}” klar - nästa gång: {{date}}",
         "kanbanRestore": "Återställ",
-        "errorTagGone": "Den här etiketten finns inte längre."
+        "errorTagGone": "Den här etiketten finns inte längre.",
+        "createdByDetail": "Skapad av {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} vara borttagen.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "Nyckeln kommer från din konfiguration. Förvara den säkert där: utan den går dina säkerhetskopior inte att öppna.",
         "backupDbKeyPlainHint": "Databasen är inte krypterad, så säkerhetskopiorna innehåller dina data i läsbar form. Med en egen DB_ENCRYPTION_KEY krypterar Yuvomi den vid nästa start.",
         "rewardsPenaltiesLabel": "Tillåt konsekvenser",
-        "rewardsPenaltiesHint": "Föräldrar kan dra ifrån poäng för oönskat beteende (ostädat rum, skrikande, sen läggdags). Anledningen är obligatorisk och syns för barnet och föräldrarna; syskon ser den inte."
+        "rewardsPenaltiesHint": "Föräldrar kan dra ifrån poäng för oönskat beteende (ostädat rum, skrikande, sen läggdags). Anledningen är obligatorisk och syns för barnet och föräldrarna; syskon ser den inte.",
+        "taskCreatedByVisibleLabel": "Visaskaparen",
+        "taskCreatedByVisibleHint": "Visningen av arbetsdetaljer namnger personen som skapade arbetsuppgiften när den har en skapare. Avstängd visar den ingenting."
     },
     "login": {
         "tagline": "Välkommen tillbaka. Ditt hem samlat på ett ställe.",

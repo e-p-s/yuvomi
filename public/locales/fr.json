@@ -714,7 +714,8 @@
         "subtasksAllDone": "« {{title}} » et toutes ses sous-tâches terminés.",
         "seriesDoneNamed": "« {{title}} » terminé - prochaine fois : {{date}}",
         "kanbanRestore": "Restaurer",
-        "errorTagGone": "Cette étiquette n'existe plus."
+        "errorTagGone": "Cette étiquette n'existe plus.",
+        "createdByDetail": "Créée par {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} article supprimé.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "La clé provient de ta configuration. Garde-la en sécurité : sans elle, tes sauvegardes ne peuvent pas être ouvertes.",
         "backupDbKeyPlainHint": "La base de données n'est pas chiffrée, les sauvegardes contiennent donc tes données en clair. Avec ta propre DB_ENCRYPTION_KEY, Yuvomi la chiffre au prochain démarrage.",
         "rewardsPenaltiesLabel": "Autoriser les conséquences",
-        "rewardsPenaltiesHint": "Les parents peuvent retirer des points pour un mauvais comportement (chambre en désordre, cris, coucher tardif). Le motif est obligatoire et reste visible pour l'enfant et les parents ; les frères et sœurs ne le voient pas."
+        "rewardsPenaltiesHint": "Les parents peuvent retirer des points pour un mauvais comportement (chambre en désordre, cris, coucher tardif). Le motif est obligatoire et reste visible pour l'enfant et les parents ; les frères et sœurs ne le voient pas.",
+        "taskCreatedByVisibleLabel": "Afficher le créateur",
+        "taskCreatedByVisibleHint": "La vue détail de la tâche indique qui l'a créée, quand la tâche porte un créateur. Désactivée, elle n'affiche rien."
     },
     "login": {
         "tagline": "Bon retour. Votre foyer, au même endroit.",

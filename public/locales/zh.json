@@ -714,7 +714,8 @@
         "subtasksAllDone": "“{{title}}”及所有子任务已完成。",
         "seriesDoneNamed": "“{{title}}”已完成 - 下次：{{date}}",
         "kanbanRestore": "恢复",
-        "errorTagGone": "此标签已不存在。"
+        "errorTagGone": "此标签已不存在。",
+        "createdByDetail": "创建者：{{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "已删除 {{count}} 件商品。",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "密钥来自你的配置。请在那里妥善保管：没有它，你的备份将无法打开。",
         "backupDbKeyPlainHint": "数据库未加密，因此备份中的数据是可读的。设置你自己的 DB_ENCRYPTION_KEY 后，Yuvomi 会在下次启动时对其加密。",
         "rewardsPenaltiesLabel": "允许后果",
-        "rewardsPenaltiesHint": "父母可以因不良行为扣分（房间不整洁、吼叫、晚睡）。原因必填，且仅孩子与父母可见；兄弟姐妹看不到。"
+        "rewardsPenaltiesHint": "父母可以因不良行为扣分（房间不整洁、吼叫、晚睡）。原因必填，且仅孩子与父母可见；兄弟姐妹看不到。",
+        "taskCreatedByVisibleLabel": "显示创建者",
+        "taskCreatedByVisibleHint": "任务详情页会在任务记录了创建者时显示创建人。关闭时不显示任何内容。"
     },
     "login": {
         "tagline": "欢迎回来。您的家，尽在一处。",

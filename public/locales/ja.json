@@ -714,7 +714,8 @@
         "subtasksAllDone": "「{{title}}」とすべてのサブタスクを完了しました。",
         "seriesDoneNamed": "「{{title}}」を完了しました - 次回: {{date}}",
         "kanbanRestore": "復元",
-        "errorTagGone": "このタグはもう存在しません。"
+        "errorTagGone": "このタグはもう存在しません。",
+        "createdByDetail": "作成者: {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} 件を削除しました。",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "キーは設定から読み込まれています。そこで安全に保管してください。キーがなければバックアップを開けません。",
         "backupDbKeyPlainHint": "データベースは暗号化されていないため、バックアップにはデータが読める形で含まれます。独自の DB_ENCRYPTION_KEY を設定すると、Yuvomi は次回の起動時に暗号化します。",
         "rewardsPenaltiesLabel": "ペナルティを許可",
-        "rewardsPenaltiesHint": "保護者は不正な行動（部屋が散らかっている、怒鳴る、就寝が遅い）で点を減らせます。理由は必須で、子どもと保護者にだけ表示されます。兄弟には表示されません。"
+        "rewardsPenaltiesHint": "保護者は不正な行動（部屋が散らかっている、怒鳴る、就寝が遅い）で点を減らせます。理由は必須で、子どもと保護者にだけ表示されます。兄弟には表示されません。",
+        "taskCreatedByVisibleLabel": "作成者を表示",
+        "taskCreatedByVisibleHint": "タスク詳細ビューは、作成者が記録されている場合に作成した人を表示します。オフの場合は何も表示しません。"
     },
     "login": {
         "tagline": "おかえりなさい。暮らしのことを一か所に。",

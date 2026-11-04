@@ -714,7 +714,8 @@
         "subtasksAllDone": "„{{title}}” és minden részfeladat kész.",
         "seriesDoneNamed": "„{{title}}” kész - legközelebb: {{date}}",
         "kanbanRestore": "Visszaállítás",
-        "errorTagGone": "Ez a címke már nem létezik."
+        "errorTagGone": "Ez a címke már nem létezik.",
+        "createdByDetail": "Létrehozta: {{name}}"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} elem törölve.",
@@ -3530,7 +3531,9 @@
         "backupDbKeyConfigHint": "A kulcs a konfigurációdból származik. Őrizd ott biztonságban: nélküle a mentéseid nem nyithatók meg.",
         "backupDbKeyPlainHint": "Az adatbázis nincs titkosítva, így a mentések olvasható formában tartalmazzák az adataidat. Saját DB_ENCRYPTION_KEY esetén a Yuvomi a következő indításkor titkosítja.",
         "rewardsPenaltiesLabel": "Következmények engedélyezése",
-        "rewardsPenaltiesHint": "A szülők pontokat vonhatnak le rossz viselkedésért (rendetlen szoba, üvöltözés, késő lefekvés). Az ok kötelező, és a gyermek meg a szülők látják; a testvérek nem."
+        "rewardsPenaltiesHint": "A szülők pontokat vonhatnak le rossz viselkedésért (rendetlen szoba, üvöltözés, késő lefekvés). Az ok kötelező, és a gyermek meg a szülők látják; a testvérek nem.",
+        "taskCreatedByVisibleLabel": "Készítő megjelenítése",
+        "taskCreatedByVisibleHint": "A feladat részletei nézet megnevezi, ki hozta létre a feladatot, ha a feladat viseli a készítőt. Kikapcsolva semmit nem mutat."
     },
     "login": {
         "tagline": "Üdv újra! Az otthon ügyei egy helyen.",

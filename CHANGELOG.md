@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instance already belongs to the first member, the first hand-over goes to the second one (Kevin,
   Anna, Max - not Kevin, Kevin). The detail view names the next member up from the same calculation
   that hands out the next instance, and a task without rotation behaves exactly as before.
+- **Who made the task (opt-in).** Households can have the task detail view say who created a task. Administrators switch it on in the rewards settings, off by default; with it on, a task that carries a creator names that person under its title. A task without a creator - or a member the viewer cannot resolve - stays without the line, and a household that never touches the switch sees nothing at all.
 - **Late completion decay (opt-in).** Households can have late completions pay less: administrators
   switch it on in the rewards settings, off by default. A task ticked off after its due day earns one
   point less for each day it is past due, and always at least one point - finishing still pays. What a
