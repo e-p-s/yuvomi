@@ -45,6 +45,11 @@ echo "== 4/6 npm ci auf CT135 =="
 run_ct "cd $APP_DIR && npm ci --omit=dev >/tmp/npmci.log 2>&1 && echo NPM_OK || (tail -5 /tmp/npmci.log; exit 1)"
 
 echo "== 5/6 Restart + Migrationen =="
+# APP_BUILD_REVISION in .env auf den Deploy-Sha: damit aendert sich der
+# Service-Worker-Cache-Name (sw.js rendert ihn aus der Umgebungsvariable) und
+# die Clients holen sich beim naechsten Oeffnen das neue Buendel statt dem
+# Cache-First-Stand des alten Service Workers.
+run_ct "grep -q '^APP_BUILD_REVISION=' $APP_DIR/.env 2>/dev/null && sed -i 's|^APP_BUILD_REVISION=.*|APP_BUILD_REVISION=$FORK_SHA|' $APP_DIR/.env || echo APP_BUILD_REVISION=$FORK_SHA >> $APP_DIR/.env"
 run_ct "systemctl restart yuvomi.service && sleep 3 && systemctl is-active yuvomi.service"
 
 echo "== 6/6 Health-Check (max 60s) =="
