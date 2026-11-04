@@ -22,7 +22,7 @@ verwandeln sich in zusätzlichе Medienzeit; Kinder sehen ihren RestTag; Histori
 | (b) CalDAV/Kalender-Export | Erfasst nichts; kann nur Kontingente/Sperren als Kalender verteilen. Nettes Add-on (Repo hat caldav-outbound-Muster), keine Erfassung. |
 | (c) Heimnetz (Pi-hole/OPNsense) | Einziger Weg, der tatsächlich SPERRT. Aber: externe Abhängigkeit, IP-basierte Kind-Zuordnung ist brüchig (mehrere Geräte, WiFi-Switches), und Yuvomi darf keine Router-Konfiguration als Kern-Pfad annehmen. Als optionale Integration (Webhook/Blockliste per API-Token), nicht als Pflicht. |
 | (d) Geräte-Pairing (vorhanden) | Perfekt als IDENTITÄTS-Schicht: der bestehende Kurzcode-Flow (server/routes/displays.js pairingRouter POST /pair, device-pairing.js mit Hash+RateLimit) liefert already "dieses Gerät = dieses Kind". Kein neuer Pairing-Mechanismus nötig. |
-| (e) API-Reporting (SDK/APK) | Der realistische Erfassungspfad: geplanter Android-Wrapper meldet Nutzungs-Sessions (screen-on/foreground-Pakete) signiert per api_tokens-Scoped-Token an Yuvomi. Server prüft Kontingent und gibt "erlaubt/gesperrt" zurück. |
+| (e) API-Reporting (SDK/APK) | Der realistische Erfassungspfad: geplanter Android-Wrapper meldet Nutzungs-Sessions (screen-on/foreground-Pakete) signiert per api_tokens-Scoped-Token an Yuvomi. Server prüft Kontingent und gibt "erlaubt/gesperrt" zurück. Technische Ausgestaltung (API-Wahl queryEvents, Berechtigungs-UX, Datenformat, Ausnahmen): siehe docs/medienzeit-android-tracker.md. |
 
 Empfehlung: (e) als Kern-Erfassung + (d) als Geräte-Identität, (a) als Fallback für Familien
 ohne APK, (c) später als optionale Sperr-Integration, (b) als View-Kosmetik. Begründung:
