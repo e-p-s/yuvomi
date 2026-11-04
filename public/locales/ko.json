@@ -475,7 +475,12 @@
         "todayTimelineNext": "다음 일정",
         "todayAlsoTitle": "오늘의 다른 일",
         "todayNothingPlanned": "아직 계획된 일정이 없습니다",
-        "todayNothingPlannedSub": "오늘의 일정, 할 일, 식사가 여기에 표시됩니다."
+        "todayNothingPlannedSub": "오늘의 일정, 할 일, 식사가 여기에 표시됩니다.",
+        "mediaTimeEmpty": "오늘 아이에게 배정된 시간이 없습니다.",
+        "mediaTimeRest": "{{quota}}분 중 {{remaining}}분 남음",
+        "mediaTimeAdjustPlus": "+{{minutes}}분 오늘",
+        "mediaTimeAdjustMinus": "-{{minutes}}분 오늘",
+        "mediaTimeMore": "다른 아동 +{{count}}명"
     },
     "tasks": {
         "resetOrder": "자동으로 정렬",
@@ -3572,7 +3577,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "개요의 미디어 시간",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "미디어 시간 타일이 개요에 다시 돌아왔습니다.",
+        "mediaTimeDashboardOff": "이 기기에서 미디어 시간 타일이 숨겨졌습니다."
     },
     "login": {
         "tagline": "다시 오신 것을 환영합니다. 우리 집의 모든 일을 한곳에서.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "오늘 할당량: 기본 {{base}} + 조정 {{adjusted}} = {{quota}}분",
+        "quotaReason": "조정: {{reason}}",
+        "adjustAction": "조정",
+        "adjustTitle": "{{name}}의 오늘 할당량 조정",
+        "adjustDeltaLabel": "분 단위 변경(+ 또는 -)",
+        "adjustDeltaHint": "오늘 {{quota}}분 적용(그중 조정 {{adjusted}}). 새 날은 다시 기본값에서 시작 - 조정은 오늘만 적용됩니다.",
+        "adjustDeltaProblem": "-1440과 1440 사이의 숫자를 입력하세요. 0은 안 됩니다.",
+        "adjustReasonLabel": "사유",
+        "adjustReasonHint": "아이가 이 문장을 읽습니다 - 오늘이 왜 다른지.",
+        "adjustReasonProblem": "사유를 입력하세요(3~300자).",
+        "adjustConfirm": "조정",
+        "adjustConfirmTitle": "할당량을 {{from}}분에서 {{to}}분으로 설정할까요?",
+        "adjustConfirmDetail": "사유: {{reason}}",
+        "dayNotesTitle": "오늘 조정",
+        "dayNotesBy": "{{name}} 작성"
     }
 }

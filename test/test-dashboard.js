@@ -3097,7 +3097,7 @@ function layoutOhne(missing) {
 // git meldet, statt ihn stillschweigend zu verschmelzen.
 const ERWARTETE_WIDGET_IDS = [
   'tasks', 'calendar', 'meals', 'shopping', 'pantry', 'birthdays', 'countdown', 'budget',
-  'rewards', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule',
+  'rewards', 'media-time', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule',
   'waste', 'family', 'notes', 'weather', 'clock', 'metrics', 'quicklinks',
 ];
 

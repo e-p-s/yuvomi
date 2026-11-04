@@ -457,7 +457,12 @@
         "todayTimelineNext": "अगला",
         "todayAlsoTitle": "आज और भी",
         "todayNothingPlanned": "अभी कुछ भी तय नहीं",
-        "todayNothingPlannedSub": "आज के अपॉइंटमेंट, कार्य और भोजन यहाँ दिखाई देंगे।"
+        "todayNothingPlannedSub": "आज के अपॉइंटमेंट, कार्य और भोजन यहाँ दिखाई देंगे।",
+        "mediaTimeEmpty": "आज किसी बच्चे को कोटा नहीं मिला।",
+        "mediaTimeRest": "{{quota}} में से {{remaining}} मिनट शेष",
+        "mediaTimeAdjustPlus": "+{{minutes}} मिनट आज",
+        "mediaTimeAdjustMinus": "-{{minutes}} मिनट आज",
+        "mediaTimeMore": "+{{count}} अन्य बच्चे"
     },
     "tasks": {
         "resetOrder": "अपने-आप क्रमबद्ध करें",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "अवलोकन पर मीडिया समय",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "अवलोकन पर मीडिया समय टाइल फिर से है।",
+        "mediaTimeDashboardOff": "इस डिवाइस पर मीडिया समय टाइल छिपी है।"
     },
     "login": {
         "tagline": "फिर से स्वागत है। आपका घर, एक ही जगह।",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "आज का कोटा: आधार {{base}} + समायोजन {{adjusted}} = {{quota}} मिनट",
+        "quotaReason": "समायोजन: {{reason}}",
+        "adjustAction": "समायोजित करें",
+        "adjustTitle": "{{name}} का आज का कोटा समायोजित करें",
+        "adjustDeltaLabel": "मिनटों में परिवर्तन (+ या -)",
+        "adjustDeltaHint": "आज {{quota}} मिनट लागू (जिनमें समायोजन {{adjusted}})। नया दिन फिर आधार मान से शुरू - समायोजन केवल आज के लिए।",
+        "adjustDeltaProblem": "-1440 और 1440 के बीच संख्या दर्ज करें, 0 नहीं।",
+        "adjustReasonLabel": "कारण",
+        "adjustReasonHint": "बच्चा यह वाक्य पढ़ता है - आज क्यों कुछ अलग है।",
+        "adjustReasonProblem": "कृपया कारण दें (3 से 300 अक्षर)।",
+        "adjustConfirm": "समायोजित करें",
+        "adjustConfirmTitle": "कोटा {{from}} से {{to}} मिनट करें?",
+        "adjustConfirmDetail": "कारण: {{reason}}",
+        "dayNotesTitle": "आज के समायोजन",
+        "dayNotesBy": "{{name}} द्वारा"
     }
 }

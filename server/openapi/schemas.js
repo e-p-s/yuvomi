@@ -378,6 +378,9 @@ export const mediaTimeProperties = {
   exempt_min: { type: 'integer', minimum: 0, description: 'Usage minutes of app exceptions (never charged, still visible in history).' },
   unknown_min: { type: 'integer', minimum: 0, description: 'Usage minutes of packages no rule covers. Fail-open: never charged; the parents decide from here.' },
   purchased_min: { type: 'integer', minimum: 0, description: 'Minutes bought with points today (they raise quota_min instead of counting as usage).' },
+  adjusted_min: { type: 'integer', description: 'Minutes the parents moved today\'s quota with notes (positive raises, negative lowers; the sum of media_time_quota_notes of the day, 0 when none).' },
+  reason: { type: ['string', 'null'], description: 'The reason of the newest quota note of the day, null when no note exists. The child sees it: no quota change without an explained reason.' },
+  delta_minutes: { type: 'integer', minimum: -1440, maximum: 1440, description: 'The adjustment a note carries (never 0).' },
   max_daily_minutes: { type: ['integer', 'null'], minimum: 0, maximum: 1440, description: 'The per-child daily cap, null when uncapped.' },
   hard_cap: { type: 'boolean', description: 'Whether the household treats the cap as final (true) or as buyable up to (false).' },
   quiet: {
@@ -3787,7 +3790,8 @@ export const schemas = {
         MediaTimeTodayData: {
           type: 'object',
           required: ['user_id', 'day', 'enabled', 'quota_min', 'used_min', 'remaining_min',
-            'charged_min', 'exempt_min', 'unknown_min', 'quiet_active', 'state', 'tracker'],
+            'charged_min', 'exempt_min', 'unknown_min', 'adjusted_min', 'reason',
+            'quiet_active', 'state', 'tracker'],
           properties: {
             user_id: mediaTimeProperties.user_id,
             day: mediaTimeProperties.day,
@@ -3799,6 +3803,8 @@ export const schemas = {
             exempt_min: mediaTimeProperties.exempt_min,
             unknown_min: mediaTimeProperties.unknown_min,
             purchased_min: mediaTimeProperties.purchased_min,
+            adjusted_min: mediaTimeProperties.adjusted_min,
+            reason: mediaTimeProperties.reason,
             max_daily_minutes: mediaTimeProperties.max_daily_minutes,
             hard_cap: mediaTimeProperties.hard_cap,
             quiet: mediaTimeProperties.quiet,
@@ -3812,6 +3818,50 @@ export const schemas = {
         MediaTimeTodayResponse: {
           type: 'object', required: ['data'],
           properties: { data: { $ref: '#/components/schemas/MediaTimeTodayData' } },
+        },
+        MediaTimeQuotaDayAdjustInput: {
+          type: 'object',
+          required: ['delta_minutes', 'reason'],
+          description: 'One adjustment of the current day. The note is never rewritten: several notes on a day sum.',
+          properties: {
+            delta_minutes: { ...mediaTimeProperties.delta_minutes, description: 'Minutes to add (positive) or take away (negative) for today. Never 0.' },
+            reason: { type: 'string', minLength: 3, maxLength: 300, description: 'Why the parents moved the quota. Mandatory: the child sees it in GET /today.' },
+          },
+        },
+        MediaTimeQuotaDayAdjustData: {
+          type: 'object',
+          required: ['day_key', 'delta_minutes', 'quota_min'],
+          properties: {
+            day_key: isoDay('The household day the note was written for (server-side, never the device clock).'),
+            delta_minutes: mediaTimeProperties.delta_minutes,
+            quota_min: mediaTimeProperties.quota_min,
+            adjusted_min: mediaTimeProperties.adjusted_min,
+            remaining_min: mediaTimeProperties.remaining_min,
+          },
+        },
+        MediaTimeQuotaDayAdjustResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeQuotaDayAdjustData' } },
+        },
+        MediaTimeQuotaNoteItem: {
+          type: 'object',
+          required: ['day_key', 'delta_minutes', 'reason', 'created_at'],
+          properties: {
+            day_key: isoDay('The household day the note applies to.'),
+            delta_minutes: mediaTimeProperties.delta_minutes,
+            reason: { type: 'string', description: 'The mandatory reason the parent gave.' },
+            created_by: { type: ['integer', 'null'], description: 'The parent who wrote it (null when that account is gone).' },
+            created_at: mediaTimeProperties.created_at,
+          },
+        },
+        MediaTimeQuotaDayNotesResponse: {
+          type: 'object', required: ['data'],
+          properties: {
+            data: {
+              type: 'object', required: ['items'],
+              properties: { items: { type: 'array', maxItems: 30, items: { $ref: '#/components/schemas/MediaTimeQuotaNoteItem' } } },
+            },
+          },
         },
         MediaTimeQuotaState: {
           type: 'object',

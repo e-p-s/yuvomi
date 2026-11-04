@@ -24,7 +24,9 @@ import { dateText, dateTimeText } from '/utils/date-format.js';
 import { esc, REQUIRED_MARK } from '/utils/html.js';
 import { openModal, closeModal, captureModalContext, captureOpenContext, isModalContextCurrent, confirmOverModal, refocusAfterRender } from '/components/modal.js';
 import { createPageFab, setPageFabAction } from '/utils/fab.js';
-import { rowActionHtml } from '/utils/row-action.js';
+import { rowMenuHtml } from '/utils/row-action.js';
+import { installPopoverMenus } from '/utils/popover-menu.js';
+import { attachSegmentIndicator } from '/utils/segment-indicator.js';
 import { wireTablist } from '/utils/tablist.js';
 import { swapContent } from '/utils/content-swap.js';
 import { renderSkeletonList } from '/utils/skeleton.js';
@@ -62,6 +64,8 @@ let state = {
   /** false = keine Eltern-/Adminrechte; bis der 403 antwortet, gilt true. */
   canManage: true,
   today: null,
+  /** Anpassungen des Tages (day-notes) fuer das gewaehlte Kind; null = nie geladen. */
+  dayNotes: null,
   devices: null,
   quiet: null,
   settings: null,
@@ -169,8 +173,31 @@ async function loadToday() {
   const [today] = await Promise.all([
     api.get(`/media-time/today${childQuery()}`),
     loadSettingsLite(),
+    loadDayNotes(),
   ]);
   state.today = today.data ?? null;
+}
+
+/* Die Anpassungen des Tages (Eltern-Notizen) sind ein Manager-Pfad. Ohne
+ * Manager-Recht bleibt der Stand leer - das Kind sieht die Begruendung der
+ * laufenden Anpassung am Balken (today.reason), die Liste der Historie nicht.
+ * Scheitert die Abfrage anders als am Recht, bleibt null: die Liste sagt dann
+ * nichts, statt "heute nichts" zu behaupten, ohne es zu wissen. */
+async function loadDayNotes() {
+  if (!state.canManage || state.selectedChildId == null) {
+    state.dayNotes = [];
+    return;
+  }
+  try {
+    const res = await api.get(`/media-time/quotas/${encodeURIComponent(state.selectedChildId)}/day-notes`);
+    state.dayNotes = res.data?.items ?? [];
+  } catch (err) {
+    if ((err?.status ?? err?.response?.status) === 403) {
+      state.dayNotes = [];
+      return;
+    }
+    state.dayNotes = null;
+  }
 }
 
 /* Geraete und Ruhezeit sind Manager-Pfade: ohne Antwort bleibt null, und die
@@ -298,6 +325,9 @@ function renderShell(container) {
       renderCurrentTab(container, { direction });
     },
   });
+  // Geteilte gleitende Kapsel unter dem aktiven Reiter (derselbe Kanon wie
+  // Belohnungen und Fasten); die Seite baut den Kopf bei jedem Aufruf neu.
+  attachSegmentIndicator(container.querySelector('.media-time-tabs'), { key: 'media-time-tabs' });
   fab = createPageFab({ id: 'media-time-fab', dockLabel: t('newLabel.mediaTime') });
   container.querySelector('.media-time-page').appendChild(fab);
   updateMediaTimeFab();
@@ -526,6 +556,54 @@ function renderToday(el) {
       </button>
     </section>` : '';
 
+  /* Die Anpassung des Tages (Eltern-Notizen, Entscheidung 4): Basis + Anpassung
+   * = Kontingent, als eigener Satz UEBER dem Balken - der Balken zeigt das
+   * Ergebnis, dieser nennt, wie es zustande kam. Der Knopf steht nur Eltern
+   * (PUT ist requireManager); die Begruendung der letzten Anpassung (reason aus
+   * /today) sehen Kinder ebenfalls - Transparenz ist hier die Regel, nicht der
+   * Umweg. Fehlt `adjusted_min` in der Antwort (ein Server vor der Anpassung),
+   * gilt er als 0: nur der Basiswert, kein Knopf-Satz ueber einem Irrtum. */
+  const adjusted = Number(data.adjusted_min) || 0;
+  const baseQuota = quota - adjusted;
+  const reasonText = String(data.reason ?? '').trim();
+  const quotaLine = `
+      <p class="mt-quota-line">
+        <span class="mt-quota-line__text">${esc(t('mediaTime.quotaLine', {
+    base: fmtNum(baseQuota),
+    adjusted: adjusted >= 0 ? `+${fmtNum(adjusted)}` : `-${fmtNum(Math.abs(adjusted))}`,
+    quota: fmtNum(quota),
+  }))}</span>
+        ${state.canManage ? `<button class="btn btn--secondary btn--sm" type="button" data-action="mt-open-adjust">
+          <i data-lucide="pencil" aria-hidden="true"></i>${esc(t('mediaTime.adjustAction'))}
+        </button>` : ''}
+      </p>
+      ${reasonText ? `<p class="mt-quota-reason">${esc(t('mediaTime.quotaReason', { reason: reasonText }))}</p>` : ''}`;
+
+  /* Die Anpassungen des Tages als Protokoll: jede Zeile delta + Grund + wann.
+   * Der Zugang ist wie der GET-Endpunkt: Eltern sehen ihr Kind, ein Kind sieht
+   * sich selbst (der Server erlaubt beides). `null` = die Antwort ist nie
+   * gekommen: dann steht hier nichts, was "heute nichts" behauptet. */
+  const notes = state.dayNotes;
+  const notesSection = (state.canManage || state.user?.id === state.selectedChildId) && Array.isArray(notes) && notes.length
+    ? `
+    <section class="mt-section" aria-labelledby="mt-day-notes-title">
+      <h2 class="mt-section__title u-section-title" id="mt-day-notes-title">${esc(t('mediaTime.dayNotesTitle'))}</h2>
+      <ul class="row-carrier">${notes.map((note) => {
+        const delta = Number(note.delta_minutes) || 0;
+        const who = note.created_by === state.user?.id
+          ? ''
+          : `${esc(t('mediaTime.dayNotesBy', { name: childNameFor(note.created_by) }))} · `;
+        return `
+        <li class="list-row">
+          <div class="list-row__main">
+            <p class="list-row__name">${esc(String(note.reason ?? ''))}</p>
+            <p class="list-row__meta">${who}${esc(dateTimeText(note.created_at))}</p>
+          </div>
+          <span class="list-row__end">${delta >= 0 ? `+${fmtNum(delta)}` : `-${fmtNum(Math.abs(delta))}`} ${esc(t('mediaTime.minutesUnit'))}</span>
+        </li>`;
+      }).join('')}</ul>
+    </section>` : '';
+
   el.insertAdjacentHTML('beforeend', `
     <div class="media-time-content__inner">
       ${header}
@@ -534,6 +612,7 @@ function renderToday(el) {
           <h2 class="mt-card__title" id="mt-today-title">${esc(t('mediaTime.todayTitle'))}</h2>
           <span class="${chip.cls}">${esc(chip.label)}</span>
         </div>
+        ${quotaLine}
         <div class="mt-progress__track" role="progressbar"
              aria-label="${esc(t('mediaTime.progressLabel'))}"
              aria-valuenow="${fmtNum(remaining)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
@@ -547,12 +626,115 @@ function renderToday(el) {
           ${tracker}
         </div>
       </section>
+      ${notesSection}
       ${exchange}
       ${setupStepsHtml()}
     </div>`);
   wireChildPicker(el, _container);
   el.querySelector('[data-action="mt-open-purchase"]')
     ?.addEventListener('click', () => openPurchaseModal());
+  el.querySelector('[data-action="mt-open-adjust"]')
+    ?.addEventListener('click', () => openAdjustModal());
+}
+
+/* Anzeigenamen fuer die Anpassungs-Notizen: derPicker-Kinder, sonst der
+ * Inhaber der Seite (Eintrag des eigenen Kindes). */
+function childNameFor(userId) {
+  const child = state.children?.find((c) => c.id === userId);
+  if (child) return child.display_name;
+  return state.user?.display_name || t('mediaTime.childLabel');
+}
+
+/* ------------------------------------------------------------------ */
+/* Tageskontingent anpassen (Eltern)                                    */
+/* ------------------------------------------------------------------ */
+
+/* Keine Zustands-Korrektur, sondern ein Protokolleintrag: delta + Pflichtgrund,
+ * der Server summiert und der Tag gilt neu. Der Grund ist Pflicht, weil das
+ * Kind ihn liest - eine Anpassung ohne Satz waere eine Zahl ohne Antwort.
+ * Vor dem Speichern die Rueckfrage mit Detail (confirmOverModal-Muster): was
+ * sich aendert, steht in der Frage, nicht erst hinter ihr. */
+function openAdjustModal() {
+  if (!state.canManage || state.selectedChildId == null) return;
+  const data = state.today;
+  if (!data) return;
+  const quota = Number(data.quota_min || 0);
+  const adjusted = Number(data.adjusted_min) || 0;
+  const modalContext = captureModalContext();
+  const refresh = async () => {
+    await loadToday();
+    if (!isModalContextCurrent(modalContext)) return;
+    closeModal({ force: true, context: modalContext });
+    await renderCurrentTab(_container, { direction: 0 });
+    refocusAfterRender();
+  };
+  openModal({
+    title: t('mediaTime.adjustTitle', { name: childNameFor(state.selectedChildId) }),
+    content: `
+      <form id="mt-adjust-form" novalidate>
+        <div class="form-group">
+          <label class="label" for="mt-adjust-delta">${esc(t('mediaTime.adjustDeltaLabel'))}${REQUIRED_MARK}</label>
+          <input class="input" id="mt-adjust-delta" type="number" min="-1440" max="1440" step="1" required
+                 inputmode="numeric" autocomplete="off">
+          <p class="form-hint">${esc(t('mediaTime.adjustDeltaHint', {
+            quota: fmtNum(quota),
+            adjusted: adjusted >= 0 ? `+${fmtNum(adjusted)}` : `-${fmtNum(Math.abs(adjusted))}`,
+          }))}</p>
+        </div>
+        <div class="form-group">
+          <label class="label" for="mt-adjust-reason">${esc(t('mediaTime.adjustReasonLabel'))}${REQUIRED_MARK}</label>
+          <textarea class="input" id="mt-adjust-reason" rows="2" maxlength="300" required></textarea>
+          <p class="form-hint">${esc(t('mediaTime.adjustReasonHint'))}</p>
+        </div>
+        <div id="mt-adjust-error" class="form-error" role="alert" hidden></div>
+        <div class="modal-panel__footer modal-panel__footer--plain">
+          <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
+          <button type="submit" class="btn btn--primary" id="mt-adjust-submit">${esc(t('mediaTime.adjustConfirm'))}</button>
+        </div>
+      </form>`,
+    onSave: async (panel) => {
+      const deltaEl = panel.querySelector('#mt-adjust-delta');
+      const reasonEl = panel.querySelector('#mt-adjust-reason');
+      const errEl = panel.querySelector('#mt-adjust-error');
+      const submit = panel.querySelector('#mt-adjust-submit');
+      const fail = (msg) => {
+        errEl.textContent = msg;
+        errEl.hidden = false;
+      };
+      const delta = Math.trunc(Number(deltaEl.value));
+      if (!Number.isInteger(delta) || delta === 0 || delta < -1440 || delta > 1440) {
+        fail(t('mediaTime.adjustDeltaProblem'));
+        return;
+      }
+      const reason = String(reasonEl.value ?? '').trim();
+      if (reason.length < 3 || reason.length > 300) {
+        fail(t('mediaTime.adjustReasonProblem'));
+        return;
+      }
+      // Die Rueckfrage nennt das Ergebnis, nicht die Absicht: von ... nach ...
+      const confirmed = await confirmOverModal({
+        title: t('mediaTime.adjustConfirmTitle', {
+          from: fmtNum(quota),
+          to: fmtNum(Math.max(0, quota + delta)),
+        }),
+        detail: t('mediaTime.adjustConfirmDetail', { reason }),
+        confirmLabel: t('mediaTime.adjustConfirm'),
+      });
+      if (!confirmed) return;
+      submit.disabled = true;
+      try {
+        await api.put(`/media-time/quotas/${encodeURIComponent(state.selectedChildId)}/day`, {
+          delta_minutes: delta,
+          reason,
+        });
+        await reloadAfterSave(refresh);
+      } catch (err) {
+        submit.disabled = false;
+        errEl.textContent = mediaTimeErrorSentence(err);
+        errEl.hidden = false;
+      }
+    },
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -658,21 +840,21 @@ async function revokeDevice(id, name) {
   }
 }
 
+/* Die Endzone jeder Zeile traegt hoechstens EINE sichtbare Handlung (Kanons
+ * D10 und D6): der Rest zieht in den Mehr-Knopf - auch der Papierkorb, der als
+ * offenes Zeichen nie die lauteste Farbe der Liste fuehren darf. Der Knopf
+ * braucht installPopoverMenus an der Wurzel, die ihn enthaelt. */
 function deviceRow(device) {
   const revoked = !!device.revoked_at;
   const name = device.name || t('mediaTime.deviceUnnamed');
-  const actions = revoked ? '' : `
-    ${rowActionHtml({
-    icon: 'package-search',
-    label: t('mediaTime.inventoryOpen', { name }),
-    attrs: { 'data-inventory': device.id },
-  })}
-    ${rowActionHtml({
-    icon: 'key-round',
-    label: t('mediaTime.deviceRevokeAction', { name }),
-    tone: 'danger',
-    attrs: { 'data-revoke': device.id },
-  })}`;
+  const actions = revoked ? '' : rowMenuHtml({
+    id: `mt-device-menu-${device.id}`,
+    label: t('common.moreActionsNamed', { name }),
+    items: [
+      { action: 'inventory', icon: 'package-search', label: t('mediaTime.inventoryOpen', { name }), attrs: { 'data-inventory': device.id } },
+      { action: 'revoke', icon: 'key-round', label: t('mediaTime.deviceRevokeAction', { name }), danger: true, attrs: { 'data-revoke': device.id } },
+    ],
+  });
   return `
     <li class="list-row mt-device-row" data-device="${device.id}">
       <div class="list-row__main">
@@ -694,7 +876,10 @@ function renderDevices(el) {
       title: t('mediaTime.devicesEmptyTitle'),
       description: t('mediaTime.devicesEmptyBody'),
       action: state.canManage
-        ? { label: t('mediaTime.deviceAdd'), icon: 'plus', className: 'mt-add-device' }
+        // tone secondary: auf diesem Reiter steht der FAB bereits fuer
+        // 'Geraet hinzufuegen' (updateMediaTimeFab) - die leere Liste braucht
+        // keine zweite Primaeraktion (R23 D14).
+        ? { label: t('mediaTime.deviceAdd'), icon: 'plus', tone: 'secondary', className: 'mt-add-device' }
         : undefined,
     });
   el.insertAdjacentHTML('beforeend', `
@@ -705,6 +890,7 @@ function renderDevices(el) {
       </section>
     </div>`);
   el.querySelector('.mt-add-device')?.addEventListener('click', () => openDeviceModal());
+  installPopoverMenus(el);
   el.querySelectorAll('[data-revoke]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const device = rows.find((d) => d.id === Number(btn.dataset.revoke));
@@ -1059,21 +1245,19 @@ function renderExceptionRows(el) {
         <p class="list-row__meta">${esc(t(`mediaTime.exceptionMatch.${item.match_type}`))} · ${esc(t(`mediaTime.exceptionExempt.${item.exempt_from}`))} · ${esc(exceptionUserLabel(item.user_id))}${item.note ? ` · ${esc(item.note)}` : ''}</p>
       </div>
       <div class="list-row__actions">
-        ${rowActionHtml({
-    icon: 'pencil',
-    label: t('mediaTime.exceptionEdit', { name: item.pattern }),
-    attrs: { 'data-exception-edit': item.id },
-  })}
-        ${rowActionHtml({
-    icon: 'trash-2',
-    label: t('mediaTime.exceptionRevokeAction', { name: item.pattern }),
-    tone: 'danger',
-    attrs: { 'data-exception-revoke': item.id },
+        ${rowMenuHtml({
+    id: `mt-exception-menu-${item.id}`,
+    label: t('common.moreActionsNamed', { name: item.pattern }),
+    items: [
+      { action: 'exception-edit', icon: 'pencil', label: t('mediaTime.exceptionEdit', { name: item.pattern }), attrs: { 'data-exception-edit': item.id } },
+      { action: 'exception-revoke', icon: 'trash-2', label: t('mediaTime.exceptionRevokeAction', { name: item.pattern }), danger: true, attrs: { 'data-exception-revoke': item.id } },
+    ],
   })}
       </div>
     </li>`).join('');
   host.replaceChildren();
   host.insertAdjacentHTML('beforeend', `<ul class="row-carrier">${rows}</ul>`);
+  installPopoverMenus(host);
   host.querySelectorAll('[data-exception-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
       openExceptionModal(items.find((x) => x.id === Number(btn.dataset.exceptionEdit)) ?? null);
@@ -1109,6 +1293,7 @@ function openExceptionModal(existing) {
   const modalContext = captureModalContext();
   openModal({
     title: existing ? t('mediaTime.exceptionEditTitle') : t('mediaTime.exceptionAddTitle'),
+    initialFocus: 'edit',
     content: `
       <form id="mt-exception-form" novalidate>
         <div class="form-group">

@@ -567,7 +567,12 @@
         "todayTimelineNext": "następne",
         "todayAlsoTitle": "Dziś także",
         "todayNothingPlanned": "Jeszcze nic nie zaplanowano",
-        "todayNothingPlannedSub": "Dzisiejsze terminy, zadania i posiłki pojawią się tutaj."
+        "todayNothingPlannedSub": "Dzisiejsze terminy, zadania i posiłki pojawią się tutaj.",
+        "mediaTimeEmpty": "Dziś żadne dziecko nie ma limitu.",
+        "mediaTimeRest": "jeszcze {{remaining}} z {{quota}} min",
+        "mediaTimeAdjustPlus": "+{{minutes}} min dziś",
+        "mediaTimeAdjustMinus": "-{{minutes}} min dziś",
+        "mediaTimeMore": "+{{count}} kolejne dzieci"
     },
     "tasks": {
         "resetOrder": "Sortuj automatycznie",
@@ -3800,7 +3805,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Czas z medi w przeglądzie",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Kafelek czasu z medi wrócił do przeglądu.",
+        "mediaTimeDashboardOff": "Kafelek czasu z medi jest ukryty na tym urządzeniu."
     },
     "login": {
         "tagline": "Witaj ponownie. Twój dom w jednym miejscu.",
@@ -7417,6 +7426,21 @@
         "minAgo_many": "vor {{count}} Min",
         "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
         "inventoryTruncHint_few": "Zeige die ersten 50 von {{count}}",
-        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Limit dziś: baza {{base}} + korekta {{adjusted}} = {{quota}} min",
+        "quotaReason": "Korekta: {{reason}}",
+        "adjustAction": "Dostosuj",
+        "adjustTitle": "Dostosuj dzisiejszy limit: {{name}}",
+        "adjustDeltaLabel": "Zmiana w minutach (+ lub -)",
+        "adjustDeltaHint": "Dziś obowiązuje {{quota}} min (w tym korekta {{adjusted}}). Nowy dzień zaczyna się znowu od bazy - korekta tylko na dziś.",
+        "adjustDeltaProblem": "Podaj liczbę między -1440 a 1440, nie 0.",
+        "adjustReasonLabel": "Powód",
+        "adjustReasonHint": "Dziecko czyta to zdanie - dlaczego dziś jest inaczej.",
+        "adjustReasonProblem": "Podaj powód (3 do 300 znaków).",
+        "adjustConfirm": "Dostosuj",
+        "adjustConfirmTitle": "Ustawić limit z {{from}} na {{to}} min?",
+        "adjustConfirmDetail": "Powód: {{reason}}",
+        "dayNotesTitle": "Dzisiejsze korekty",
+        "dayNotesBy": "od {{name}}"
     }
 }

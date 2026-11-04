@@ -457,7 +457,12 @@
         "todayTimelineNext": "tiếp theo",
         "todayAlsoTitle": "Hôm nay còn có",
         "todayNothingPlanned": "Chưa có kế hoạch nào",
-        "todayNothingPlannedSub": "Lịch hẹn, công việc và bữa ăn hôm nay sẽ hiển thị ở đây."
+        "todayNothingPlannedSub": "Lịch hẹn, công việc và bữa ăn hôm nay sẽ hiển thị ở đây.",
+        "mediaTimeEmpty": "Hôm nay chưa đứa trẻ nào có hạn mức.",
+        "mediaTimeRest": "còn {{remaining}} trong {{quota}} phút",
+        "mediaTimeAdjustPlus": "+{{minutes}} phút hôm nay",
+        "mediaTimeAdjustMinus": "-{{minutes}} phút hôm nay",
+        "mediaTimeMore": "+{{count}} trẻ khác"
     },
     "tasks": {
         "resetOrder": "Sắp xếp tự động",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Thời gian media ở tổng quan",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Thẻ thời gian media đã trở lại tổng quan.",
+        "mediaTimeDashboardOff": "Thẻ thời gian media đã ẩn trên thiết bị này."
     },
     "login": {
         "tagline": "Chào mừng bạn trở lại. Ngôi nhà của bạn ở cùng một nơi.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Hạn mức hôm nay: gốc {{base}} + điều chỉnh {{adjusted}} = {{quota}} phút",
+        "quotaReason": "Điều chỉnh: {{reason}}",
+        "adjustAction": "Điều chỉnh",
+        "adjustTitle": "Điều chỉnh hạn mức hôm nay của {{name}}",
+        "adjustDeltaLabel": "Thay đổi theo phút (+ hoặc -)",
+        "adjustDeltaHint": "Hôm nay áp dụng {{quota}} phút (trong đó điều chỉnh {{adjusted}}). Ngày mới lại bắt đầu từ giá trị gốc - điều chỉnh chỉ áp dụng cho hôm nay.",
+        "adjustDeltaProblem": "Nhập số từ -1440 đến 1440, không phải 0.",
+        "adjustReasonLabel": "Lý do",
+        "adjustReasonHint": "Trẻ đọc câu này - vì sao hôm nay khác.",
+        "adjustReasonProblem": "Vui lòng nêu lý do (3 đến 300 ký tự).",
+        "adjustConfirm": "Điều chỉnh",
+        "adjustConfirmTitle": "Đặt hạn mức từ {{from}} sang {{to}} phút?",
+        "adjustConfirmDetail": "Lý do: {{reason}}",
+        "dayNotesTitle": "Điều chỉnh hôm nay",
+        "dayNotesBy": "bởi {{name}}"
     }
 }

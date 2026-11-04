@@ -549,7 +549,12 @@
         "todayTimelineNext": "далі",
         "todayAlsoTitle": "Також сьогодні",
         "todayNothingPlanned": "Поки нічого не заплановано",
-        "todayNothingPlannedSub": "Тут з'являться сьогоднішні зустрічі, завдання та страви."
+        "todayNothingPlannedSub": "Тут з'являться сьогоднішні зустрічі, завдання та страви.",
+        "mediaTimeEmpty": "Сьогодні жодна дитина не має ліміту.",
+        "mediaTimeRest": "ще {{remaining}} з {{quota}} хв",
+        "mediaTimeAdjustPlus": "+{{minutes}} хв сьогодні",
+        "mediaTimeAdjustMinus": "-{{minutes}} хв сьогодні",
+        "mediaTimeMore": "+{{count}} ще дітей"
     },
     "tasks": {
         "resetOrder": "Сортувати автоматично",
@@ -3782,7 +3787,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Екранний час в огляді",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Плитка екранного часу знову в огляді.",
+        "mediaTimeDashboardOff": "Плитку екранного часу приховано на цьому пристрої."
     },
     "login": {
         "tagline": "З поверненням. Ваш дім - в одному місці.",
@@ -7417,6 +7426,21 @@
         "minAgo_many": "vor {{count}} Min",
         "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
         "inventoryTruncHint_few": "Zeige die ersten 50 von {{count}}",
-        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Ліміт на сьогодні: база {{base}} + коригування {{adjusted}} = {{quota}} хв",
+        "quotaReason": "Коригування: {{reason}}",
+        "adjustAction": "Скоригувати",
+        "adjustTitle": "Скоригувати ліміт {{name}} на сьогодні",
+        "adjustDeltaLabel": "Зміна в хвилинах (+ або -)",
+        "adjustDeltaHint": "Сьогодні діє {{quota}} хв (з них коригування {{adjusted}}). Новий день знову починається з базового значення - коригування лише на сьогодні.",
+        "adjustDeltaProblem": "Введіть число від -1440 до 1440, не 0.",
+        "adjustReasonLabel": "Причина",
+        "adjustReasonHint": "Дитина читає це речення - чому сьогодні інакше.",
+        "adjustReasonProblem": "Вкажіть причину (від 3 до 300 символів).",
+        "adjustConfirm": "Скоригувати",
+        "adjustConfirmTitle": "Встановити ліміт із {{from}} на {{to}} хв?",
+        "adjustConfirmDetail": "Причина: {{reason}}",
+        "dayNotesTitle": "Коригування на сьогодні",
+        "dayNotesBy": "від {{name}}"
     }
 }

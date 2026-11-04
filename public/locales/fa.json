@@ -475,7 +475,12 @@
         "todayTimelineNext": "بعدی",
         "todayAlsoTitle": "همچنین امروز",
         "todayNothingPlanned": "هنوز چیزی برنامه‌ریزی نشده",
-        "todayNothingPlannedSub": "قرارها، کارها و وعده‌های غذایی امروز اینجا نمایش داده می‌شوند."
+        "todayNothingPlannedSub": "قرارها، کارها و وعده‌های غذایی امروز اینجا نمایش داده می‌شوند.",
+        "mediaTimeEmpty": "امروز هیچ کودکی سهمیه ندارد.",
+        "mediaTimeRest": "{{remaining}} از {{quota}} دقیقه باقی است",
+        "mediaTimeAdjustPlus": "+{{minutes}} دقیقه امروز",
+        "mediaTimeAdjustMinus": "-{{minutes}} دقیقه امروز",
+        "mediaTimeMore": "+{{count}} کودک دیگر"
     },
     "tasks": {
         "resetOrder": "مرتب‌سازی خودکار",
@@ -3572,7 +3577,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "زمان رسانه در نمای کلی",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "کارت زمان رسانه دوباره در نمای کلی است.",
+        "mediaTimeDashboardOff": "کارت زمان رسانه روی این دستگاه پنهان است."
     },
     "login": {
         "tagline": "دوباره خوش آمدید. خانهٔ شما در یک جا.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "سهمیه امروز: پایه {{base}} + تنظیم {{adjusted}} = {{quota}} دقیقه",
+        "quotaReason": "تنظیم: {{reason}}",
+        "adjustAction": "تنظیم",
+        "adjustTitle": "تنظیم سهمیه امروز {{name}}",
+        "adjustDeltaLabel": "تغییر به دقیقه (+ یا -)",
+        "adjustDeltaHint": "امروز {{quota}} دقیقه اعمال می‌شود (از آن تنظیم {{adjusted}}). روز جدید دوباره از مقدار پایه آغاز می‌شود - یک تنظیم فقط برای امروز است.",
+        "adjustDeltaProblem": "عددی بین -1440 و 1440 وارد کنید، نه 0.",
+        "adjustReasonLabel": "علت",
+        "adjustReasonHint": "کودک این جمله را می‌خواند - چرا امروز متفاوت است.",
+        "adjustReasonProblem": "لطفاً یک علت (۳ تا ۳۰۰ نویسه) وارد کنید.",
+        "adjustConfirm": "تنظیم",
+        "adjustConfirmTitle": "سهمیه از {{from}} به {{to}} دقیقه تنظیم شود؟",
+        "adjustConfirmDetail": "علت: {{reason}}",
+        "dayNotesTitle": "تنظیمات امروز",
+        "dayNotesBy": "توسط {{name}}"
     }
 }

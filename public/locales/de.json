@@ -475,7 +475,12 @@
         "todayTimelineNext": "als Nächstes",
         "todayAlsoTitle": "Außerdem heute",
         "todayNothingPlanned": "Noch nichts geplant",
-        "todayNothingPlannedSub": "Termine, Aufgaben und Mahlzeiten von heute erscheinen hier."
+        "todayNothingPlannedSub": "Termine, Aufgaben und Mahlzeiten von heute erscheinen hier.",
+        "mediaTimeEmpty": "Heute hat noch kein Kind ein Kontingent.",
+        "mediaTimeRest": "noch {{remaining}} von {{quota}} Min",
+        "mediaTimeAdjustPlus": "+{{minutes}} Min heute",
+        "mediaTimeAdjustMinus": "-{{minutes}} Min heute",
+        "mediaTimeMore": "+{{count}} weitere Kinder"
     },
     "tasks": {
         "resetOrder": "Automatisch sortieren",
@@ -3572,7 +3577,11 @@
         "rewardsTabsSideLabel": "Belohnungs-Reiter als Seitenleiste",
         "rewardsTabsSideHint": "Auf dem Bildschirm stehen die Reiter links als Spalte, auf dem Handy als Liste unter dem Titel. Wischen ueber dem Inhalt wechselt den Reiter.",
         "rewardsTabsSideOn": "Seitenleiste aktiv - wirksam auf der Belohnungen-Seite.",
-        "rewardsTabsSideOff": "Reiter wieder als Leiste."
+        "rewardsTabsSideOff": "Reiter wieder als Leiste.",
+        "mediaTimeDashboardLabel": "Medienzeit auf der Uebersicht",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Die Medienzeit-Kachel steht wieder auf der Uebersicht.",
+        "mediaTimeDashboardOff": "Die Medienzeit-Kachel ist auf diesem Geraet ausgeblendet."
     },
     "login": {
         "tagline": "Willkommen zurück. Dein Zuhause an einem Ort.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Kontingent heute: Basis {{base}} + Anpassung {{adjusted}} = {{quota}} Min",
+        "quotaReason": "Anpassung: {{reason}}",
+        "adjustAction": "Anpassen",
+        "adjustTitle": "Tageskontingent von {{name}} anpassen",
+        "adjustDeltaLabel": "Aenderung in Minuten (+ oder -)",
+        "adjustDeltaHint": "Heute gilt {{quota}} Min (davon Anpassung {{adjusted}}). Der neue Tag beginnt wieder beim Basiswert - eine Anpassung gilt nur fuer heute.",
+        "adjustDeltaProblem": "Bitte eine Zahl zwischen -1440 und 1440 eingeben, nicht 0.",
+        "adjustReasonLabel": "Grund",
+        "adjustReasonHint": "Das Kind liest diesen Satz - warum der Tag heute anders gilt.",
+        "adjustReasonProblem": "Bitte einen Grund angeben (3 bis 300 Zeichen).",
+        "adjustConfirm": "Anpassen",
+        "adjustConfirmTitle": "Kontingent von {{from}} auf {{to}} Min setzen?",
+        "adjustConfirmDetail": "Grund: {{reason}}",
+        "dayNotesTitle": "Anpassungen heute",
+        "dayNotesBy": "von {{name}}"
     }
 }

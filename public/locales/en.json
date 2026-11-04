@@ -457,7 +457,12 @@
         "todayTimelineNext": "up next",
         "todayAlsoTitle": "Also today",
         "todayNothingPlanned": "Nothing planned yet",
-        "todayNothingPlannedSub": "Today's appointments, tasks and meals will show up here."
+        "todayNothingPlannedSub": "Today's appointments, tasks and meals will show up here.",
+        "mediaTimeEmpty": "No child has a quota today.",
+        "mediaTimeRest": "{{remaining}} of {{quota}} min left",
+        "mediaTimeAdjustPlus": "+{{minutes}} min today",
+        "mediaTimeAdjustMinus": "-{{minutes}} min today",
+        "mediaTimeMore": "+{{count}} more children"
     },
     "tasks": {
         "resetOrder": "Sort automatically",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Media time on the overview",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "The media time tile is back on the overview.",
+        "mediaTimeDashboardOff": "The media time tile is hidden on this device."
     },
     "login": {
         "tagline": "Welcome back. Your home in one place.",
@@ -7067,6 +7076,21 @@
             "history": "Log",
             "charged": "Charged"
         },
-        "inventoryTruncHint_one": "Showing the first 50 of {{count}}"
+        "inventoryTruncHint_one": "Showing the first 50 of {{count}}",
+        "quotaLine": "Quota today: base {{base}} + adjustment {{adjusted}} = {{quota}} min",
+        "quotaReason": "Adjustment: {{reason}}",
+        "adjustAction": "Adjust",
+        "adjustTitle": "Adjust {{name}}'s quota for today",
+        "adjustDeltaLabel": "Change in minutes (+ or -)",
+        "adjustDeltaHint": "Today {{quota}} min apply (of which adjustment {{adjusted}}). The new day starts again at the base value - an adjustment applies only to today.",
+        "adjustDeltaProblem": "Enter a number between -1440 and 1440, not 0.",
+        "adjustReasonLabel": "Reason",
+        "adjustReasonHint": "The child reads this sentence - why today counts differently.",
+        "adjustReasonProblem": "Please give a reason (3 to 300 characters).",
+        "adjustConfirm": "Adjust",
+        "adjustConfirmTitle": "Set the quota from {{from}} to {{to}} min?",
+        "adjustConfirmDetail": "Reason: {{reason}}",
+        "dayNotesTitle": "Today's adjustments",
+        "dayNotesBy": "by {{name}}"
     }
 }

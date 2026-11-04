@@ -305,6 +305,36 @@ export function dayCredit(d, userId, dayKey) {
   return row.credit_min;
 }
 
+/**
+ * Eltern-Notiz: die Summe der Anpassungen (delta_minutes), die Eltern an
+ * diesem Tag am Kontingent vorgenommen haben (0 wenn keine). Mehrere
+ * Eintraege pro Tag sind erlaubt und summieren - die Notizen sind ein
+ * Protokoll, nie ein Zustand, der ueberschrieben wird. Dieselbe Stelle im
+ * Kontingent wie dayCredit: credit und Notizen heben (oder senken) den Tag,
+ * beide sind kein Verbrauch.
+ */
+export function quotaAdjustmentFor(d, userId, dayKey) {
+  const row = d.prepare(`
+    SELECT COALESCE(SUM(delta_minutes), 0) AS adjusted_min
+    FROM media_time_quota_notes
+    WHERE user_id = ? AND day_key = ?
+  `).get(userId, dayKey);
+  return row.adjusted_min;
+}
+
+/**
+ * Die Begruendungen eines Tages fuer die KIND-Ansicht (Transparenz: jede
+ * Anpassung am Kontingent erklaert sich dem Kind). Sortiert nach created_at
+ * aufsteigend, damit die letzte die neueste ist.
+ */
+export function quotaNoteReasons(d, userId, dayKey) {
+  return d.prepare(`
+    SELECT reason FROM media_time_quota_notes
+    WHERE user_id = ? AND day_key = ?
+    ORDER BY created_at ASC, id ASC
+  `).all(userId, dayKey).map((r) => r.reason);
+}
+
 export function quotaRow(d, userId) {
   return d.prepare('SELECT * FROM media_time_quotas WHERE user_id = ?').get(userId) ?? null;
 }
@@ -324,10 +354,26 @@ export function quotaState(d, userId, now = new Date()) {
   // Cap (media_time_hard_cap, Default) bleibt max_daily_minutes trotzdem die
   // Obergrenze; bei kaufbarem Cap ('0') darf das Kontingent bis dorthin, oder
   // ohne Cap offen, wachsen.
+  // Eltern-Notiz (Migration 284): die Anpassungen des Tages (delta_minutes der
+  // media_time_quota_notes) wirken an exakt derselben Stelle wie der credit -
+  // sie verschieben den Tag, sie sind kein Verbrauch. Ein Minus senkt das
+  // Kontingent unter die Basis; die Basis-Zeile selbst bleibt unangetastet
+  // (adjust-Philosophie: korrigieren, nicht radieren).
   const base = quota && quota.enabled === 1 ? quota.daily_minutes : 0;
   const credit = dayCredit(d, userId, dayKey);
+  const adjusted = quotaAdjustmentFor(d, userId, dayKey);
+  // Die Obergrenze des Tages (Entscheidung 4): bei hartem Cap (Default) ist
+  // max_daily_minutes die Obergrenze fuer credit und positive Notizen -
+  // dieselbe Klammer wie bisher. Ein Minus der Eltern senkt den Tag dagegen
+  // von der BASIS aus (bis auf 0): wer 180 von 240 erlaubt, soll dem Kind
+  // nicht versehentlich nur noch die Cap-Reste lassen. Ein negatives Ergebnis
+  // der Summe waere kein Kontingent - der Boden ist 0.
   const hardCap = mediaTimeHardCap(d);
-  let quotaMin = base + credit;
+  let quotaMin = base + credit + adjusted;
+  // Vor der Cap-Klammer auf 0: eine Senkung darf das Kontingent bis auf 0
+  // fuehren, ein negatives Kontingent gibt es nicht (remaining/derived state
+  // bleiben dadurch gueltige Zahlen).
+  quotaMin = Math.max(0, quotaMin);
   if (hardCap && quota && quota.max_daily_minutes != null) {
     quotaMin = Math.min(quotaMin, quota.max_daily_minutes);
   }
@@ -347,6 +393,7 @@ export function quotaState(d, userId, now = new Date()) {
     exempt_min: usage.exempt_min,
     unknown_min: usage.unknown_min,
     purchased_min: credit,
+    adjusted_min: adjusted,
     max_daily_minutes: quota?.max_daily_minutes ?? null,
     hard_cap: hardCap,
     quiet_active: quietActive,

@@ -16969,7 +16969,13 @@ test('ein Modul fuehrt EIN Zeichen, und die Zuordnung steht an einer Stelle', ()
   // wie ein Lucide-Glyph, eine Id ist ein Modulschluessel.
   const headerArgs = [...dashboard.matchAll(/widgetHeader\('([^']+)'/g)].map((m) => m[1]);
   assert.ok(headerArgs.length >= 10, `Nur ${headerArgs.length} widgetHeader-Aufrufe gefunden - die Signatur greift nicht mehr.`);
-  const fremdeArgs = headerArgs.filter((id) => !(id in MODULE_ICON_KEYS));
+  // Widget-Ids, die kein eigenes MODULE_ICON-Zeichen fuehren, muessen auf ein
+  // Modul gemappt sein (MODULE_FOR_WIDGET) - dieselbe Bruke, die split-expenses
+  // aufs Budget-Modul legt. Ein Icon-Name ist erlaubt, wenn er NICHT als Modul
+  // gemappt ist (dann waere es die alte Abschrift an der Aufrufstelle).
+  const moduleForWidgetBlock = (dashboard.match(/const MODULE_FOR_WIDGET = \{[^}]*\}/) ?? [''])[0];
+  const mapped = new Set([...moduleForWidgetBlock.matchAll(/'?([\w-]+)'?\s*:/g)].map((m) => m[1]));
+  const fremdeArgs = headerArgs.filter((id) => !(id in MODULE_ICON_KEYS) && !mapped.has(id));
   assert.deepEqual(fremdeArgs, [],
     'widgetHeader nimmt die Widget-Id (ein Schluessel von MODULE_ICON), nicht einen Icon-Namen.\n'
     + fremdeArgs.join('\n'));

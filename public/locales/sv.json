@@ -457,7 +457,12 @@
         "todayTimelineNext": "härnäst",
         "todayAlsoTitle": "Även i dag",
         "todayNothingPlanned": "Inget planerat än",
-        "todayNothingPlannedSub": "Dagens möten, uppgifter och måltider visas här."
+        "todayNothingPlannedSub": "Dagens möten, uppgifter och måltider visas här.",
+        "mediaTimeEmpty": "Inget barn har en kvot idag.",
+        "mediaTimeRest": "fortfarande {{remaining}} av {{quota}} min",
+        "mediaTimeAdjustPlus": "+{{minutes}} min idag",
+        "mediaTimeAdjustMinus": "-{{minutes}} min idag",
+        "mediaTimeMore": "+{{count}} fler barn"
     },
     "tasks": {
         "resetOrder": "Sortera automatiskt",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Medietid i översikten",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Medietid-kortet är tillbaka i översikten.",
+        "mediaTimeDashboardOff": "Medietid-kortet är dolt på den här enheten."
     },
     "login": {
         "tagline": "Välkommen tillbaka. Ditt hem samlat på ett ställe.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Kvot idag: bas {{base}} + justering {{adjusted}} = {{quota}} min",
+        "quotaReason": "Justering: {{reason}}",
+        "adjustAction": "Justera",
+        "adjustTitle": "Justera {{name}}s kvot för idag",
+        "adjustDeltaLabel": "Ändring i minuter (+ eller -)",
+        "adjustDeltaHint": "Idag gäller {{quota}} min (varav justering {{adjusted}}). Den nya dagen börjar igen på basvärdet - en justering gäller bara idag.",
+        "adjustDeltaProblem": "Ange ett tal mellan -1440 och 1440, inte 0.",
+        "adjustReasonLabel": "Anledning",
+        "adjustReasonHint": "Barnet läser meningen - varför idag gäller annorlunda.",
+        "adjustReasonProblem": "Ange en anledning (3 till 300 tecken).",
+        "adjustConfirm": "Justera",
+        "adjustConfirmTitle": "Sätta kvoten från {{from}} till {{to}} min?",
+        "adjustConfirmDetail": "Anledning: {{reason}}",
+        "dayNotesTitle": "Dagens justeringar",
+        "dayNotesBy": "av {{name}}"
     }
 }

@@ -1682,8 +1682,12 @@ test('R21 Rueckweg: die stille Nachfrage holt jeden eigenen Slice neu, bevor sie
   const src = readFileSync(new URL('../public/pages/dashboard.js', import.meta.url), 'utf8');
   const refreshFn = src.slice(src.indexOf('async function refreshDashboardData('), src.indexOf('const refreshTimerId'));
   assert.ok(refreshFn.length > 0, 'refreshDashboardData() nicht gefunden');
+  // Die Slice-Achse kann von der Widget-Id abweichen ('media-time' -> data.mediaTime,
+  // weil die Id der Route /media-time folgt). Die Achse steht als zweite Option im
+  // Muster, damit ein Slice nicht als weitergereichtes Anhaengsel durchlaeuft.
   const carried = [...refreshFn.matchAll(/fresh\.(\w+) = data\.\1;/g)].map((m) => m[1]);
-  for (const slice of ['cycle', 'waste']) {
+  const AXIS_BY_SLICE = { mediaTime: 'media-time' };
+  for (const slice of carried) {
     assert.ok(carried.includes(slice), `fresh.${slice} wird in der Nachfrage gar nicht mehr gesetzt - die Kachel fiele auf ihren Leerzustand`);
   }
   const stamp = refreshFn.indexOf('rememberOverview();');
@@ -1693,7 +1697,7 @@ test('R21 Rueckweg: die stille Nachfrage holt jeden eigenen Slice neu, bevor sie
     // Ohne Ruecksetzen kehrt ensure*() an seinem eigenen "schon geladen" um.
     assert.match(src, new RegExp(`async function ${ensure}\\(\\) \\{\\s*if \\(data\\.${slice} !== undefined\\) return;`),
       `${ensure}() laedt nicht mehr nur bei undefined - dann misst dieser Test das Falsche`);
-    const visible = refreshFn.indexOf(`widgetConfig.some((w) => w.id === '${slice}' && w.visible)`);
+    const visible = refreshFn.indexOf(`w.id === '${AXIS_BY_SLICE[slice] ?? slice}' && w.visible`);
     const reset = refreshFn.indexOf(`data.${slice} = undefined;`);
     const reload = refreshFn.indexOf(`await ${ensure}();`);
     const carry = refreshFn.indexOf(`fresh.${slice} = data.${slice};`);

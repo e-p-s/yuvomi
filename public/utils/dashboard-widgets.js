@@ -41,7 +41,11 @@ import { EVENT_LIMIT_DEFAULT, clampEventLimit } from './dashboard-event-limit.js
  * unten), eine Umsortierung schaltet nichts mehr um. Die Default-Position ist
  * aber weiter der Ort, an dem ein Neuzugang erscheint, und der Guard
  * „eine fehlende Id landet an ihrer Default-Position" haelt das fest. */
-export const WIDGET_IDS = ['tasks', 'calendar', 'meals', 'shopping', 'pantry', 'birthdays', 'countdown', 'budget', 'rewards', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule', 'waste', 'family', 'notes', 'weather', 'clock', 'metrics', 'quicklinks'];
+// `media-time` (Medienzeit-Balken je Kind) steht bei den Listen: eine Zeile pro
+// Kind mit Name und Restminuten - dieselbe Gestalt wie Geburtstage und Vorrat.
+// Die Id lautet wie der Routenpfad (/media-time), damit das Markensiegel des
+// Kopfes (widgetHeader -> slug) denselben Weg geht wie jede andere Kachel.
+export const WIDGET_IDS = ['tasks', 'calendar', 'meals', 'shopping', 'pantry', 'birthdays', 'countdown', 'budget', 'rewards', 'media-time', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule', 'waste', 'family', 'notes', 'weather', 'clock', 'metrics', 'quicklinks'];
 
 // Vier kuratierte Formen statt sechs: über vier Auswahlmöglichkeiten pro Widget
 // (× bis zu 12 Widgets) kippt der Anpassen-Modus in Mikro-Entscheidungs-Overhead
@@ -110,7 +114,7 @@ export function defaultWidgetSize(id) {
   // (PR #930 review).
   // `pantry` („Laeuft bald ab") ist dieselbe Kachel wie die Geburtstage: eine
   // nach Naehe sortierte Liste aus Name und „noch so lange".
-  if (['tasks', 'calendar', 'rewards', 'budget', 'family', 'notes', 'birthdays', 'countdown', 'schedule', 'waste', 'pantry'].includes(id)) return '1x2';
+  if (['tasks', 'calendar', 'rewards', 'budget', 'family', 'notes', 'birthdays', 'countdown', 'schedule', 'waste', 'pantry', 'media-time'].includes(id)) return '1x2';
   // Die Uhr startet breit statt quadratisch: Uhrzeit und darunter der ausgeschriebene
   // Wochentag brauchen Zeile, nicht Höhe - auf 1x1 bräche das Datum um (#651).
   // `quicklinks` steht bei der Uhr und nicht bei den Listen: es ist eine ZEILE
@@ -176,7 +180,13 @@ export const COCKPIT_COVERED_WIDGETS = new Set(['tasks', 'calendar', 'shopping',
 // gespeichert haben (keine Migration); nur wer der Vorgabe folgt oder ein
 // Layout ohne `budget` mitbringt, startet ohne. Die Kennzahlreihe fuehrt den
 // Saldo aus demselben Grund nicht mehr (METRIC_TILE_ORDER, pages/dashboard.js).
-export const DEFAULT_HIDDEN_WIDGETS = new Set([...COCKPIT_COVERED_WIDGETS, 'budget', 'rewards', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule', 'waste', 'pantry', 'clock', 'weather', 'quicklinks']);
+// `media-time` steht bei den Opt-ins wie `rewards`: der Balken je Kind ist eine
+// Eltern-Ansicht, und ein Dashboard, das ab Werk Zahlen ueber die Kinder zeigt,
+// die nicht jeder im Haushalt sehen soll, waere die Ueberladung, die diese Menge
+// verhindern soll. Dazu traegt die Kachel ihre Requests selbst (pro Kind
+// GET /media-time/today) - ab Werk sichtbar hielte sie jeden Haushalt ohne
+// Medienzeit-Modul nicht, aber jeden mit Modul in einer Anfrage mehr.
+export const DEFAULT_HIDDEN_WIDGETS = new Set([...COCKPIT_COVERED_WIDGETS, 'budget', 'rewards', 'media-time', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule', 'waste', 'pantry', 'clock', 'weather', 'quicklinks']);
 
 export function defaultWidgetVisible(id) {
   return !DEFAULT_HIDDEN_WIDGETS.has(id);

@@ -595,7 +595,12 @@
         "todayTimelineNext": "التالي",
         "todayAlsoTitle": "أيضًا اليوم",
         "todayNothingPlanned": "لم يُخطَّط لشيء بعد",
-        "todayNothingPlannedSub": "ستظهر هنا مواعيد اليوم ومهامه ووجباته."
+        "todayNothingPlannedSub": "ستظهر هنا مواعيد اليوم ومهامه ووجباته.",
+        "mediaTimeEmpty": "لا يوجد رصيد أطفال اليوم.",
+        "mediaTimeRest": "باقي {{remaining}} من {{quota}} دقيقة",
+        "mediaTimeAdjustPlus": "+{{minutes}} دقيقة اليوم",
+        "mediaTimeAdjustMinus": "-{{minutes}} دقيقة اليوم",
+        "mediaTimeMore": "+{{count}} أطفال آخرين"
     },
     "tasks": {
         "resetOrder": "الترتيب التلقائي",
@@ -3897,7 +3902,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "مدة الوسائط في النظرة العامة",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "عادت بطاقة مدة الوسائط إلى النظرة العامة.",
+        "mediaTimeDashboardOff": "بطاقة مدة الوسائط مخفية على هذا الجهاز."
     },
     "login": {
         "tagline": "مرحبًا بعودتك. منزلك في مكان واحد.",
@@ -7594,6 +7603,21 @@
         "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
         "inventoryTruncHint_two": "Zeige die ersten 50 von {{count}}",
         "inventoryTruncHint_few": "Zeige die ersten 50 von {{count}}",
-        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "الرصيد اليوم: أساسي {{base}} + تعديل {{adjusted}} = {{quota}} دقيقة",
+        "quotaReason": "التعديل: {{reason}}",
+        "adjustAction": "تعديل",
+        "adjustTitle": "تعديل رصيد {{name}} لليوم",
+        "adjustDeltaLabel": "التغيير بالدقائق (+ أو -)",
+        "adjustDeltaHint": "يسري اليوم {{quota}} دقيقة (منها تعديل {{adjusted}}). يبدأ اليوم الجديد من القيمة الأساسية - التعديل يسري لليوم فقط.",
+        "adjustDeltaProblem": "أدخل رقمًا بين -1440 و1440، وليس 0.",
+        "adjustReasonLabel": "السبب",
+        "adjustReasonHint": "يقرأ الطفل هذه الجملة - لماذا يسري اليوم غير ذلك.",
+        "adjustReasonProblem": "أدخل سببًا (3 إلى 300 حرف).",
+        "adjustConfirm": "عدّل",
+        "adjustConfirmTitle": "تعيين الرصيد من {{from}} إلى {{to}} دقيقة؟",
+        "adjustConfirmDetail": "السبب: {{reason}}",
+        "dayNotesTitle": "تعديلات اليوم",
+        "dayNotesBy": "من {{name}}"
     }
 }

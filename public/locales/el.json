@@ -457,7 +457,12 @@
         "todayTimelineNext": "επόμενο",
         "todayAlsoTitle": "Επίσης σήμερα",
         "todayNothingPlanned": "Τίποτα προγραμματισμένο ακόμα",
-        "todayNothingPlannedSub": "Τα σημερινά ραντεβού, οι εργασίες και τα γεύματα θα εμφανίζονται εδώ."
+        "todayNothingPlannedSub": "Τα σημερινά ραντεβού, οι εργασίες και τα γεύματα θα εμφανίζονται εδώ.",
+        "mediaTimeEmpty": "Κανένα παιδί δεν έχει ποσό σήμερα.",
+        "mediaTimeRest": "απομένουν {{remaining}} από {{quota}} λεπτά",
+        "mediaTimeAdjustPlus": "+{{minutes}} λεπτά σήμερα",
+        "mediaTimeAdjustMinus": "-{{minutes}} λεπτά σήμερα",
+        "mediaTimeMore": "+{{count}} ακόμη παιδιά"
     },
     "tasks": {
         "resetOrder": "Αυτόματη ταξινόμηση",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Χρόνος πολυμέσων στην επισκόπηση",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Η κάρτα χρόνου πολυμέσων είναι πάλι στην επισκόπηση.",
+        "mediaTimeDashboardOff": "Η κάρτα χρόνου πολυμέσων είναι κρυφή σε αυτή τη συσκευή."
     },
     "login": {
         "tagline": "Καλώς ήρθατε ξανά. Το σπίτι σας σε ένα μέρος.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Ποσό σήμερα: βάση {{base}} + προσαρμογή {{adjusted}} = {{quota}} λεπτά",
+        "quotaReason": "Προσαρμογή: {{reason}}",
+        "adjustAction": "Προσαρμογή",
+        "adjustTitle": "Προσαρμογή σημερινού ποσού του {{name}}",
+        "adjustDeltaLabel": "Αλλαγή σε λεπτά (+ ή -)",
+        "adjustDeltaHint": "Σ today ισχύουν {{quota}} λεπτά (από αυτά προσαρμογή {{adjusted}}). Η νέα μέρα ξεκινά πάλι από τη βάση - η προσαρμογή ισχύει μόνο για σήμερα.",
+        "adjustDeltaProblem": "Βάλε έναν αριθμό μεταξύ -1440 και 1440, όχι 0.",
+        "adjustReasonLabel": "Αιτία",
+        "adjustReasonHint": "Το παιδί διαβάζει αυτή τη φράση - γιατί ισχύει σήμερα κάτι διαφορετικό.",
+        "adjustReasonProblem": "Δώσε αιτία (3 έως 300 χαρακτήρες).",
+        "adjustConfirm": "Προσαρμογή",
+        "adjustConfirmTitle": "Ορισμός ποσού από {{from}} σε {{to}} λεπτά;",
+        "adjustConfirmDetail": "Αιτία: {{reason}}",
+        "dayNotesTitle": "Προσαρμογές σήμερα",
+        "dayNotesBy": "από {{name}}"
     }
 }

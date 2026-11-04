@@ -505,7 +505,12 @@
         "todayTimelineNext": "jako další",
         "todayAlsoTitle": "Dnes také",
         "todayNothingPlanned": "Zatím nic naplánováno",
-        "todayNothingPlannedSub": "Dnešní události, úkoly a jídla se objeví tady."
+        "todayNothingPlannedSub": "Dnešní události, úkoly a jídla se objeví tady.",
+        "mediaTimeEmpty": "Dnes nemá žádné dítě kvótu.",
+        "mediaTimeRest": "zbývá {{remaining}} z {{quota}} min",
+        "mediaTimeAdjustPlus": "+{{minutes}} min dnes",
+        "mediaTimeAdjustMinus": "-{{minutes}} min dnes",
+        "mediaTimeMore": "+{{count}} další děti"
     },
     "tasks": {
         "resetOrder": "Řadit automaticky",
@@ -3673,7 +3678,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Čas u médií na přehledu",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Karta času u médií je znovu v přehledu.",
+        "mediaTimeDashboardOff": "Karta času u médií je na tomto zařízení skrytá."
     },
     "login": {
         "tagline": "Vítejte zpět. Váš domov na jednom místě.",
@@ -7253,6 +7262,21 @@
         "hoursAgo_few": "vor {{count}} Std",
         "minAgo_few": "vor {{count}} Min",
         "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
-        "inventoryTruncHint_few": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_few": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Kvóta dnes: základ {{base}} + úprava {{adjusted}} = {{quota}} min",
+        "quotaReason": "Úprava: {{reason}}",
+        "adjustAction": "Upravit",
+        "adjustTitle": "Upravit dnešní kvótu: {{name}}",
+        "adjustDeltaLabel": "Změna v minutách (+ nebo -)",
+        "adjustDeltaHint": "Dnes platí {{quota}} min (z toho úprava {{adjusted}}). Nový den začíná znovu na základní hodnotě - úprava platí jen dnes.",
+        "adjustDeltaProblem": "Zadej číslo mezi -1440 a 1440, ne 0.",
+        "adjustReasonLabel": "Důvod",
+        "adjustReasonHint": "Dítě tu větu čte - proč dnešní den platí jinak.",
+        "adjustReasonProblem": "Zadej důvod (3 až 300 znaků).",
+        "adjustConfirm": "Upravit",
+        "adjustConfirmTitle": "Nastavit kvótu z {{from}} na {{to}} min?",
+        "adjustConfirmDetail": "Důvod: {{reason}}",
+        "dayNotesTitle": "Úpravy dnes",
+        "dayNotesBy": "od {{name}}"
     }
 }

@@ -77,7 +77,7 @@ const STUBS = {
       // Text; Platzhalter werden wie im Original eingesetzt, unbekannte bleiben.
       const dict = globalThis.__tDict;
       if (dict && Object.prototype.hasOwnProperty.call(dict, key)) {
-        return String(dict[key]).replace(/\{\{(\w+)\}\}/g, (m, name) => (values && name in values ? String(values[name]) : m));
+        return String(dict[key]).replace(/{{(w+)}}/g, (m, name) => (values && name in values ? String(values[name]) : m));
       }
       if (!values || Object.keys(values).length === 0) return key;
       return key + JSON.stringify(values);

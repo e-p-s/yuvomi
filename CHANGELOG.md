@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit with a bar on the overview, quota adjustable with a reason.** Every child gets a
+  progress bar on the dashboard showing today's screen time against the daily quota - base minutes
+  plus parental adjustment plus exchanged bonus minutes, counted from zero each day, never carried
+  over. Parents adjust the day with a plus or minus delta and a mandatory reason; the child reads
+  the reason under their bar and in the "Adjustments today" list. The bar is opt-out per device in
+  Personal appearance, like the tab rail (migration 284).
+
 - **A recurring task can hand itself along.** A series like "take out the bin" used to hang on the
   same person forever; a rotation pool of at least two people now gives each follow-up instance to
   the next member in a fixed order (#1763, migration 277). The order chosen in the pool is the order

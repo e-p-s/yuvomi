@@ -457,7 +457,12 @@
         "todayTimelineNext": "hierna",
         "todayAlsoTitle": "Verder vandaag",
         "todayNothingPlanned": "Nog niets gepland",
-        "todayNothingPlannedSub": "Afspraken, taken en maaltijden van vandaag verschijnen hier."
+        "todayNothingPlannedSub": "Afspraken, taken en maaltijden van vandaag verschijnen hier.",
+        "mediaTimeEmpty": "Geen kind heeft vandaag een quotum.",
+        "mediaTimeRest": "nog {{remaining}} van {{quota}} min",
+        "mediaTimeAdjustPlus": "+{{minutes}} min vandaag",
+        "mediaTimeAdjustMinus": "-{{minutes}} min vandaag",
+        "mediaTimeMore": "+{{count}} meer kinderen"
     },
     "tasks": {
         "resetOrder": "Automatisch sorteren",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Mediatijd op het overzicht",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "De mediatijd-tegel staat weer op het overzicht.",
+        "mediaTimeDashboardOff": "De mediatijd-tegel is verborgen op dit apparaat."
     },
     "login": {
         "tagline": "Welkom terug. Je huishouden op één plek.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Quota vandaag: basis {{base}} + aanpassing {{adjusted}} = {{quota}} min",
+        "quotaReason": "Aanpassing: {{reason}}",
+        "adjustAction": "Aanpassen",
+        "adjustTitle": "Quota van {{name}} vandaag aanpassen",
+        "adjustDeltaLabel": "Wijziging in minuten (+ of -)",
+        "adjustDeltaHint": "Vandaag gelden {{quota}} min (davoor aanpassing {{adjusted}}). De nieuwe dag begint weer op de basiswaarde - een aanpassing geldt alleen vandaag.",
+        "adjustDeltaProblem": "Voer een getal tussen -1440 en 1440 in, geen 0.",
+        "adjustReasonLabel": "Reden",
+        "adjustReasonHint": "Het kind leest deze zin - waarom vandaag anders geldt.",
+        "adjustReasonProblem": "Geef een reden op (3 tot 300 tekens).",
+        "adjustConfirm": "Aanpassen",
+        "adjustConfirmTitle": "Quota van {{from}} naar {{to}} min zetten?",
+        "adjustConfirmDetail": "Reden: {{reason}}",
+        "dayNotesTitle": "Aanpassingen vandaag",
+        "dayNotesBy": "door {{name}}"
     }
 }

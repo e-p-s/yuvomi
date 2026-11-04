@@ -457,7 +457,12 @@
         "todayTimelineNext": "次の予定",
         "todayAlsoTitle": "今日のほかの予定",
         "todayNothingPlanned": "まだ予定はありません",
-        "todayNothingPlannedSub": "今日の予定、タスク、食事がここに表示されます。"
+        "todayNothingPlannedSub": "今日の予定、タスク、食事がここに表示されます。",
+        "mediaTimeEmpty": "本日、子どもの割り当てはありません。",
+        "mediaTimeRest": "{{quota}}分中{{remaining}}分残り",
+        "mediaTimeAdjustPlus": "今日+{{minutes}}分",
+        "mediaTimeAdjustMinus": "今日-{{minutes}}分",
+        "mediaTimeMore": "他{{count}}人の子ども"
     },
     "tasks": {
         "resetOrder": "自動で並べ替え",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "概要のメディア時間",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "メディア時間のタイルは概要に戻りました。",
+        "mediaTimeDashboardOff": "このデバイスではメディア時間のタイルは非表示です。"
     },
     "login": {
         "tagline": "おかえりなさい。暮らしのことを一か所に。",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "本日の割り当て：基本 {{base}} + 調整 {{adjusted}} = {{quota}} 分",
+        "quotaReason": "調整：{{reason}}",
+        "adjustAction": "調整",
+        "adjustTitle": "{{name}} の本日の割り当てを調整",
+        "adjustDeltaLabel": "分での変更（+ または -）",
+        "adjustDeltaHint": "本日は{{quota}}分が適用（うち調整{{adjusted}}）。新しい日は基本値からやり直し - 調整は今日だけです。",
+        "adjustDeltaProblem": "-1440～1440の数字を入力（0は不可）。",
+        "adjustReasonLabel": "理由",
+        "adjustReasonHint": "子どもはこの文を読みます - 今日はなぜ違うのか。",
+        "adjustReasonProblem": "理由を入力（3～300文字）。",
+        "adjustConfirm": "調整",
+        "adjustConfirmTitle": "割り当てを{{from}}分から{{to}}分に変更しますか？",
+        "adjustConfirmDetail": "理由：{{reason}}",
+        "dayNotesTitle": "今日の変更",
+        "dayNotesBy": "{{name}}による"
     }
 }

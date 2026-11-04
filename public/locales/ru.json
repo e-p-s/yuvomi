@@ -549,7 +549,12 @@
         "todayTimelineNext": "далее",
         "todayAlsoTitle": "Также сегодня",
         "todayNothingPlanned": "Пока ничего не запланировано",
-        "todayNothingPlannedSub": "Здесь появятся встречи, задачи и блюда на сегодня."
+        "todayNothingPlannedSub": "Здесь появятся встречи, задачи и блюда на сегодня.",
+        "mediaTimeEmpty": "Сегодня ни у кого из детей нет лимита.",
+        "mediaTimeRest": "ещё {{remaining}} из {{quota}} мин",
+        "mediaTimeAdjustPlus": "+{{minutes}} мин сегодня",
+        "mediaTimeAdjustMinus": "-{{minutes}} мин сегодня",
+        "mediaTimeMore": "и ещё {{count}} детей"
     },
     "tasks": {
         "resetOrder": "Сортировать автоматически",
@@ -3782,7 +3787,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Экранное время в обзоре",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Плитка экранного времени снова в обзоре.",
+        "mediaTimeDashboardOff": "Плитка экранного времени скрыта на этом устройстве."
     },
     "login": {
         "tagline": "С возвращением. Ваш дом - в одном месте.",
@@ -7417,6 +7426,21 @@
         "minAgo_many": "vor {{count}} Min",
         "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
         "inventoryTruncHint_few": "Zeige die ersten 50 von {{count}}",
-        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_many": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Лимит на сегодня: база {{base}} + корректировка {{adjusted}} = {{quota}} мин",
+        "quotaReason": "Корректировка: {{reason}}",
+        "adjustAction": "Скорректировать",
+        "adjustTitle": "Скорректировать лимит {{name}} на сегодня",
+        "adjustDeltaLabel": "Изменение в минутах (+ или -)",
+        "adjustDeltaHint": "Сегодня действует {{quota}} мин (в том числе корректировка {{adjusted}}). Новый день снова начнётся с базового значения - корректировка только на сегодня.",
+        "adjustDeltaProblem": "Введите число от -1440 до 1440, не 0.",
+        "adjustReasonLabel": "Причина",
+        "adjustReasonHint": "Ребёнок читает эту фразу - почему сегодня всё иначе.",
+        "adjustReasonProblem": "Укажите причину (от 3 до 300 символов).",
+        "adjustConfirm": "Скорректировать",
+        "adjustConfirmTitle": "Установить лимит с {{from}} на {{to}} мин?",
+        "adjustConfirmDetail": "Причина: {{reason}}",
+        "dayNotesTitle": "Корректировки на сегодня",
+        "dayNotesBy": "от {{name}}"
     }
 }

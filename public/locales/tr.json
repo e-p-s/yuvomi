@@ -457,7 +457,12 @@
         "todayTimelineNext": "sıradaki",
         "todayAlsoTitle": "Bugün ayrıca",
         "todayNothingPlanned": "Henüz bir şey planlanmadı",
-        "todayNothingPlannedSub": "Bugünün randevuları, görevleri ve öğünleri burada görünecek."
+        "todayNothingPlannedSub": "Bugünün randevuları, görevleri ve öğünleri burada görünecek.",
+        "mediaTimeEmpty": "Bugün hiçbir çocuğun kotası yok.",
+        "mediaTimeRest": "{{quota}} dk içinde hâlâ {{remaining}} dk",
+        "mediaTimeAdjustPlus": "+{{minutes}} dk bugün",
+        "mediaTimeAdjustMinus": "-{{minutes}} dk bugün",
+        "mediaTimeMore": "+{{count}} çocuk daha"
     },
     "tasks": {
         "resetOrder": "Otomatik sırala",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Genel bakışta medya süresi",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Medya süresi kartı tekrar genel bakışta.",
+        "mediaTimeDashboardOff": "Medya süresi kartı bu cihazda gizli."
     },
     "login": {
         "tagline": "Tekrar hoş geldin. Evin tek bir yerde.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Bugünkü kota: temel {{base}} + ayarlama {{adjusted}} = {{quota}} dk",
+        "quotaReason": "Ayarlamada: {{reason}}",
+        "adjustAction": "Ayarla",
+        "adjustTitle": "{{name}} için bugünkü kotayı ayarla",
+        "adjustDeltaLabel": "Dakika olarak değişiklik (+ veya -)",
+        "adjustDeltaHint": "Bugün {{quota}} dk geçerli (bundan ayarlama {{adjusted}}). Yeni gün yine temel değerden başlar - bir ayarlama yalnız bugün için.",
+        "adjustDeltaProblem": "-1440 ile 1440 arasında bir sayı gir, 0 değil.",
+        "adjustReasonLabel": "Neden",
+        "adjustReasonHint": "Çocuk bu cümleyi okur - bugün neden farklı geçer.",
+        "adjustReasonProblem": "Lütfen bir neden girin (3 ile 300 karakter).",
+        "adjustConfirm": "Ayarla",
+        "adjustConfirmTitle": "Kota {{from}} dk yerine {{to}} dk yapılsın mı?",
+        "adjustConfirmDetail": "Neden: {{reason}}",
+        "dayNotesTitle": "Bugünkü ayarlamalar",
+        "dayNotesBy": "{{name}} tarafından"
     }
 }

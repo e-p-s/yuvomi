@@ -8501,3 +8501,87 @@ button.today-cockpit__more--link {
  * 15/600 von R18 waren eine Zeilenstimme NUR der Uebersicht - dieselbe
  * Aufgabe las in der Kachel anders als in ihrer Liste. Guard: test:typography
  * "R21 S5 + DW-P1-4". */
+
+/* ============================================================
+   Medienzeit-Kachel (dashboard-Widget "Medienzeit")
+   ------------------------------------------------------------
+   Der Balken je Kind als eigener Parallelpfad zu mt-progress
+   (media-time.css) und rw-progress (rewards.css): dieselbe Grammatik
+   (ScaleX-Fuellung ueber --mtile-progress), damit die Uebersicht
+   weder media-time.css noch rewards.css importieren muss. Die Zeile
+   selbst ist die geteilte Listenzeile (list-row, DW-P1-4) - der Balken
+   ist ihr drittes Element zwischen Meta und Endangabe und antwortet
+   nicht: er zeigt (dieselbe Regel wie der Balken der Seite).
+   Die Akzent-Quelle ist das Modul-Token (--module-media-time, tokens.css);
+   die Stufen sprechen nur an der Endangabe, nie am ganzen Balken
+   (dieselbe Zurueckhaltung wie am Vorrat: exceeded = danger, nearing =
+   warning, der Rest bleibt Akzent).
+   ============================================================ */
+
+.mtile-bar__track {
+  position: relative;
+  height: 8px;
+  margin-block: var(--space-1) 0;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.mtile-bar__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--module-media-time, var(--color-accent));
+  transform: scaleX(var(--mtile-progress, 0));
+  transform-origin: left center;
+  transition: transform var(--duration-xl) var(--ease-out);
+}
+
+.media-time-widget-row--exceeded .mtile-bar__fill {
+  background: var(--color-danger);
+}
+
+.media-time-widget-row--nearing .mtile-bar__fill {
+  background: var(--color-warning);
+}
+
+.media-time-widget-row--off .mtile-bar__fill {
+  background: var(--color-text-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mtile-bar__fill {
+    transition: none;
+  }
+}
+
+.media-time-widget-row__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--module-media-time, var(--color-accent)) var(--tint-hint), transparent);
+  color: var(--module-media-time, var(--color-accent));
+  font-weight: 600;
+}
+
+/* Die Endangabe traegt die Stufe (die Zeile bleibt in ihrer Rolle; nur die
+   Farbe wechselt). */
+.media-time-widget-row__rest {
+  font-variant-numeric: tabular-nums;
+}
+
+.media-time-widget-row__rest--exceeded {
+  color: var(--color-danger-ink, var(--color-danger));
+}
+
+.media-time-widget-row__rest--nearing {
+  color: var(--color-warning-ink, var(--color-warning));
+}
+
+.media-time-widget-row__rest--off {
+  color: var(--color-text-tertiary);
+}

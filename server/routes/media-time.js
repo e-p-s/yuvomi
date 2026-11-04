@@ -41,6 +41,8 @@ import {
   dayUsage,
   quotaRow,
   quotaState,
+  quotaAdjustmentFor,
+  quotaNoteReasons,
   reclassifyForUser,
   exceptionsVersion,
   trackerStatus,
@@ -517,6 +519,11 @@ router.get('/today', (req, res) => {
         exempt_min: state.exempt_min,
         unknown_min: state.unknown_min,
         purchased_min: state.purchased_min,
+        // Eltern-Notiz (Migration 284): die Anpassung des Tages und die
+        // Begruendung des neuesten Eintrags - das Kind sieht beides
+        // (Transparenz: keine Kontingent-Aenderung ohne erklaerten Grund).
+        adjusted_min: state.adjusted_min,
+        reason: quotaNoteReasons(d, requested, state.day).slice(-1)[0] ?? null,
         max_daily_minutes: state.max_daily_minutes,
         hard_cap: state.hard_cap,
         // Die globale Ruhezeit ist fuer ALLE im Haushalt sichtbar (Entscheidung
@@ -605,6 +612,103 @@ router.put('/quotas/:userId', requireManager, (req, res) => {
   } catch (err) {
     log.error('PUT /quotas/:userId error:', err);
     return res.status(500).json({ error: 'Failed to save quota.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// Tagesanpassung des Kontingents (Migration 284): Eltern erhoehen oder
+// senken den HEUTIGEN Tag eines Kindes - nie still, jede Anpassung traegt
+// eine Begruendung, und das Kind sieht sie (GET /today: adjusted_min +
+// reason). Ein Protokoll, kein Zustand: mehrere Eintraege pro Tag summieren,
+// nichts wird rueck-editiert (dieselbe Philosophie wie der Punktetausch,
+// der seinen Kauf als credit-Zeile behaelt). Der Tag ist der Server-Tag
+// (mediaTimeDayKey, Haushaltszone) - derselbe, den /today zaehlt.
+// --------------------------------------------------------
+router.put('/quotas/:userId/day', requireManager, (req, res) => {
+  try {
+    const d = db.get();
+    const userId = toInt(req.params.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'userId must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (!mediaTimeEnabled(d)) {
+      return res.status(403).json({
+        error: 'Media time is not enabled for this household.', code: 403, reason: 'media_time_disabled',
+      });
+    }
+    const refusal = childRefusal(d, userId);
+    if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.status, reason: refusal.reason });
+
+    const body = req.body ?? {};
+    const delta = toInt(body.delta_minutes);
+    if (!Number.isInteger(delta) || delta === 0 || delta < -1440 || delta > 1440) {
+      return res.status(400).json({
+        error: 'delta_minutes must be a non-zero integer in -1440..1440.', code: 400, reason: 'media_time_bad_request',
+      });
+    }
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (reason.length < 3 || reason.length > 300) {
+      return res.status(400).json({
+        error: 'reason is required (3..300 characters).', code: 400, reason: 'media_time_bad_request',
+      });
+    }
+
+    const dayKey = mediaTimeDayKey(d);
+    d.prepare(`
+      INSERT INTO media_time_quota_notes (user_id, day_key, delta_minutes, reason, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(userId, dayKey, delta, reason, actingUser(req), isoNow());
+
+    const state = quotaState(d, userId);
+    return res.json({
+      data: {
+        day_key: dayKey,
+        delta_minutes: delta,
+        quota_min: state.quota_min,
+        adjusted_min: state.adjusted_min,
+        remaining_min: state.remaining_min,
+      },
+    });
+  } catch (err) {
+    log.error('PUT /quotas/:userId/day error:', err);
+    return res.status(500).json({ error: 'Failed to adjust the daily quota.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// GET /quotas/:userId/day-notes — die Anpassungs-Notizen eines Kindes
+// (Eltern-Protokoll mit Begruendung). Transparenz-Gegenstueck zur PUT:
+// Kinder lesen ALL ihre Eintraege (letzte 30), Eltern die jedes Kindes.
+// --------------------------------------------------------
+router.get('/quotas/:userId/day-notes', (req, res) => {
+  try {
+    const d = db.get();
+    const actor = actingUser(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Authentication required.', code: 401, reason: 'media_time_unauthenticated' });
+    }
+    const userId = toInt(req.params.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'userId must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (userId !== actor && !isParentOrAdmin(req)) {
+      return res.status(403).json({
+        error: 'Only parents can read another child.', code: 403, reason: 'media_time_forbidden',
+      });
+    }
+    const target = d.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    if (!target) return res.status(404).json({ error: 'User not found.', code: 404 });
+    const items = d.prepare(`
+      SELECT day_key, delta_minutes, reason, created_by, created_at
+      FROM media_time_quota_notes
+      WHERE user_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT 30
+    `).all(userId);
+    return res.json({ data: { items } });
+  } catch (err) {
+    log.error('GET /quotas/:userId/day-notes error:', err);
+    return res.status(500).json({ error: 'Failed to read quota notes.', code: 500 });
   }
 });
 

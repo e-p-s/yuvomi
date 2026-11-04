@@ -12264,6 +12264,46 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 284,
+    description: 'media time: quota adjustment notes (parent edits today\'s quota with a reason)',
+    // Die Tagesanpassung der Medienzeit (User-Wunsch): Eltern duerfen das
+    // Kontingent des HEUTIGEN Tages erhoehen oder verringern - aber nicht
+    // still. Jede Anpassung traegt eine Begruendung, und das Kind sieht sie
+    // (GET /today zeigt reason + adjusted_min, GET /quotas/:userId/day-notes
+    // die letzten Eintraege). Es ist ein Protokoll, kein Zustand: mehrere
+    // Eintraege pro Tag sind erlaubt und summieren; nichts wird je
+    // rueck-editiert (dieselbe Philosophie wie die credit-Sessions der
+    // Punktetaeusche, die ihre Historie als eigene Zeilen behalten).
+    //
+    // Kein UNIQUE(user_id, day_key, created_at): zwei Eltern koennen in
+    // derselben Sekunde anpassen, und das ist ihr gutes Recht - die Summe
+    // der delta_minutes des Tages ist die Antwort, nicht die einzelne Zeile.
+    // Der Index auf (user_id, day_key) traegt genau diese Abfrage (Service:
+    // quotaAdjustmentFor / quotaNoteReasons). day_key ist dasselbe Format
+    // (YYYY-MM-DD, Haushaltszone) wie mediaTimeDayKey - ein Tag, dieselbe
+    // Zaehlung wie die credit-Minuten.
+    //
+    // created_by traegt die id des Elternteils (SET NULL statt CASCADE: ein
+    // geloeschter Elter soll die Begruendung nicht aus der Kind-Ansicht
+    // reissen - die Zeile erklaert dem Kind eine Zeit, die es bekommen oder
+    // verloren hat).
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS media_time_quota_notes (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          day_key       TEXT    NOT NULL,
+          delta_minutes INTEGER NOT NULL,
+          reason        TEXT    NOT NULL,
+          created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_time_quota_notes_user_day
+          ON media_time_quota_notes(user_id, day_key);
+      `);
+    },
+  },
 ];
 
 /**

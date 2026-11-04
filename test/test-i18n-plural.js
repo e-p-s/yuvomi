@@ -273,6 +273,7 @@ const PLURAL_EXCEPTIONS = {
   'dashboard.todayShoppingCount': 'NO_NOUN',
   'dashboard.rewardsPending': 'NO_NOUN',
   'dashboard.healthRefill': 'NO_NOUN',
+  'dashboard.mediaTimeMore': 'NO_NOUN',
   'health.labs.abnormalBadge': 'NO_NOUN',
 
   // --- Zahl in Klammern / hinter Doppelpunkt ------------------------------

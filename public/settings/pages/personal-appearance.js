@@ -16,6 +16,7 @@ import { wireTablist } from '/utils/tablist.js';
 import { attachSegmentIndicator } from '/utils/segment-indicator.js';
 import { isWallModeEnabled, setWallModeEnabled } from '/utils/wall-mode.js';
 import { isRewardsTabsSideEnabled, setRewardsTabsSideEnabled } from '/utils/rewards-tabs-side.js';
+import { isMediaTimeDashboardEnabled, setMediaTimeDashboardEnabled } from '/utils/media-time-dashboard.js';
 import { getNightHours, setNightHours } from '/utils/night-hours.js';
 import {
   SCREENSAVER_IDLE_STEPS,
@@ -818,6 +819,20 @@ function deviceDisplayRowsHtml({ screensaverOn = true, isAdmin = false } = {}) {
           descriptionId: 'rewards-tabs-side-hint',
           attrs: { id: 'rewards-tabs-side-toggle', 'aria-describedby': 'rewards-tabs-side-hint' },
         })}
+        <!-- Die Medienzeit-Kachel der Uebersicht - geratelokal wie die Zeile
+             darueber. Das MODUL Medienzeit schaltet der Haushalt (Modulschalter);
+             dieser Schalter sagt nur: auf DIESEM Geraet soll die Kachel der
+             Uebersicht stehen oder nicht. Wandtablet und Kuechentelefon
+             entscheiden verschieden, und PUT /preferences kennt dafuer keinen
+             Key - eine Anzeigepraferenz ist keine Haushaltsentscheidung. -->
+        ${settingSwitchRowHtml({
+          label: t('settings.mediaTimeDashboardLabel'),
+          checked: isMediaTimeDashboardEnabled(),
+          icon: 'hourglass',
+          description: t('settings.mediaTimeDashboardHint'),
+          descriptionId: 'media-time-dashboard-hint',
+          attrs: { id: 'media-time-dashboard-toggle', 'aria-describedby': 'media-time-dashboard-hint' },
+        })}
         ${nightHoursRowHtml()}
         <!-- Next to wall mode and for the same reason: device-local (#885). A
              photo frame and a kitchen tablet in one household want different
@@ -929,6 +944,19 @@ function bindDeviceDisplay(container) {
       railToggle.checked
         ? t('settings.rewardsTabsSideOn', { page: t('nav.rewards') })
         : t('settings.rewardsTabsSideOff'),
+      'success',
+    );
+  });
+
+  // Medienzeit-Kachel der Uebersicht - geratelokal wie die Zeile darueber.
+  // Der Wechsel wirkt beim naechsten Aufbau der Uebersicht; der Toast sagt das.
+  const mtileToggle = container.querySelector('#media-time-dashboard-toggle');
+  mtileToggle?.addEventListener('change', () => {
+    setMediaTimeDashboardEnabled(mtileToggle.checked);
+    window.yuvomi?.showToast(
+      mtileToggle.checked
+        ? t('settings.mediaTimeDashboardOn', { page: t('nav.dashboard') })
+        : t('settings.mediaTimeDashboardOff'),
       'success',
     );
   });

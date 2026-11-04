@@ -457,7 +457,12 @@
         "todayTimelineNext": "下一個",
         "todayAlsoTitle": "今天還有",
         "todayNothingPlanned": "尚無任何安排",
-        "todayNothingPlannedSub": "今天的約會、任務和餐點會顯示在這裡。"
+        "todayNothingPlannedSub": "今天的約會、任務和餐點會顯示在這裡。",
+        "mediaTimeEmpty": "今天沒有孩子有額度。",
+        "mediaTimeRest": "尚餘 {{remaining}}／{{quota}} 分鐘",
+        "mediaTimeAdjustPlus": "今天 +{{minutes}} 分鐘",
+        "mediaTimeAdjustMinus": "今天 -{{minutes}} 分鐘",
+        "mediaTimeMore": "另有 {{count}} 名孩子"
     },
     "tasks": {
         "resetOrder": "自動排序",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "總覽中的媒體時間",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "媒體時間磚塊已回到總覽。",
+        "mediaTimeDashboardOff": "此裝置上已隱藏媒體時間磚塊。"
     },
     "login": {
         "tagline": "歡迎回來。你的家，盡在一處。",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "今日額度：基礎 {{base}} + 調整 {{adjusted}} = {{quota}} 分鐘",
+        "quotaReason": "調整：{{reason}}",
+        "adjustAction": "調整",
+        "adjustTitle": "調整 {{name}} 今天的額度",
+        "adjustDeltaLabel": "以分鐘為單位的變更（+ 或 -）",
+        "adjustDeltaHint": "今天適用 {{quota}} 分鐘（其中調整 {{adjusted}}）。新的一天會從基礎值重新開始 - 調整只適用於今天。",
+        "adjustDeltaProblem": "請輸入 -1440 到 1440 之間的數字，不能是 0。",
+        "adjustReasonLabel": "原因",
+        "adjustReasonHint": "孩子會讀這句話 - 為什麼今天不一樣。",
+        "adjustReasonProblem": "請填寫原因（3 到 300 個字元）。",
+        "adjustConfirm": "調整",
+        "adjustConfirmTitle": "將額度從 {{from}} 設為 {{to}} 分鐘？",
+        "adjustConfirmDetail": "原因：{{reason}}",
+        "dayNotesTitle": "今天的調整",
+        "dayNotesBy": "由 {{name}}"
     }
 }

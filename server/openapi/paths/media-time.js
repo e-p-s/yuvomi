@@ -77,7 +77,7 @@ export function mediaTimePaths() {
         summary: 'Today for one child (or oneself): charged / exempt / unknown minutes',
         tag: 'MediaTime',
         params: [{ name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'A child; parents/admin only. Omitted: the caller themselves.' }],
-        description: 'The day in the household time zone. `charged_min` reduces the quota, `exempt_min` (app exceptions and bought time credit the quota instead) and `system_min` never do, and `unknown_min` is usage of unclassified packages shown for the parents to decide (fail-open: never charged). `quota_min` is `daily_minutes` plus bought minutes, capped by `max_daily_minutes` when `hard_cap` is on. The household quiet window (`quiet`, `quiet_active`) is a signal visible to every member, not a lock. `tracker.online` says whether a device of this child reported within 12 hours.',
+        description: 'The day in the household time zone. `charged_min` reduces the quota, `exempt_min` (app exceptions and bought time credit the quota instead) and `system_min` never do, and `unknown_min` is usage of unclassified packages shown for the parents to decide (fail-open: never charged). `quota_min` is `daily_minutes` plus bought minutes plus the parents\' note adjustments of the day (`adjusted_min`, see PUT /media-time/quotas/{userId}/day), capped by `max_daily_minutes` when `hard_cap` is on. `reason` carries the reason of the newest note of the day (null when none) - the child sees every quota change with its explained reason. The household quiet window (`quiet`, `quiet_active`) is a signal visible to every member, not a lock. `tracker.online` says whether a device of this child reported within 12 hours.',
         responses: {
           200: {
             description: 'Today',
@@ -120,6 +120,46 @@ export function mediaTimePaths() {
           200: {
             description: 'Stored quota',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeQuotaResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'The target (child, device, quota) does not exist in this household.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/quotas/{userId}/day': {
+      put: op({
+        summary: 'Adjust a child\'s quota for TODAY, with a mandatory reason (parents/admin)',
+        tag: 'MediaTime',
+        params: [idParam('userId', 'Child user id')],
+        stateChanging: true,
+        requestBody: jsonBody('#/components/schemas/MediaTimeQuotaDayAdjustInput'),
+        description: 'Body: { delta_minutes: non-zero integer -1440..1440, reason: 3..300 chars }. Raises or lowers the quota of the CURRENT household day (the same `mediaTimeDayKey` day GET /today counts) - the base `daily_minutes` row is never rewritten (adjust philosophy: correct, never erase). The note is a protocol entry, not a state: several notes on one day sum into `adjusted_min`, and the child sees the newest `reason` in GET /today (transparency: no quota change without an explained reason). The answer carries the day, the delta, and the resulting `quota_min`/`adjusted_min`/`remaining_min`. A positive note is still bounded by `max_daily_minutes` when the household cap is hard.',
+        responses: {
+          200: {
+            description: 'Adjustment stored, quota after it',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeQuotaDayAdjustResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'The target (child, device, quota) does not exist in this household.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/quotas/{userId}/day-notes': {
+      get: op({
+        summary: 'Quota adjustment notes of a child (last 30, newest first)',
+        tag: 'MediaTime',
+        params: [idParam('userId', 'Child user id')],
+        description: 'The transparency counterpart of PUT /media-time/quotas/{userId}/day: parents/admin read any child, a child reads all their own notes (the last 30, newest first) - every adjustment stays visible with its reason.',
+        responses: {
+          200: {
+            description: 'Notes',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeQuotaDayNotesResponse' } } },
           },
           400: { $ref: '#/components/responses/BadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
@@ -322,6 +362,14 @@ const CASE_REASONS = {
   },
   '/api/v1/media-time/quotas/{userId}': {
     put: REASON_BAD + ', `media_time_forbidden` (403), `media_time_not_a_child` (403, the target is not a child)',
+  },
+  '/api/v1/media-time/quotas/{userId}/day': {
+    put: REASON_BAD + ' (400, `delta_minutes` is zero, not an integer, out of -1440..1440, or `reason` is missing or outside 3..300 characters), '
+      + '`media_time_disabled` (403, the household has media time switched off), '
+      + '`media_time_forbidden` (403), `media_time_not_a_child` (403, the target is not a child)',
+  },
+  '/api/v1/media-time/quotas/{userId}/day-notes': {
+    get: REASON_BAD + ', `media_time_unauthenticated` (401, no session), `media_time_forbidden` (403, reading another child without being a parent)',
   },
   '/api/v1/media-time/quiet-hours': {
     put: '`media_time_bad_request` (400, the range is not "HH:MM-HH:MM"), `media_time_forbidden` (403)',

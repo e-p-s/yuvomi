@@ -475,7 +475,12 @@
         "todayTimelineNext": "berikutnya",
         "todayAlsoTitle": "Juga hari ini",
         "todayNothingPlanned": "Belum ada rencana",
-        "todayNothingPlannedSub": "Janji, tugas, dan makanan hari ini akan muncul di sini."
+        "todayNothingPlannedSub": "Janji, tugas, dan makanan hari ini akan muncul di sini.",
+        "mediaTimeEmpty": "Tidak ada anak dengan kuota hari ini.",
+        "mediaTimeRest": "sisa {{remaining}} dari {{quota}} menit",
+        "mediaTimeAdjustPlus": "+{{minutes}} menit hari ini",
+        "mediaTimeAdjustMinus": "-{{minutes}} menit hari ini",
+        "mediaTimeMore": "+{{count}} anak lainnya"
     },
     "tasks": {
         "resetOrder": "Urutkan otomatis",
@@ -3572,7 +3577,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Waktu media di ringkasan",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Kartu waktu media kembali ada di ringkasan.",
+        "mediaTimeDashboardOff": "Kartu waktu media disembunyikan di perangkat ini."
     },
     "login": {
         "tagline": "Selamat datang kembali. Rumah Anda dalam satu tempat.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Kuota hari ini: dasar {{base}} + penyesuaian {{adjusted}} = {{quota}} menit",
+        "quotaReason": "Penyesuaian: {{reason}}",
+        "adjustAction": "Sesuaikan",
+        "adjustTitle": "Sesuaikan kuota hari ini untuk {{name}}",
+        "adjustDeltaLabel": "Perubahan dalam menit (+ atau -)",
+        "adjustDeltaHint": "Hari ini berlaku {{quota}} menit (termasuk penyesuaian {{adjusted}}). Hari baru dimulai lagi dari nilai dasar - penyesuaian hanya berlaku hari ini.",
+        "adjustDeltaProblem": "Masukkan angka antara -1440 dan 1440, bukan 0.",
+        "adjustReasonLabel": "Alasan",
+        "adjustReasonHint": "Anak membaca kalimat ini - mengapa hari ini berlaku berbeda.",
+        "adjustReasonProblem": "Berikan alasan (3 sampai 300 karakter).",
+        "adjustConfirm": "Sesuaikan",
+        "adjustConfirmTitle": "Setel kuota dari {{from}} ke {{to}} menit?",
+        "adjustConfirmDetail": "Alasan: {{reason}}",
+        "dayNotesTitle": "Penyesuaian hari ini",
+        "dayNotesBy": "oleh {{name}}"
     }
 }

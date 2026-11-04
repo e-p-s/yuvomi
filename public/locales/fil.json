@@ -475,7 +475,12 @@
         "todayTimelineNext": "susunod",
         "todayAlsoTitle": "Ngayong araw din",
         "todayNothingPlanned": "Wala pang nakaplano",
-        "todayNothingPlannedSub": "Lalabas dito ang mga appointment, gawain at pagkain ngayong araw."
+        "todayNothingPlannedSub": "Lalabas dito ang mga appointment, gawain at pagkain ngayong araw.",
+        "mediaTimeEmpty": "Walang bata ngayong araw na may quota.",
+        "mediaTimeRest": "natitira ang {{remaining}} sa {{quota}} min",
+        "mediaTimeAdjustPlus": "+{{minutes}} min ngayong araw",
+        "mediaTimeAdjustMinus": "-{{minutes}} min ngayong araw",
+        "mediaTimeMore": "+{{count}} pang bata"
     },
     "tasks": {
         "resetOrder": "Awtomatikong ayusin",
@@ -3572,7 +3577,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Media time sa overview",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "Nasa overview na naman ang media time tile.",
+        "mediaTimeDashboardOff": "Nakatago ang media time tile sa device na ito."
     },
     "login": {
         "tagline": "Maligayang pagbabalik. Ang iyong tahanan sa iisang lugar.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Quota ngayong araw: base {{base}} + adjustment {{adjusted}} = {{quota}} min",
+        "quotaReason": "Pagsasaayos: {{reason}}",
+        "adjustAction": "I-adjust",
+        "adjustTitle": "I-adjust ang quota ni {{name}} ngayong araw",
+        "adjustDeltaLabel": "Pagbabago sa minuto (+ o -)",
+        "adjustDeltaHint": "Ngayong araw, {{quota}} min ang may bisa (kabilang ang adjustment na {{adjusted}}). Magsisimuli muli ang bagong araw sa base value - ngayong araw lang may bisa ang adjustment.",
+        "adjustDeltaProblem": "Maglagay ng numero sa pagitan ng -1440 at 1440, hindi 0.",
+        "adjustReasonLabel": "Dahilan",
+        "adjustReasonHint": "Binabasa ng bata ang pangungusap na ito - bakit iba ngayong araw.",
+        "adjustReasonProblem": "Magbigay ng dahilan (3 hanggang 300 karakter).",
+        "adjustConfirm": "I-adjust",
+        "adjustConfirmTitle": "Itakda ang quota mula {{from}} hanggang {{to}} min?",
+        "adjustConfirmDetail": "Dahilan: {{reason}}",
+        "dayNotesTitle": "Mga pagsasaayos ngayong araw",
+        "dayNotesBy": "ni {{name}}"
     }
 }

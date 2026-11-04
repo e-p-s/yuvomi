@@ -500,6 +500,8 @@
 .rw-reward-card__meta,
 /* Medienzeit: Aufteilung des Tages (verrechnet, ausgenommen, unbekannt, getauscht) */
 .mt-meta,
+/* Medienzeit-Kachel auf der Uebersicht: Restzeit und Anpassungssumme pro Kind */
+.media-time-widget-row__meta,
 /* Aufgaben: die Zeile und ihre Teile, die vorher je 12px trugen */
 .task-card__meta,
 .kanban-card__meta,

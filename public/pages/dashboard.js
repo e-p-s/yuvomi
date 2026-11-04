@@ -36,6 +36,7 @@ import { setLeaveGuard } from '/utils/leave-guard.js';
 import { openModal, closeModal, confirmModal, refocusAfterRender, lastInputWasKeyboard } from '/components/modal.js';
 import { renderAvatarStack, sharedSurname } from '/components/user-multi-select.js';
 import { isSoloHousehold } from '/utils/household.js';
+import { isMediaTimeDashboardEnabled } from '/utils/media-time-dashboard.js';
 import { toggleRegion, durationToken, easingToken, expandIn } from '/utils/ux.js';
 import { swapContent, SWAP_FROM_OPACITY } from '/utils/content-swap.js';
 import { brandMarkSvg } from '/utils/brand-mark.js';
@@ -805,7 +806,7 @@ function maybeHintCustomize(container) {
 // `split-expenses` ist kein Widget, sondern eine Kachel der Kennzahlreihe -
 // steht aber hier, weil `isWidgetModuleEnabled()` auch die Kacheln filtert, und
 // die geteilten Ausgaben haengen am Budget-Modul (server/scopes.js).
-const MODULE_FOR_WIDGET = { tasks: 'tasks', calendar: 'calendar', shopping: 'shopping', meals: 'meals', notes: 'notes', birthdays: 'birthdays', budget: 'budget', 'split-expenses': 'budget', rewards: 'rewards', health: 'health', cycle: 'health', fasting: 'health', nutrition: 'health', housekeeping: 'housekeeping', schedule: 'schedule', waste: 'waste', pantry: 'pantry' };
+const MODULE_FOR_WIDGET = { tasks: 'tasks', calendar: 'calendar', shopping: 'shopping', meals: 'meals', notes: 'notes', birthdays: 'birthdays', budget: 'budget', 'split-expenses': 'budget', rewards: 'rewards', 'media-time': 'media_time', health: 'health', cycle: 'health', fasting: 'health', nutrition: 'health', housekeeping: 'housekeeping', schedule: 'schedule', waste: 'waste', pantry: 'pantry' };
 
 const WIDGETS_WITH_OPTIONS = new Set(['calendar', 'tasks', 'notes', 'waste', 'shopping']);
 
@@ -956,6 +957,12 @@ function isWidgetModuleEnabled(id) {
   // beiden Listen, so wie ein abgeschaltetes Modul auch.
   if (id === 'family' && isSoloHousehold()) return false;
   if (id === 'fasting' && !canUseFasting()) return false;
+  // Medienzeit-Kachel: zusaetzlich zum Modulschalter (MODULE_FOR_WIDGET) gilt die
+  // geraetelokale Anzeigepraferenz (utils/media-time-dashboard.js, Muster
+  // Wand-Modus). Aus heisst hier WIE abgeschaltetes Modul: nicht sichtbar und
+  // nicht in der Anpassen-Ablage - eine Kachel, die der Nutzer auf diesem
+  // Geraet abgewaehlt hat, ist keine Kachel, die er versehentlich zurueckholt.
+  if (id === 'media-time' && !isMediaTimeDashboardEnabled()) return false;
   if (id === 'countdown' && !countdownAvailable) return false;
   if (id === 'weather' && !weatherAvailable) return false;
   return true;
@@ -979,6 +986,7 @@ function widgetLabel(id) {
     birthdays: () => t('nav.birthdays'),
     budget:   () => t('nav.budget'),
     rewards:  () => t('nav.rewards'),
+    'media-time': () => t('nav.mediaTime'),
     health:   () => t('nav.health'),
     cycle:    () => t('health.cycle.title'),
     fasting:  () => t('health.fasting.title'),
@@ -1005,7 +1013,12 @@ function widgetLabel(id) {
 function widgetIcon(id) {
   const ext = getExtensionWidgetMeta(id);
   if (ext?.icon) return ext.icon;
-  return MODULE_ICON[id] ?? MODULE_ICON.dashboard;
+  // Eine Widget-Id ist kein Modulkey: die Kachel 'media-time' (Route
+  // /media-time) hoert aufs Modul 'media_time' (MODULE_FOR_WIDGET oben). Ohne
+  // diese Bruecke faellt sie still auf dashboard-das-Raster zurueck, waehrend
+  // die Leiste dieselbe Sanduhr zeigt. 'split-expenses' ist derselbe Fall.
+  const mod = MODULE_FOR_WIDGET[id];
+  return MODULE_ICON[id] ?? (mod ? MODULE_ICON[mod] : null) ?? MODULE_ICON.dashboard;
 }
 
 const BUDGET_CATEGORY_LABEL_KEYS = {
@@ -1265,6 +1278,11 @@ function widgetHeader(widgetId, title, count, linkHref, linkLabel, sealSlug = nu
   // deshalb aria-hidden, und derselbe Wert steht hinter der h3 als Satz.
   const numericCount = Number(count);
   const hasCount = count != null && Number.isFinite(numericCount) && numericCount > 0;
+  // Die Badge traegt denselben Wert wie das countText gegen der h3, und damit ein
+  // Screenreader die Zahl nicht zweimal spricht (einmal in der Ueberschrift,
+  // einmal danach), muss sie ihren Wert verlieren. Die Regel steht hier und nicht
+  // an den Aufrufstellen: jede Kaelte, die eine Badge zeichnet, ist gemeint
+  // (Critique 2026-09-23 - der Satz darunter erzaehlt dieselbe Geschichte).
   const badge = hasCount
     ? `<span aria-hidden="true" class="widget__badge">${count}</span>`
     : '';
@@ -7560,6 +7578,7 @@ function dashboardTileRenderers(cfg, data, weather, currency, { visibleMealTypes
     countdown: (size) => renderCountdowns(data.countdowns ?? [], size, data.countdownTotal),
     budget: (size) => renderBudgetWidget(data.budget ?? {}, currency, size),
     rewards: (size) => renderRewardsWidget(data.rewards ?? {}, size),
+    'media-time': (size) => renderMediaTimeWidget(data.mediaTime, size),
     health: (size) => renderHealthWidget(data.health ?? {}, size),
     cycle: (size) => renderCycleWidget(data.cycle, size),
     fasting: (size) => renderFastingWidget(data.fasting, size),
@@ -10104,6 +10123,23 @@ export async function render(container, { user, signal: routeSignal = null } = {
     }
   }
 
+  // Eigener Slice wie Waste (zwei Antworten, parallel). Die Kachel traegt ihre
+  // Requests selbst - GET /media-time/quotas ist ein Manager-Pfad und der Rest
+  // pro Kind eine eigene Antwort (siehe loadMediaTimeSlice). Ein Fehler laesst
+  // die Kachel auf null fallen: der Renderer wirft ueber dem leeren Stand, und
+  // ueber den try/catch der Kachel steht die geteilte Fehlerkachel mit Retry -
+  // "kein Kind" duerfte die Kachel behaupten, "nichts geladen" nicht.
+  async function ensureMediaTimeSlice() {
+    if (data.mediaTime !== undefined) return;
+    if (window.yuvomi?.isModuleDisabled('media_time')) return;
+    try {
+      data.mediaTime = await loadMediaTimeSlice(user);
+    } catch (err) {
+      console.error('[Dashboard] Medienzeit-Slice Ladefehler:', err);
+      data.mediaTime = null;
+    }
+  }
+
   // Nur wenn die opt-in-Kachel sichtbar ist — die Mehrheit ohne aktivierte Kachel
   // löst keinen Request aus. Auf dem Telefon zählt die eigene Anordnung (#2109).
   const phoneVisibleIds = new Set((phoneWidgetConfig ?? []).filter((w) => w.visible).map((w) => w.id));
@@ -10115,6 +10151,9 @@ export async function render(container, { user, signal: routeSignal = null } = {
   }
   if (!loadFailed && (widgetConfig.some((w) => w.id === 'waste' && w.visible) || phoneVisibleIds.has('waste'))) {
     await ensureWasteSlice();
+  }
+  if (!loadFailed && (widgetConfig.some((w) => w.id === 'media-time' && w.visible) || phoneVisibleIds.has('media-time'))) {
+    await ensureMediaTimeSlice();
   }
   // Auch die Nachlade-Runden koennen von einem Verlassen oder Neuaufbau
   // ueberholt worden sein (#977).
@@ -10150,6 +10189,7 @@ export async function render(container, { user, signal: routeSignal = null } = {
       fresh.cycle = data.cycle;
       fresh.schedule = data.schedule;
       fresh.waste = data.waste;
+      fresh.mediaTime = data.mediaTime;
       fresh.pendingReminders = data.pendingReminders;
       data = fresh;
       setCountdownAvailability(data?.countdowns);
@@ -10183,6 +10223,7 @@ export async function render(container, { user, signal: routeSignal = null } = {
       if (phoneSaved.has('cycle') && !desktopVisible.has('cycle')) await ensureCycleSlice();
       if (phoneSaved.has('schedule') && !desktopVisible.has('schedule')) await ensureScheduleSlice();
       if (phoneSaved.has('waste') && !desktopVisible.has('waste')) await ensureWasteSlice();
+      if (phoneSaved.has('media-time') && !desktopVisible.has('media-time')) await ensureMediaTimeSlice();
       // Skelett-Vorhersage fuer den naechsten Kaltstart (#2109).
       if (onPhoneStage()) {
         rememberLayoutHint(
@@ -10208,6 +10249,7 @@ export async function render(container, { user, signal: routeSignal = null } = {
     // nachladen — sonst zeigte sie fälschlich den Empty-State bis zum Reload.
     if (widgetConfig.some((w) => w.id === 'cycle' && w.visible)) await ensureCycleSlice();
     if (widgetConfig.some((w) => w.id === 'schedule' && w.visible)) await ensureScheduleSlice();
+    if (widgetConfig.some((w) => w.id === 'media-time' && w.visible)) await ensureMediaTimeSlice();
     // Waste's Typ-Option (#1063 Phase 10) reist nicht in dashboardQuery() mit
     // (der Slice ist ein eigenstaendiger Client-Fetch, siehe ensureWasteSlice) -
     // reloadIfQueryChanged() wuerde den alten, ungefilterten Stand also
@@ -10381,6 +10423,7 @@ export async function render(container, { user, signal: routeSignal = null } = {
     isCustomizing = false;
     if (widgetConfig.some((w) => w.id === 'cycle' && w.visible)) await ensureCycleSlice();
     if (widgetConfig.some((w) => w.id === 'schedule' && w.visible)) await ensureScheduleSlice();
+    if (widgetConfig.some((w) => w.id === 'media-time' && w.visible)) await ensureMediaTimeSlice();
     // Siehe die Notiz an derselben Zeile in persistWidgetConfig() - der Reset
     // kann eine eigene Typ-Auswahl verwerfen, und dashboardQuery() traegt sie
     // nicht mit.
@@ -11394,6 +11437,18 @@ export async function render(container, { user, signal: routeSignal = null } = {
         if (signal.aborted) return;
       }
       fresh.waste = data.waste;
+      // Medienzeit wie Schedule: der Stand des Tages ist ein bewegtes Ziel
+      // (Verbrauch, Tausch, Eltern-Anpassung) und ueberlebt sonst 15 Minuten
+      // und auf dem Wandtablet sogar den Mitternachts-Wechsel. Der Tag selbst
+      // haelt die Kachel ueber `overviewSignature` (mediaTime traegt den Tag
+      // der Server-Antwort) - der Reset hier gilt dem Nachladen, nicht dem
+      // Verwerfen.
+      if (widgetConfig.some((w) => w.id === 'media-time' && w.visible) || refreshPhoneIds.has('media-time')) {
+        data.mediaTime = undefined;
+        await ensureMediaTimeSlice();
+        if (signal.aborted) return;
+      }
+      fresh.mediaTime = data.mediaTime;
       fresh.pendingReminders = pendingReminders;
       const unchanged = before !== null && overviewSignature(fresh) === before;
       data = fresh;
@@ -11624,11 +11679,204 @@ async function loadScheduleSlice(day) {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* Medienzeit-Slice (die Kachel "Medienzeit")                           */
+/* ------------------------------------------------------------------ */
+
+/* Die Kachel traegt ihre Daten selbst, aus demselben Grund wie Schedule und
+ * Waste: /dashboard fuehrt das Modul nicht mit. Anders als dort ist die Liste der
+ * Kinder keine Haushaltsantwort, die man einfach abholt: GET /media-time/quotas
+ * ist ein Manager-Pfad. Ein 403 darauf ist die Auskunft "kein Elternteil" -
+ * dann fragt die Kachel nur die EIGENE Person (GET /media-time/today ohne
+ * user_id), dieselbe Regel wie auf der Medienzeit-Seite.
+ *
+ * Pro Kind ein GET /today, parallel ueber Promise.allSettled: ein einzelnes
+ * Kind, das antwortet, zeigt eine Zeile - ein Kind, das fehlschlaegt, faellt
+ * aus der Kachel, ohne die Kachel zu kippen. Schlagen ALLE fehl, bleibt null
+ * (die Kachel verschwindet ueber den leeren Renderer, nicht ueber eine leere
+ * Liste - eine leere Liste hiesse "kein Kind hat heute Kontingent", und das
+ * weiss die Seite ohne Antwort nicht). */
+async function loadMediaTimeSlice(user) {
+  const selfId = Number.isInteger(user?.id) ? user.id : null;
+  let children = null;
+  let manager = true;
+  try {
+    const res = await api.get('/media-time/quotas');
+    const rows = (res.data ?? []).filter((r) => Number.isInteger(r.user_id));
+    children = rows.map((r) => ({
+      id: r.user_id,
+      display_name: r.display_name || r.username || String(r.user_id),
+    }));
+  } catch (err) {
+    if ((err?.status ?? err?.response?.status) === 403) {
+      manager = false;
+      children = null;
+    } else {
+      throw err;
+    }
+  }
+  // Manager ohne Kind: es gibt nichts zu zaehlen, und die eigene Person ist kein
+  // Kind-Kontingent. Die Kachel zeigt den Leerzustand, keine eigene Balkenzeile.
+  const targets = manager
+    ? (children ?? [])
+    : (selfId != null ? [{ id: selfId, display_name: user?.display_name ?? '' }] : []);
+  if (!targets.length) return { children: [], failed: 0, manager: false };
+  const settled = await Promise.allSettled(
+    targets.map((c) => api.get(`/media-time/today?user_id=${encodeURIComponent(c.id)}`)),
+  );
+  const rows = [];
+  let failed = 0;
+  settled.forEach((res, i) => {
+    if (res.status !== 'fulfilled' || !res.value?.data) { failed += 1; return; }
+    rows.push({ id: targets[i].id, display_name: targets[i].display_name, today: res.value.data });
+  });
+  // Antwortloser Totalausfall: null (Kachel verschwindet), nicht [] (Kachel
+  // behauptet einen leeren Tag fuer Kinder, ueber deren Stand nichts bekannt ist).
+  if (!rows.length && failed) return null;
+  return { children: rows, failed, manager };
+}
+
+/* ------------------------------------------------------------------ */
+/* Medienzeit-Kachel                                                   */
+/* ------------------------------------------------------------------ */
+
+/* Der Ton spricht nur an der Zahl, nie am ganzen Balken - dieselbe Regel wie am
+ * Vorrat: eine Liste, die jede Zeile rot faerbt, sagt nichts mehr.
+ *   exceeded: das Kontingent ist ueberschritten (roter Rest, Rest = 0);
+ *   nearing:  unter einem Viertel uebrig (das Kind sollte aufhoeren koennen);
+ *   ok:       alles Weitere. */
+function mediaTimeTone(row) {
+  const today = row?.today ?? {};
+  if (today.enabled === false) return 'off';
+  if (today.state === 'exceeded') return 'exceeded';
+  const quota = Number(today.quota_min) || 0;
+  const remaining = Math.max(0, Number(today.remaining_min) || 0);
+  if (quota > 0 && remaining / quota < 0.25) return 'nearing';
+  return 'ok';
+}
+
+/* Der Balken fuellt sich nach Verbrauch (1 - rest/quote); bei ueberschritten
+ * steht er voll. Die Fuellung traegt --mtile-progress, die Breite rechnet CSS -
+ * dieselbe Grammatik wie mt-progress auf der Seite, als eigener Parallelpfad:
+ * dashboard.css importiert weder media-time.css noch rewards.css.
+ * OHNE QUOTIENT KEIN PROGRESSBAR: role=progressbar an einer Zahl, die keine
+ * Skala hat (Kontingent 0), ist ein Versprechen, das nichts haelt - dort steht
+ * die Zahl allein im Text. */
+/* Die Zahl des Tages: dieselbe formatPoints-Regel wie an Punkten und Betraegen
+ * (getNumberFormat, Locale des Haushalts). fmtNum ist NUR auf der
+ * Medienzeit-Seite lokal definiert - die Kachel traegt ihre eigene. */
+function fmtNum(n) {
+  return getNumberFormat().format(Number(n) || 0);
+}
+
+function mediaTimeBarHtml(row) {
+  const today = row?.today ?? {};
+  const quota = Math.max(0, Number(today.quota_min) || 0);
+  const remaining = Math.max(0, Number(today.remaining_min) || 0);
+  if (quota <= 0) return '';
+  const tone = mediaTimeTone(row);
+  const ratio = tone === 'exceeded' ? 1 : Math.min(1, 1 - remaining / quota);
+  const label = t('mediaTime.remainingOfQuota', {
+    remaining: fmtNum(remaining),
+    quota: fmtNum(quota),
+  });
+  return `<div class="mtile-bar__track" role="progressbar"
+    aria-label="${esc(t('mediaTime.progressLabel'))}"
+    aria-valuenow="${fmtNum(remaining)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
+    aria-valuetext="${esc(label)}"><div class="mtile-bar__fill" style="--mtile-progress:${ratio}"></div></div>`;
+}
+
+function renderMediaTimeWidget(mediaTime, size = '1x2') {
+  // 'undefined' = der Slice wurde nie geladen (ein Test-Aufbau ohne User, ein
+  // Aufbau vor dem ersten ensureMediaTimeSlice). Dafuer gibt es nichts zu
+  // behaupten: die Kachel bleibt weg, statt eine Fehlerkachel fuer einen Stand
+  // zu zeigen, nach dem nie gefragt wurde. `null` = die Antwort ist da und
+  // sagt "nichts": Fehlerkachel ueber den Wurf im Rahmen (renderWidgetBody).
+  if (mediaTime === undefined) return '';
+  if (!mediaTime) throw new Error('media time widget slice failed to load');
+  const rows = Array.isArray(mediaTime.children) ? mediaTime.children : [];
+  const title = t('nav.mediaTime');
+  const span = tileSpanAttrs((s, k = 0) => ({
+    items: rows.length,
+    total: rows.length,
+    cap: listRowCap(s) + k,
+  }), size);
+  const header = widgetHeader('media-time', title, null, '/media-time');
+  if (!rows.length) {
+    // Leerzustand NUR fuer Eltern ohne Kind mit Kontingent (die Antwort ist da,
+    // sie sagt nur "niemand"). Ein Kind ohne eigene Antwort faellt ueber den
+    // throw ueber dem try/catch der Kachel in die Fehlerkachel - "kein Kind"
+    // duerfte die Kachel nie behaupten, wenn es die Antwort nicht weiss.
+    if (!mediaTime.manager) throw new Error('media time widget has no own answer');
+    return `<div class="widget widget--media-time"${span}>
+      ${header}
+      ${widgetEmptyHtml(t('dashboard.mediaTimeEmpty'))}
+    </div>`;
+  }
+  const cap = listRowCap(size);
+  const fill = fillRows(rows.length, cap);
+  const shown = rows.slice(0, cap + fill);
+  const items = shown.map((row, index) => {
+    const tone = mediaTimeTone(row);
+    const today = row.today ?? {};
+    const quota = Math.max(0, Number(today.quota_min) || 0);
+    const remaining = Math.max(0, Number(today.remaining_min) || 0);
+    const who = esc(row.display_name || String(row.id));
+    const rest = t('dashboard.mediaTimeRest', {
+      remaining: fmtNum(remaining),
+      quota: fmtNum(quota),
+    });
+    // Eltern springen auf die Medienzeit-Seite mit dem Kind voraus (der Router
+    // traegt `user_id` in die Adresse); ein Kind hat nichts auszuwaehlen und
+    // faellt auf die eigene Seite zurueck. Der Klick ist eine Route ueber
+    // data-route, kein Knopf, der schreibt.
+    const route = mediaTime.manager
+      ? `/media-time?user_id=${encodeURIComponent(row.id)}`
+      : '/media-time';
+    const reason = String(today.reason ?? '').trim();
+    const metaBits = [rest];
+    // Die Anpassung (adjusted_min) nennt, dass der Tag nicht beim Basiswert
+    // liegt; die Begruendung (reason) haengt daneben als zweiter Satz -
+    // Kinder sehen beide, Transparenz ohne Klick. Fehlt das Feld in der Antwort
+    // (ein Server vor der Anpassung), ist es 0: keine Zeile dafuer.
+    if (Number(today.adjusted_min) !== 0) {
+      const adj = Number(today.adjusted_min);
+      metaBits.push(adj > 0
+        ? t('dashboard.mediaTimeAdjustPlus', { minutes: fmtNum(adj) })
+        : t('dashboard.mediaTimeAdjustMinus', { minutes: fmtNum(Math.abs(adj)) }));
+    }
+    if (reason) metaBits.push(reason);
+    const meta = metaBits.filter(Boolean).join(' · ');
+    return `<div class="list-row media-time-widget-row media-time-widget-row--${tone}" data-route="${esc(route)}" role="button" tabindex="0"${fillRowAttr(index, cap)}>
+      <span class="list-row__lead media-time-widget-row__avatar" aria-hidden="true">${esc(initials(row.display_name) || '?')}</span>
+      <div class="list-row__main media-time-widget-row__body">
+        <div class="list-row__name media-time-widget-row__name">${who}</div>
+        <div class="list-row__meta media-time-widget-row__meta">${esc(meta)}</div>
+        ${mediaTimeBarHtml(row)}
+      </div>
+      <div class="list-row__end media-time-widget-row__rest media-time-widget-row__rest--${tone}">${esc(rest)}</div>
+    </div>`;
+  }).join('');
+  // Der Rest der Kinder zaehlt gegen die geladene Liste - hier gibt es keine
+  // serverseitige Gesamtzahl, und eine erfundene waere die schlechtere Auskunft.
+  const rest = Math.max(0, rows.length - Math.min(shown.length, cap));
+  const more = rest > 0
+    ? `<p class="widget-list-more"${fillMoreAttrs(fill, rest, 'dashboard.mediaTimeMore')}>${esc(t('dashboard.mediaTimeMore', { count: rest }))}</p>`
+    : '';
+  return `<div class="widget widget--media-time"${span}>
+    ${header}
+    <div class="widget__body widget__body--rows">
+      ${widgetRows(items, { tag: 'ul' })}
+      ${more}
+    </div>
+  </div>`;
+}
+
 export const __test = {
 mergePhoneDisplayCfg, onboardingCardPlacement,
   usableOverviewMemo, overviewMemoKey, overviewSignature, watchOverviewWrites,  getOverviewMemo: () => _overviewMemo,
   setOverviewMemo: (memo) => { _overviewMemo = memo; },
-  childDefaultFor, taskForOthersOnly, customizeLeaveAllowed, setCustomizeFabHidden, renderCalendarWidget, renderRewardsWidget, loadScheduleSlice, renderUrgentTasks, renderUpcomingEvents, buildTodayHighlights, buildTodayProgram, buildTodayCockpitModel, renderTodayCockpit, renderPinnedNotes, renderScheduleWidget, renderWasteWidget, renderPantryWidget, renderFamilyWidget, formatDueDate, normalizeVisibleMealTypes, renderTodayMeals, calendarEventRoute, eventOccurrenceDateKey, eventStartDate, renderWallSurface, renderWallWho, planWallWhoLines, fitWallWho, createWallFit, rebuildWall, shedWallProgram, WALL_WHO_LADDER, renderDashboardOverview, selectMetricTiles, METRIC_TILE_ORDER, PROGRAM_ROW_CAP, WALL_ROW_CAP, weatherToneKey, weatherMotionAttr, weatherTempBand, weatherSpanModel, weatherDayLabel, weatherTodayRange, renderWeatherWidget, renderWeatherUnavailable, weatherAvailableFrom, renderWallWeather, relativeDateLabel, listRowCap, calendarRowCap, calendarTileModel, tileSpanOf, renderDashboardSkeleton, rememberGridHint, carryTileSizes, watchTileSizes, createPendingIcons, openWidgetOptions, renderFab, widgetHeader, renderDashboardLayout, renderMetricTiles, renderGridHint, captureTileRects, playTileFlip, measureTileFlip, startTileFlip, playGridShift, arrangeChildren, placeBefore, focusTarget, nearestScrollDelta, tileDrawKey, dashboardTileRenderers, dashboardTileListed, renderWidgetBody, renderWidgetWrapper, familyManageHref, customizeHasChanges, focusKeyOf, captureRebuildFocus, restoreFocusAfterRebuild, shoppingSoleListRoute, todayMoreRoute, wireTodayMore, wireTodayOverdue, renderWidgetSizeMenu, renderNewPill, FAB_ACTIONS, FAB_NEW_BTN, NEW_SHEETS, wireNewMenu, initFab, rowsArriving, shownRowKeys, renderCustomizeFootnote, applyRowFill, gridHoleSuggestion, programRowsThatFit, PROGRAM_ROW_CAP_PHONE, createPhoneProgramFit, renderWidgetError, renderWidgetCustomizeControls, renderWidgetTileMenu, syncCustomizeControls, wireLinks, renderFastingWidget, renderNutritionWidget, renderWasteWidget, renderQuickLinks, renderShoppingLists };
+  childDefaultFor, taskForOthersOnly, customizeLeaveAllowed, setCustomizeFabHidden, renderCalendarWidget, renderRewardsWidget, loadScheduleSlice, renderUrgentTasks, renderUpcomingEvents, buildTodayHighlights, buildTodayProgram, buildTodayCockpitModel, renderTodayCockpit, renderPinnedNotes, renderScheduleWidget, renderWasteWidget, renderPantryWidget, renderFamilyWidget, formatDueDate, normalizeVisibleMealTypes, renderTodayMeals, calendarEventRoute, eventOccurrenceDateKey, eventStartDate, renderWallSurface, renderWallWho, planWallWhoLines, fitWallWho, createWallFit, rebuildWall, shedWallProgram, WALL_WHO_LADDER, renderDashboardOverview, selectMetricTiles, METRIC_TILE_ORDER, PROGRAM_ROW_CAP, WALL_ROW_CAP, weatherToneKey, weatherMotionAttr, weatherTempBand, weatherSpanModel, weatherDayLabel, weatherTodayRange, renderWeatherWidget, renderWeatherUnavailable, weatherAvailableFrom, renderWallWeather, relativeDateLabel, listRowCap, calendarRowCap, calendarTileModel, tileSpanOf, renderDashboardSkeleton, rememberGridHint, carryTileSizes, watchTileSizes, createPendingIcons, openWidgetOptions, renderFab, widgetHeader, renderDashboardLayout, renderMetricTiles, renderGridHint, captureTileRects, playTileFlip, measureTileFlip, startTileFlip, playGridShift, arrangeChildren, placeBefore, focusTarget, nearestScrollDelta, tileDrawKey, dashboardTileRenderers, dashboardTileListed, renderWidgetBody, renderWidgetWrapper, familyManageHref, customizeHasChanges, focusKeyOf, captureRebuildFocus, restoreFocusAfterRebuild, shoppingSoleListRoute, todayMoreRoute, wireTodayMore, wireTodayOverdue, renderWidgetSizeMenu, renderNewPill, FAB_ACTIONS, FAB_NEW_BTN, NEW_SHEETS, wireNewMenu, initFab, rowsArriving, shownRowKeys, renderCustomizeFootnote, applyRowFill, gridHoleSuggestion, programRowsThatFit, PROGRAM_ROW_CAP_PHONE, createPhoneProgramFit, renderWidgetError, renderWidgetCustomizeControls, renderWidgetTileMenu, syncCustomizeControls, wireLinks, renderFastingWidget, renderNutritionWidget, renderWasteWidget, renderQuickLinks, renderShoppingLists, renderMediaTimeWidget, loadMediaTimeSlice, mediaTimeTone };
 
 // `signal` ist der Controller des Aufbaus, der die Wetterkarte gezeichnet hat
 // (#976/#977). Vorher las diese Funktion das Modul-Feld `_fabController` -

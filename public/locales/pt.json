@@ -457,7 +457,12 @@
         "todayTimelineNext": "a seguir",
         "todayAlsoTitle": "Também hoje",
         "todayNothingPlanned": "Nada planeado ainda",
-        "todayNothingPlannedSub": "Os compromissos, tarefas e refeições de hoje aparecerão aqui."
+        "todayNothingPlannedSub": "Os compromissos, tarefas e refeições de hoje aparecerão aqui.",
+        "mediaTimeEmpty": "Nenhuma criança tem quota hoje.",
+        "mediaTimeRest": "ainda {{remaining}} de {{quota}} min",
+        "mediaTimeAdjustPlus": "+{{minutes}} min hoje",
+        "mediaTimeAdjustMinus": "-{{minutes}} min hoje",
+        "mediaTimeMore": "+{{count}} crianças a mais"
     },
     "tasks": {
         "resetOrder": "Ordenar automaticamente",
@@ -3554,7 +3559,11 @@
         "rewardsTabsSideLabel": "Reward tabs as side rail",
         "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
         "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
-        "rewardsTabsSideOff": "Tabs back to the bar."
+        "rewardsTabsSideOff": "Tabs back to the bar.",
+        "mediaTimeDashboardLabel": "Tempo de média na visão geral",
+        "mediaTimeDashboardHint": "Die Kachel zeigt pro Kind den Balken des Tageskontingents. Der Modulschalter entscheidet, ob es Medienzeit im Haushalt gibt - dieser Schalter, ob die Kachel auf diesem Geraet steht.",
+        "mediaTimeDashboardOn": "O cartão de tempo de média voltou à visão geral.",
+        "mediaTimeDashboardOff": "O cartão de tempo de média está oculto neste dispositivo."
     },
     "login": {
         "tagline": "Bem-vindo de volta. A tua casa num só lugar.",
@@ -7067,6 +7076,21 @@
             "history": "Protokoll",
             "charged": "Verrechnung"
         },
-        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}"
+        "inventoryTruncHint_one": "Zeige die ersten 50 von {{count}}",
+        "quotaLine": "Quota de hoje: base {{base}} + ajuste {{adjusted}} = {{quota}} min",
+        "quotaReason": "Ajuste: {{reason}}",
+        "adjustAction": "Ajustar",
+        "adjustTitle": "Ajustar a quota de hoje de {{name}}",
+        "adjustDeltaLabel": "Alteração em minutos (+ ou -)",
+        "adjustDeltaHint": "Hoje aplicam-se {{quota}} min (dos quais ajuste {{adjusted}}). O novo dia recomeça no valor base - um ajuste só vale para hoje.",
+        "adjustDeltaProblem": "Introduz um número entre -1440 e 1440, não 0.",
+        "adjustReasonLabel": "Motivo",
+        "adjustReasonHint": "A criança lê esta frase - por que hoje conta de outra forma.",
+        "adjustReasonProblem": "Indica um motivo (3 a 300 caracteres).",
+        "adjustConfirm": "Ajustar",
+        "adjustConfirmTitle": "Definir a quota de {{from}} para {{to}} min?",
+        "adjustConfirmDetail": "Motivo: {{reason}}",
+        "dayNotesTitle": "Ajustes de hoje",
+        "dayNotesBy": "por {{name}}"
     }
 }
