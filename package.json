@@ -321,6 +321,8 @@
     "test:notifications": "node scripts/with-env.mjs DB_PATH=:memory: node --experimental-sqlite test/test-notifications.js",
     "test:notification-channel-form": "node --loader ./test/test-browser-loader.mjs --test test/test-notification-channel-form.js",
     "test:mcp": "node --experimental-sqlite --test test/test-mcp.js",
+    "test:task-approval": "node --test test/test-task-approval.js",
+    "test:task-approval-ui": "node --loader ./test/test-browser-loader.mjs --test test/test-task-approval-ui.js",
     "test:mcp-router-permissions": "node --experimental-sqlite --test test/test-mcp-router-permissions.js",
     "test:modules": "node --experimental-sqlite --test test/test-modules.js",
     "test:zip-reader": "node --test test/test-zip-reader.js",
