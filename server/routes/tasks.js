@@ -12,7 +12,7 @@ import { documentVisibleSql } from '../services/document-access.js';
 import { sendDocumentDeletionConflict } from '../services/document-deletion-lock.js';
 import { assertDocumentLinkTargetsAvailable, documentViewer, sendDocumentLinkRefusal } from '../services/document-links.js';
 import { nextDueAfterCompletion } from '../services/recurrence.js';
-import { syncTaskRewards, seriesOfTask } from '../services/rewards.js';
+import { awardForCompletion, syncTaskRewards, seriesOfTask } from '../services/rewards.js';
 import {
   isRotationMode, pickRotationTarget, nextRotationEntry, setRotation, carryRotation,
   rotationPoolRows, mergeRotationPool,
@@ -1064,7 +1064,7 @@ router.delete('/categories/:key', (req, res) => {
 // --------------------------------------------------------
 router.get('/', (req, res) => {
   try {
-    const { status, priority, assigned_to, category, tag, include_future, archived } = req.query;
+    const { status, priority, assigned_to, category, tag, include_future, archived, approval } = req.query;
 
     let sql = `
       SELECT
@@ -1133,6 +1133,14 @@ router.get('/', (req, res) => {
       }
       if (statusArchiv || archiveQuery === 'only') sql += ' AND t.archived_at IS NOT NULL';
       else if (!archiveQuery)                      sql += ' AND t.archived_at IS NULL';
+    }
+
+    // Freigabe-Warteschlange: `?approval=pending` liefert nur Check-ins, die auf
+    // Bestaetigung warten. Das Filtern danach ist eine Admin-Ansicht - fuer
+    // Nicht-Admins ist die Nachfrage wirkungslos (sie duerften ohnehin nicht
+    // bestaetigen), die Liste bleibt fuer sie die normale.
+    if (approval === 'pending' && isAdminRequest(req)) {
+      sql += " AND t.approval_status = 'pending'";
     }
 
     const priorities = asList(priority);
@@ -1360,13 +1368,13 @@ router.post('/', (req, res) => {
         INSERT INTO tasks
           (title, description, category, priority, status, start_date, due_date, due_time,
            assigned_to, created_by, parent_task_id, is_recurring, recurrence_rule,
-           recurrence_from_completion, points, visibility, countdown, locked)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           recurrence_from_completion, points, visibility, countdown, locked, requires_approval)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         title.trim(), description, category, priority, status,
         start_date, due_date, due_time, firstUid, req.authUserId || req.session.userId, parent_task_id,
         is_recurring ? 1 : 0, recurrence_rule, recurrence_from_completion ? 1 : 0, points, visibility,
-        countdown ? 1 : 0, req.body.locked ? 1 : 0
+        countdown ? 1 : 0, req.body.locked ? 1 : 0, req.body.requires_approval ? 1 : 0
       );
       setAssignments(db.get(), result.lastInsertRowid, userIds);
       if (rotationIn.mode !== undefined || rotationIn.pool !== undefined) {
@@ -1390,7 +1398,7 @@ router.post('/', (req, res) => {
       if (status !== 'open') {
         const actingUserId = req.authUserId || req.session.userId;
         const newId = Number(result.lastInsertRowid);
-        syncTaskRewards(db.get(), newId, 'open', status, actingUserId);
+        syncTaskRewards(db.get(), newId, 'open', status, actingUserId, null, { asAdmin: isAdminRequest(req) });
         syncTaskCompletion(db.get(), newId, 'open', status, actingUserId);
         // Erledigt angelegte Serie: die naechste Instanz gehoert dazu, genau wie
         // beim Abhaken. Ohne sie endete eine Serie in dem Moment, in dem sie
@@ -1502,6 +1510,10 @@ router.put('/:id', (req, res) => {
     // Sperre der Aufgabe (#830). Nicht mitgeschickt heisst "nicht angefasst".
     const lockedRequested = req.body.locked !== undefined ? (req.body.locked ? 1 : 0) : null;
     const locked = lockedRequested ?? task.locked;
+    // Freigabe-Pflicht ist Definition (wer darf erledigt buchen?), nicht
+    // Umgang: dasselbe Recht wie die Sperre, desselben Grundes wegen.
+    const requiresApprovalRequested = req.body.requires_approval !== undefined ? (req.body.requires_approval ? 1 : 0) : null;
+    const requiresApproval = requiresApprovalRequested ?? task.requires_approval;
 
     // Vor dem Update festhalten: die Rückrichtung vergleicht damit, ob sich die
     // Tags wirklich geändert haben (#586).
@@ -1534,6 +1546,12 @@ router.put('/:id', (req, res) => {
         is_recurring: is_recurring ? 1 : 0, recurrence_rule,
         recurrence_from_completion: recurrence_from_completion ? 1 : 0,
         countdown: countdown ? 1 : 0, points, visibility,
+        // Die Freigabepflicht haengt an derselben Entscheidung wie die Sperre:
+        // wer die Definition nicht anfassen darf, darf auch nicht nachtraeglich
+        // bestimmen, dass sein Check-in einer Bestaetigung braucht - oder sie
+        // abschalten. Unveraendert mitschicken ist wie bei den anderen Feldern
+        // erlaubt (der Dialog schickt die ganze Aufgabe zurueck).
+        requires_approval: requiresApproval,
       };
       let touchesDefinition = Object.keys(wanted).some((k) => !sameFieldValue(wanted[k], task[k]));
 
@@ -1551,6 +1569,7 @@ router.put('/:id', (req, res) => {
       // Die Sperre selbst zu loesen ist der erste Zug, den jemand versuchen
       // wuerde, der sie umgehen will.
       if (lockedRequested !== null && lockedRequested !== task.locked) touchesDefinition = true;
+      if (requiresApprovalRequested !== null && requiresApprovalRequested !== task.requires_approval) touchesDefinition = true;
 
       // Rotation ist Definition (#830): Modus und Ablieferungsreihenfolge sind
       // genau das, was ein Kind sonst ueber die Sperre hebt - dieselbe
@@ -1591,13 +1610,13 @@ router.put('/:id', (req, res) => {
           title = ?, description = ?, category = ?, priority = ?,
           status = ?, start_date = ?, due_date = ?, due_time = ?, assigned_to = ?,
           is_recurring = ?, recurrence_rule = ?, recurrence_from_completion = ?,
-          points = ?, visibility = ?, countdown = ?, locked = ?,
+          points = ?, visibility = ?, countdown = ?, locked = ?, requires_approval = ?,
           sort_order = CASE WHEN category = ? THEN sort_order ELSE NULL END
         WHERE id = ?
       `).run(title.trim(), description, category, priority,
              status, start_date, due_date, due_time, firstUid,
              is_recurring ? 1 : 0, recurrence_rule, recurrence_from_completion ? 1 : 0,
-             points, visibility, countdown ? 1 : 0, locked,
+             points, visibility, countdown ? 1 : 0, locked, requiresApproval,
              // Der Rang gilt in der alten Nachbarschaft, nicht in der neuen: die
              // Aufgabe landete sonst an einem beliebigen Platz einer Liste, die
              // jemand anderes geordnet hat, meist gleichauf mit der, die diese
@@ -1633,7 +1652,7 @@ router.put('/:id', (req, res) => {
       if (archiveRequested && !task.archived_at) setArchived(task.id, true);
       syncHousekeepingPaymentStatus(db.get(), req.params.id, status);
       // Punkte erst nach setAssignments: die Zuständigen werden daraus abgeleitet.
-      syncTaskRewards(db.get(), task.id, task.status, status, req.authUserId || req.session.userId);
+      syncTaskRewards(db.get(), task.id, task.status, status, req.authUserId || req.session.userId, null, { asAdmin: isAdminRequest(req) });
       // Derselbe Übergang, ein zweiter Vorgang: der Verlauf hält fest, DASS
       // abgehakt wurde (#791). Bewusst neben der Punktevergabe statt in ihr -
       // Punkte gehen an die Zuständigen und nur bei eingeschaltetem Modul, ein
@@ -1948,18 +1967,36 @@ function spawnRecurrenceFollowup(task) {
   // Assignment-Kopie wie zuvor. Wer abhakt, zaehlt nicht: der Zeiger folgt der
   // Serie.
   const rotation = pickRotationTarget(db.get(), task);
+  // Der Checkende erbt die Serie (#2422, Punkt 3): wer die letzte Instanz
+  // erledigt hat, soll die naechste bekommen - nicht der, der sie je
+  // zugewiesen bekam. Das gilt erst recht bei Freigabepflicht: die Punkte
+  // wandern an `checkin_by_user_id`, und wem die naechste Instanz gehoert,
+  // entscheidet dasselbe Recht. Ohne Check-in (reine Zeitplan-Serien) bleibt
+  // die bisherige Zuweisung der Massstab.
+  const carriedAssignees = (() => {
+    const ids = [...existingAssignments];
+    if (task.checkin_by_user_id && task.checkin_by_user_id !== task.assigned_to) {
+      ids.unshift(task.checkin_by_user_id);
+      if (task.assigned_to) {
+        const i = ids.lastIndexOf(task.assigned_to);
+        if (i > -1) ids.splice(i, 1);
+      }
+    }
+    return ids;
+  })();
 
   db.get().transaction(() => {
     const newTask = db.get().prepare(`
       INSERT INTO tasks (title, description, category, priority, status,
         start_date, due_date, due_time, assigned_to, created_by, is_recurring, recurrence_rule,
-        points, visibility, recurrence_from_completion, countdown, locked, recurrence_origin_id,
+        points, visibility, recurrence_from_completion, countdown, locked, requires_approval,
+        recurrence_origin_id,
         target_caldav_account_id, target_caldav_list_url, recurrence_series_id, sort_order)
-      VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.title, task.description, task.category, task.priority,
       shiftedStartDate(task.start_date, task.due_date, nextDate),
-      nextDate, task.due_time, rotation ? rotation.userId : task.assigned_to, task.created_by,
+      nextDate, task.due_time, rotation ? rotation.userId : (carriedAssignees[0] ?? task.assigned_to), task.created_by,
       task.recurrence_rule, task.points, task.visibility,
       // Ohne das Mitnehmen fiele die Serie ab der zweiten Instanz auf die
       // Fälligkeitsrechnung zurück - lautlos, weil die Folgeinstanz sonst
@@ -1997,7 +2034,7 @@ function spawnRecurrenceFollowup(task) {
     // beim naechsten Abhaken an der richtigen Position weiterschaltet. Der
     // Pool reist samt seiner Positionen (carryRotation): der Zeiger zeigt auf
     // eine davon. Ohne Rotation: wie heute.
-    setAssignments(db.get(), newTask.lastInsertRowid, rotation ? [rotation.userId] : existingAssignments);
+    setAssignments(db.get(), newTask.lastInsertRowid, rotation ? [rotation.userId] : carriedAssignees);
     carryRotation(db.get(), task, newTask.lastInsertRowid);
     if (rotation !== null) {
       db.get().prepare('UPDATE tasks SET rotation_last_user = ?, rotation_last_position = ? WHERE id = ?')
@@ -2209,7 +2246,7 @@ router.patch('/:id/status', (req, res) => {
 
       syncHousekeepingPaymentStatus(db.get(), req.params.id, status);
       // Punkte-Gutschrift/Storno an den Aufgaben-Statuswechsel koppeln.
-      syncTaskRewards(db.get(), Number(req.params.id), prev.status, status, req.authUserId || req.session.userId, doneByUserId);
+      syncTaskRewards(db.get(), Number(req.params.id), prev.status, status, req.authUserId || req.session.userId, doneByUserId, { asAdmin: isAdminRequest(req) });
       // Der Verlauf hängt am selben Übergang (#791). Dieser Weg trägt ihn
       // dreifach: Checkbox, Swipe und die Sammelaktion gehen alle hier durch.
       syncTaskCompletion(db.get(), Number(req.params.id), prev.status, status, req.authUserId || req.session.userId, doneByUserId);
@@ -2691,6 +2728,70 @@ router.patch('/:id/comments/:commentId', (req, res) => {
     notifyMentions(found.task, row.comment, found.me, found.row.comment);
   } catch (err) {
     log.error('PATCH /:id/comments/:commentId error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// --------------------------------------------------------
+// Aufgaben-Freigabe: Bestaetigung oder Ablehnung eines Check-ins, der als
+// `approval_status = 'pending'` angemeldet wurde (siehe Migration 278).
+// Berechtigung ist `isAdminRequest`, bewusst nie aus `family_role` abgeleitet
+// ("wer jemand ist, nicht was er darf" - docs/DECISIONS.md Eintrag 2).
+// Bestaetigen bucht jetzt ueber awardForCompletion - Netto- und Tagesdeckel
+// verhindern Doppelbuchung, der Spaetabzug (falls einkaertiert) bemisst am
+// Check-in-Tag (`checkin_at`), nicht am Bestaetigungstag. Ablehnen oeffnet die
+// Aufgabe wie ein Zuruecknehmen (inkl. Folgeinstanz-Rueckbau #650) - gebucht
+// war nie etwas, storniert wird nichts; die Begruendung bleibt stehen.
+// --------------------------------------------------------
+router.post('/:id/approval', (req, res) => {
+  try {
+    if (!isAdminRequest(req)) {
+      return res.status(403).json({ error: 'Admin access required.', code: 403, reason: 'task_approval_admin_only' });
+    }
+    const action = req.body?.action;
+    if (action !== 'approve' && action !== 'reject') {
+      return res.status(400).json({ error: "action must be 'approve' or 'reject'", code: 400 });
+    }
+    const note = typeof req.body?.note === 'string' && req.body.note.trim()
+      ? req.body.note.trim().slice(0, 500) : null;
+    const task = db.get().prepare('SELECT * FROM tasks WHERE id = ?').get(Number(req.params.id));
+    if (!task || task.archived_at) {
+      return res.status(404).json({ error: 'Task not found.', code: 404, reason: 'tasks_task_not_found' });
+    }
+    if (task.approval_status !== 'pending') {
+      return res.status(409).json({ error: 'Task has no pending approval.', code: 409, reason: 'task_approval_not_pending' });
+    }
+    const actingUserId = req.authUserId || req.session.userId;
+    const now = new Date();
+    const stamp = now.toISOString().replace(/\.\d+Z$/, 'Z');
+    if (action === 'approve') {
+      db.get().transaction(() => {
+        db.get().prepare("UPDATE tasks SET approval_status = 'approved', approved_by = ?, approved_at = ? WHERE id = ?")
+          .run(actingUserId, stamp, task.id);
+        // Der Check-in liegt in der Vergangenheit; ein Spaetabzug (siehe Rewards)
+        // bemisst sich daran, nicht an diesem Zeitpunkt.
+        awardForCompletion(db.get(), task.id, actingUserId, null, {
+          now,
+          completedOn: task.checkin_at ? String(task.checkin_at).slice(0, 10) : undefined,
+          asAdmin: true,
+        });
+      })();
+    } else {
+      db.get().transaction(() => {
+        db.get().prepare("UPDATE tasks SET status = 'open', approval_status = NULL, approved_by = NULL, approved_at = NULL, checkin_at = NULL, reject_note = ? WHERE id = ?")
+          .run(note, task.id);
+        syncTaskCompletion(db.get(), task.id, 'done', 'open', actingUserId);
+        // Wieder offengelegt, dieselbe Serien-Ruecknahme wie beim Zuruecknehmen
+        // per Checkbox (#650): die Folgeinstanz darf nicht neben der offenen
+        // Aufgabe stehen bleiben.
+        if (task.is_recurring) discardRecurrenceFollowup(task.id);
+        markTodoOutbound('tasks', { ...task, status: 'done' }, { ...task, status: 'open', reject_note: note });
+      })();
+    }
+    const updated = db.get().prepare('SELECT * FROM tasks WHERE id = ?').get(task.id);
+    res.json({ data: updated });
+  } catch (err) {
+    log.error('POST /:id/approval error:', err);
     res.status(500).json({ error: 'Internal server error.', code: 500 });
   }
 });

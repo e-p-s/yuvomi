@@ -192,6 +192,16 @@ export const PERMISSION_CAPABILITIES = Object.freeze([
     labelKey: 'settings.permCapabilityTasksReorder',
     default: 'allow',
   },
+  // Freigabe eines Check-ins (tasks.js POST /:id/approval): Punkte buchen ist
+  // eine Entscheidung, keine Nebensache. Admins duerfen immer (default allow
+  // wie die anderen Haushalt-Rechte); wer sie nicht hat, sieht die Warteschlange
+  // nur, bestaetigt oder verwirft nicht.
+  {
+    key: 'tasks_approve',
+    module: 'tasks',
+    labelKey: 'settings.permCapabilityTasksApprove',
+    default: 'allow',
+  },
 ]);
 
 export const MODULE_ACCESS_LEVELS = Object.freeze(['none', 'read', 'write']);

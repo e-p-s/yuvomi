@@ -7,7 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
 - **A recurring task can hand itself along.** A series like "take out the bin" used to hang on the
   same person forever; a rotation pool of at least two people now gives each follow-up instance to
   the next member in a fixed order (#1763, migration 277). The order chosen in the pool is the order
@@ -23,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   completion earned stands with the booking: later changes of the due date, the point value or the
   setting never rewrite booked amounts, and for every late earning the ledger shows the base it came
   from and how many days it was late.
+
+## [2.85.0] - 2026-11-04
+
+### Added
 - **Stock: the minimum belongs to the product, and running low is read over all its batches**
   (part 3 of #1448). Toothpaste with 1 in the bathroom, 8 in the attic and a minimum of 3 no
   longer reads as running low: the household has 9. Milk with 1 l, 1 l and 2 l against a minimum
@@ -74,6 +77,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layout. Options (calendar limit, task filters, shopping-list selection, etc.) follow the desktop
   arrangement, so only the order and visibility are separate. "Same as desktop" removes the phone
   arrangement and goes back to following the desktop. (#2109)
+- **A recurring task can hand itself along.** A series like "take out the bin" used to hang on the
+  same person forever; a rotation pool of at least two people now gives each follow-up instance to
+  the next member in a fixed order (#1763, migration 277). The order chosen in the pool is the order
+  the task is handed along in. The series remembers a position, not a person: a member who leaves the
+  pool does not restart it at the first person - Kevin's round stays Kevin's, then Max, then Kevin
+  again - and a deactivated account (#1381) is skipped while it cannot sign in. If the running
+  instance already belongs to the first member, the first hand-over goes to the second one (Kevin,
+  Anna, Max - not Kevin, Kevin). The detail view names the next member up from the same calculation
+  that hands out the next instance, and a task without rotation behaves exactly as before.
 
 ### Deprecated
 - **`min_quantity` on a pantry item (`/api/v1/pantry`) is deprecated and will be removed in the
@@ -86,6 +98,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writing it on the product itself comes with a later part of #1448, before the field goes.
 
 ### Fixed
+- **A birthday keeps the color you give it in the calendar.** The birthday sync wrote its own red
+  back onto every birthday event each time it ran, which is on every visit to Birthdays and every
+  reminder check. Giving several birthdays the same color looked as if a color could be used only
+  once: the one changed last kept it, the earlier ones fell back to red. New birthdays still start
+  in red; after that the color is the calendar's. Reported by email.
+- **The weather tile no longer shows your coordinates as the place name.** With coordinates but no
+  place name set, the tile and the API showed the raw position in full precision
+  (`54.31665773950043, 10.116079422296027`), the exact location of the home for everyone who sees
+  the overview. Without a name the tile now shows none, and `city` in `/api/v1/weather` is `null`.
+  Reported for the Home Assistant app in ulsklyc/yuvomi-home-assistant#4.
 - **The Budget title stands in full next to the month in every language.** From 390px up the title
   was cut off in eleven languages ("Presupues..." in Spanish even at 430px), because the month only
   moved to a row of its own below 390px. The head now measures: whenever the title would be cut off
@@ -148,6 +170,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dashes.** Trimming the dashes around the folder and file part of a stored document's name used a
   pattern CodeQL flags as polynomial. The step before it already collapsed every run into one dash,
   so uploads were not slowed down in practice; the name stays exactly the same.
+- **A shared-expense guest only reaches its own account routes (GHSA-q7gc-2cc9-w8fj).** A guest
+  account is meant to see Shared expenses and nothing else, and every other module already refused
+  it. The account routes did not: they answer before that check, so a signed-in guest could read the
+  household's account list with the members' contact details. The account routes now ask the same
+  list as the rest of the API. A guest keeps signing in and out, its own account details and the
+  changelog; everything else there is refused, and members notice nothing.
 
 ## [2.84.0] - 2026-11-02
 
@@ -437,6 +465,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   characters instead of 90, spacing follows the app's scale, a failed copy shows its note on its own
   line instead of breaking around the button, and the "taking longer than usual" note no longer
   touches the line above it.
+
 ## [2.83.0] - 2026-10-29
 
 ### Added
