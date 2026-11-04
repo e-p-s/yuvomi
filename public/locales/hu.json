@@ -715,7 +715,9 @@
         "seriesDoneNamed": "„{{title}}” kész - legközelebb: {{date}}",
         "kanbanRestore": "Visszaállítás",
         "errorTagGone": "Ez a címke már nem létezik.",
-        "createdByDetail": "Létrehozta: {{name}}"
+        "createdByDetail": "Létrehozta: {{name}}",
+        "task_approval_admin_only": "Csak rendszergazada hagyja jóvá vagy utasítja el a feladatokat.",
+        "task_approval_not_pending": "Ez a feladat most nem vár jóváhagyásra."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} elem törölve.",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "Következmények engedélyezése",
         "rewardsPenaltiesHint": "A szülők pontokat vonhatnak le rossz viselkedésért (rendetlen szoba, üvöltözés, késő lefekvés). Az ok kötelező, és a gyermek meg a szülők látják; a testvérek nem.",
         "taskCreatedByVisibleLabel": "Készítő megjelenítése",
-        "taskCreatedByVisibleHint": "A feladat részletei nézet megnevezi, ki hozta létre a feladatot, ha a feladat viseli a készítőt. Kikapcsolva semmit nem mutat."
+        "taskCreatedByVisibleHint": "A feladat részletei nézet megnevezi, ki hozta létre a feladatot, ha a feladat viseli a készítőt. Kikapcsolva semmit nem mutat.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Üdv újra! Az otthon ügyei egy helyen.",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "Következmény visszavonása",
         "penaltyRetractedToast": "Következmény visszavonva",
         "ledgerPenaltyRetracted": "Következmény visszavonva",
-        "penaltyNoChild": "Ebben a házban még nincs gyermek. a következmény gyermeknek szól."
+        "penaltyNoChild": "Ebben a házban még nincs gyermek. a következmény gyermeknek szól.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Naptár megnyitása",
@@ -6873,5 +6900,19 @@
         "custom": "Saját szín",
         "chooseCustom": "Saját szín választása",
         "standard": "Alapértelmezett szín"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "A képernyőidő-kérelem hiányos volt.",
+            "media_time_device_required": "Ehhez az eseményhez eszköz kell, nem fiók.",
+            "media_time_disabled": "A képernyőidő ki van kapcsolva ebben a háztartásban.",
+            "media_time_forbidden": "Ennekhez nincs meg a szülői jogod.",
+            "media_time_not_a_child": "A képernyőidő csak a háztartás gyerekeire vonatkozik.",
+            "media_time_no_quota": "Ez a gyermek ma nem kapott képernyőidő-keretet.",
+            "media_time_exchange_off": "A pontváltás jelenleg ki van kapcsolva ebben a háztartásban.",
+            "media_time_cap_reached": "A mai maximum kicserélt képernyőidő elérkezett.",
+            "media_time_insufficient_points": "Nincs elég pont a kért képernyőidőhöz.",
+            "media_time_unauthenticated": "Ehhez a képernyőidő-művelethez bejelentkezett fiók vagy eszköz kell."
+        }
     }
 }

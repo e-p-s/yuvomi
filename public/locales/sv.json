@@ -715,7 +715,9 @@
         "seriesDoneNamed": "”{{title}}” klar - nästa gång: {{date}}",
         "kanbanRestore": "Återställ",
         "errorTagGone": "Den här etiketten finns inte längre.",
-        "createdByDetail": "Skapad av {{name}}"
+        "createdByDetail": "Skapad av {{name}}",
+        "task_approval_admin_only": "Endast en administrator godkanner eller avslar uppgifter.",
+        "task_approval_not_pending": "Denna uppgift väntar inte på godkännande just nu."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} vara borttagen.",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "Tillåt konsekvenser",
         "rewardsPenaltiesHint": "Föräldrar kan dra ifrån poäng för oönskat beteende (ostädat rum, skrikande, sen läggdags). Anledningen är obligatorisk och syns för barnet och föräldrarna; syskon ser den inte.",
         "taskCreatedByVisibleLabel": "Visaskaparen",
-        "taskCreatedByVisibleHint": "Visningen av arbetsdetaljer namnger personen som skapade arbetsuppgiften när den har en skapare. Avstängd visar den ingenting."
+        "taskCreatedByVisibleHint": "Visningen av arbetsdetaljer namnger personen som skapade arbetsuppgiften när den har en skapare. Avstängd visar den ingenting.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Välkommen tillbaka. Ditt hem samlat på ett ställe.",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "Ångra konsekvens",
         "penaltyRetractedToast": "Konsekvens ångrad",
         "ledgerPenaltyRetracted": "Konsekvens ångrad",
-        "penaltyNoChild": "Det finns inget barn i hushållet än. en konsekvens kräver ett barn."
+        "penaltyNoChild": "Det finns inget barn i hushållet än. en konsekvens kräver ett barn.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Öppna kalender",
@@ -6873,5 +6900,19 @@
         "custom": "Egen färg",
         "chooseCustom": "Välj egen färg",
         "standard": "Standardfärg"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "Begäran om skärmtid var ofullständig.",
+            "media_time_device_required": "Handelsen behover en enhet, inte ett konto.",
+            "media_time_disabled": "Skärmtid är avstängd i detta hushåll.",
+            "media_time_forbidden": "Du saknar foraldrarattigheter for detta.",
+            "media_time_not_a_child": "Skarmtid galler bara for barn i detta hushall.",
+            "media_time_no_quota": "Detta barn har ingen planerad skarmtid idag.",
+            "media_time_exchange_off": "Poangutbyte ar for tillfallet avstängt i detta hushall.",
+            "media_time_cap_reached": "Dagens maximum for bytt skarmtid ar uppnatt.",
+            "media_time_insufficient_points": "Det finns inte tillrackligt med poang for den onskade skarmtiden.",
+            "media_time_unauthenticated": "Denna skarmtidshandling kraver ett inloggad konto eller en enhet."
+        }
     }
 }

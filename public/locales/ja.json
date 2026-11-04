@@ -715,7 +715,9 @@
         "seriesDoneNamed": "「{{title}}」を完了しました - 次回: {{date}}",
         "kanbanRestore": "復元",
         "errorTagGone": "このタグはもう存在しません。",
-        "createdByDetail": "作成者: {{name}}"
+        "createdByDetail": "作成者: {{name}}",
+        "task_approval_admin_only": "タスクの承認と却下は管理者のみが行えます。",
+        "task_approval_not_pending": "このタスクは今、承認を待っていません。"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} 件を削除しました。",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "ペナルティを許可",
         "rewardsPenaltiesHint": "保護者は不正な行動（部屋が散らかっている、怒鳴る、就寝が遅い）で点を減らせます。理由は必須で、子どもと保護者にだけ表示されます。兄弟には表示されません。",
         "taskCreatedByVisibleLabel": "作成者を表示",
-        "taskCreatedByVisibleHint": "タスク詳細ビューは、作成者が記録されている場合に作成した人を表示します。オフの場合は何も表示しません。"
+        "taskCreatedByVisibleHint": "タスク詳細ビューは、作成者が記録されている場合に作成した人を表示します。オフの場合は何も表示しません。",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "おかえりなさい。暮らしのことを一か所に。",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "ペナルティを取り消す",
         "penaltyRetractedToast": "ペナルティを取り消しました",
         "ledgerPenaltyRetracted": "ペナルティを取り消しました",
-        "penaltyNoChild": "この世帯にまだ子どもがいません. ペナルティには子どもが必要です。"
+        "penaltyNoChild": "この世帯にまだ子どもがいません. ペナルティには子どもが必要です。",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "カレンダーを開く",
@@ -6873,5 +6900,19 @@
         "custom": "カスタムカラー",
         "chooseCustom": "カスタムカラーを選択",
         "standard": "既定の色"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "スクリーンタイムの要求が不完全でした。",
+            "media_time_device_required": "このイベントはアカウントではなくデバイスが必要です。",
+            "media_time_disabled": "この世帯ではスクリーンタイムが無効です。",
+            "media_time_forbidden": "これには保護者の権限がありません。",
+            "media_time_not_a_child": "スクリーンタイムはこの家庭の子どものみに適用されます。",
+            "media_time_no_quota": "この子どもの今日はスクリーンタイムの計画がありません。",
+            "media_time_exchange_off": "この世帯では現在ポイント交換が無効です。",
+            "media_time_cap_reached": "今日の交換済みスクリーンタイムの上限に達しました。",
+            "media_time_insufficient_points": "要求されたスクリーンタイムに十分なポイントがありません。",
+            "media_time_unauthenticated": "このスクリーンタイム操作にはサインインしたアカウントまたはデバイスが必要です。"
+        }
     }
 }

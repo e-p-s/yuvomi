@@ -733,7 +733,9 @@
         "seriesDoneNamed": "\"{{title}}\" selesai - berikutnya: {{date}}",
         "kanbanRestore": "Pulihkan",
         "errorTagGone": "Tag ini sudah tidak ada.",
-        "createdByDetail": "Dibuat oleh {{name}}"
+        "createdByDetail": "Dibuat oleh {{name}}",
+        "task_approval_admin_only": "Hanya administrator yang menyetujui atau menolak tugas.",
+        "task_approval_not_pending": "Tugas ini tidak menunggu persetujuan saat ini."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} item dihapus.",
@@ -3551,7 +3553,19 @@
         "rewardsPenaltiesLabel": "Izinkan konsekuensi",
         "rewardsPenaltiesHint": "Orang tua dapat mengurangi poin karena perilaku buruk (kamar berantakan, berteriak, tidur terlambat). Alasan wajib dan tetap terlihat oleh anak dan orang tua; saudara tidak melihatnya.",
         "taskCreatedByVisibleLabel": "Tampilkan pembuat",
-        "taskCreatedByVisibleHint": "Tampilan detail tugas menyebut orang yang membuat tugas, jika tugas punya pembuat. Jika dimatikan, tidak menampilkan apa pun."
+        "taskCreatedByVisibleHint": "Tampilan detail tugas menyebut orang yang membuat tugas, jika tugas punya pembuat. Jika dimatikan, tidak menampilkan apa pun.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Selamat datang kembali. Rumah Anda dalam satu tempat.",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "Tarik konsekuensi",
         "penaltyRetractedToast": "Konsekuensi ditarik",
         "ledgerPenaltyRetracted": "Konsekuensi ditarik",
-        "penaltyNoChild": "Belum ada anak di rumah ini. konsekuensi membutuhkan anak sebagai target."
+        "penaltyNoChild": "Belum ada anak di rumah ini. konsekuensi membutuhkan anak sebagai target.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Buka kalender",
@@ -6873,5 +6900,19 @@
         "custom": "Warna sendiri",
         "chooseCustom": "Pilih warna sendiri",
         "standard": "Warna bawaan"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "Permintaan waktu layar tidak lengkap.",
+            "media_time_device_required": "Peristiwa ini butuh perangkat, bukan akun.",
+            "media_time_disabled": "Waktu layar dimatikan di rumah ini.",
+            "media_time_forbidden": "Anda tidak punya hak orang tua untuk ini.",
+            "media_time_not_a_child": "Waktu layar hanya berlaku untuk anak di rumah ini.",
+            "media_time_no_quota": "Anak ini tidak punya kuota waktu layar hari ini.",
+            "media_time_exchange_off": "Penukaran poin saat ini dimatikan di rumah ini.",
+            "media_time_cap_reached": "Kuota maksimum waktu layar yang ditukar hari ini tercapai.",
+            "media_time_insufficient_points": "Poin tidak cukup untuk waktu layar yang diminta.",
+            "media_time_unauthenticated": "Aksi waktu layar ini butuh akun yang masuk atau perangkat."
+        }
     }
 }

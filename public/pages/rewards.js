@@ -85,6 +85,10 @@ let state = {
   user: null,
   overview: null,      // { balances, catalog, pendingCount, isAdmin, me }
   catalog: [],
+  /** Aktive Konsequenz-Vorlagen (Katalog 283) fuer die Straf-Vergabe; null = noch nie geladen. */
+  consequences: null,
+  /** Hat der Nutzer das Sagen wie auf dieser Seite (isAdmin-Regel); true = Serverentscheid, bis die Seite es prueft. */
+  canManage: true,
   ledger: [],
   recentLedger: null,  // letzte Buchungen fuer die Seitenspalte der Uebersicht; null = unbekannt
   redemptions: [],     // pending requests (admin) or own requests
@@ -322,6 +326,27 @@ async function loadCatalog() {
   state.catalog = res.data || [];
 }
 
+/* KONSEQUENZEN-KATALOG (Migration 283): die aktiven Vorlagen fuer die
+ * Straf-Vergabe. Scheitert die Abfrage, bleibt `null` und die Vergabe zeigt nur
+ * die freien Felder - die Vorlagen erleichtern die Vergabe, sie bedingen sie
+ * nicht. */
+async function loadConsequences() {
+  try {
+    const res = await api.get('/rewards/consequences');
+    state.consequences = res.data || [];
+  } catch {
+    state.consequences = null;
+  }
+  // Die Verwaltungsseite haengt an derselben Schwelle wie der Praemienpfad
+  // (isAdmin); ohne Antwort bleibt das Feld zu, statt einen 403-Raum zu zeigen.
+  state.canManage = await isAdminSafe();
+}
+
+/** isAdmin, ohne die Seite zu blockieren: Fehler = keine Verwaltungsrechte annehmen. */
+async function isAdminSafe() {
+  try { return isAdmin(); } catch { return false; }
+}
+
 async function loadLedger() {
   const q = state.ledgerFilter ? `?user_id=${encodeURIComponent(state.ledgerFilter)}` : '';
   const res = await api.get(`/rewards/ledger${q}`);
@@ -498,9 +523,9 @@ async function renderCurrentTab(container, { direction = null, drill = false } =
   }
   const tab = state.tab;
   try {
-    if (tab === 'overview') await Promise.all([loadOverview(), loadRecentLedger(), loadMoney()]);
-    else if (tab === 'catalog') await Promise.all([loadCatalog(), loadOverview()]);
-    else await Promise.all([loadLedger(), loadOverview()]);
+    if (tab === 'overview') await Promise.all([loadOverview(), loadRecentLedger(), loadMoney(), loadConsequences()]);
+    else if (tab === 'catalog') await Promise.all([loadCatalog(), loadOverview(), loadConsequences()]);
+    else await Promise.all([loadLedger(), loadOverview(), loadConsequences()]);
     if (seq !== renderSeq) return;
     const draw = () => {
       if (tab === 'overview') renderOverview(el);
@@ -1442,12 +1467,53 @@ function openPenaltyModal(presetMemberId = null) {
             ${PENALTY_CATEGORIES.map((c) => `<option value="${c}">${esc(t(`rewards.category.${c}`))}</option>`).join('')}
           </select>
         </div>`;
+  /* Die aktiven Vorlagen des Katalogs (283) als Chips: ein Klick fuellt
+   * Grund und Punkte, beides bleibt frei editierbar - die Vorlage nimmt die
+   * Arbeit ab, sie nimmt sie nicht ab. Kein Katalog geladen (null) oder leer:
+   * die freie Eingabe steht sowiesoda, die Chips fehlen lautlos. */
+  const chips = (state.consequences || []).length
+    ? `<div class="form-group">
+         <span class="label" id="rw-penalty-catalog-label">${esc(t('rewards.penaltyCatalogLabel'))}</span>
+         <div class="rw-penalty-chips" role="group" aria-labelledby="rw-penalty-catalog-label">
+           ${(state.consequences || []).map((c) => `<span class="rw-penalty-chip-wrap">
+                <button type="button" class="btn btn--ghost btn--sm rw-penalty-chip"
+                   data-catalog-id="${c.id}" data-title="${esc(c.title)}" data-points="${Number(c.points)}">
+                  ${esc(c.title)} - ${Number(c.points)}</button>
+                ${state.canManage ? `<button type="button" class="btn btn--ghost btn--sm rw-penalty-chip-edit"
+                   data-catalog-id="${c.id}" data-title="${esc(c.title)}" data-points="${Number(c.points)}"
+                   aria-label="${esc(t('rewards.penaltyCatalogEdit'))}" title="${esc(t('rewards.penaltyCatalogEdit'))}">
+                  <i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
+              </span>`).join('')}
+         </div>
+       </div>`
+    : '';
+  /* Verwaltungszeile fuer Eltern (Admin/Eltern-Regel der Route): Katalogeintrag
+   * anlegen, ohne in die Einstellungen zu gehen. Punkte bleiben nachtraglich
+   * editierbar, aber die Zeile traegt ihren Wert von Anfang an - eine Vorlage
+   * ohne Punkte ist ein Glas ohne Fuellstrich. */
+  const manage = state.canManage && penaltiesUsable()
+    ? `<div class="form-group">
+         <label class="form-label" for="rw-penalty-new-title">${esc(t('rewards.penaltyCatalogAddLabel'))}</label>
+         <div class="rw-penalty-new">
+           <input class="form-input" id="rw-penalty-new-title" type="text" maxlength="120"
+                  placeholder="${esc(t('rewards.penaltyCatalogAddPlaceholder'))}">
+           <input class="form-input" id="rw-penalty-new-points" type="number" inputmode="numeric"
+                  min="1" max="100" step="1"
+                  aria-label="${esc(t('rewards.penaltyCatalogAddPointsLabel'))}">
+           <button type="button" class="btn btn--ghost btn--sm" id="rw-penalty-new-add">
+             ${esc(t('rewards.penaltyCatalogAdd'))}
+           </button>
+         </div>
+       </div>`
+    : '';
   openModal({
     staged: true,
     title: t('rewards.penaltyTitle'),
     content: `
       <form id="rw-penalty-form" novalidate>
         ${memberField}
+        ${chips}
+        ${manage}
         <div class="modal-grid modal-grid--2">
           <div class="form-group">
             <label class="label" for="rw-penalty-points">${esc(t('rewards.bonusPoints'))}${REQUIRED_MARK}</label>
@@ -1468,6 +1534,92 @@ function openPenaltyModal(presetMemberId = null) {
     onSave: (panel) => {
       const form = panel.querySelector('#rw-penalty-form');
       const submit = panel.querySelector('#rw-penalty-submit');
+      const pointsInput = panel.querySelector('#rw-penalty-points');
+      const reasonInput = panel.querySelector('#rw-penalty-reason');
+      let pickedCatalogId = null;
+      const renderChips = () => {
+        const box = panel.querySelector('.rw-penalty-chips');
+        const label = panel.querySelector('#rw-penalty-catalog-label');
+        if (!box || !label) return;
+        // DOM-API statt Markup-String: der Audit-Guard erlaubt kein innerHTML
+        // unter public/, und die Katalogtitel sind Haushalt-Eingaben.
+        box.replaceChildren();
+        for (const c of (state.consequences || [])) {
+          const wrap = document.createElement('span');
+          wrap.className = 'rw-penalty-chip-wrap';
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'btn btn--ghost btn--sm rw-penalty-chip';
+          chip.dataset.catalogId = String(c.id);
+          chip.dataset.title = c.title;
+          chip.dataset.points = String(Number(c.points));
+          chip.textContent = `${c.title} - ${Number(c.points)}`;
+          wrap.appendChild(chip);
+          if (state.canManage) {
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'btn btn--ghost btn--sm rw-penalty-chip-edit';
+            edit.dataset.catalogId = String(c.id);
+            edit.dataset.title = c.title;
+            edit.dataset.points = String(Number(c.points));
+            edit.setAttribute('aria-label', t('rewards.penaltyCatalogEdit'));
+            edit.title = t('rewards.penaltyCatalogEdit');
+            const icon = document.createElement('i');
+            icon.setAttribute('data-lucide', 'pencil');
+            icon.setAttribute('aria-hidden', 'true');
+            edit.appendChild(icon);
+            wrap.appendChild(edit);
+          }
+          box.appendChild(wrap);
+        }
+        if (window.lucide) window.lucide.createIcons({ el: box });
+        bindChips();
+      };
+      const bindChips = () => {
+        panel.querySelectorAll?.('.rw-penalty-chip').forEach((chip) => {
+          chip.addEventListener('click', () => {
+            panel.querySelectorAll?.('.rw-penalty-chip').forEach((c) => c.classList.remove('is-selected'));
+            chip.classList.add('is-selected');
+            pickedCatalogId = Number(chip.dataset.catalogId);
+            reasonInput.value = chip.dataset.title;
+            pointsInput.value = chip.dataset.points;
+          });
+        });
+        panel.querySelectorAll?.('.rw-penalty-chip-edit').forEach((btn) => {
+          btn.addEventListener('click', () => openConsequenceEditModal(Number(btn.dataset.catalogId), renderChips));
+        });
+      };
+      bindChips();
+      // Anlegen aus der Vergabe heraus (Eltern-Regel der Route): der neue
+      // Eintrag erscheint als Chip und wird gleich ausgewaehlt - die Eltern
+      // tippen ihre Regel einmal und nutzen sie sofort.
+      const addBtn = panel.querySelector('#rw-penalty-new-add');
+      addBtn?.addEventListener('click', async () => {
+        const newTitle = String(panel.querySelector('#rw-penalty-new-title')?.value ?? '').trim();
+        const newPoints = Math.trunc(Number(panel.querySelector('#rw-penalty-new-points')?.value));
+        const errEl = panel.querySelector('#rw-penalty-error');
+        if (!newTitle || !Number.isFinite(newPoints) || newPoints < 1 || newPoints > 100) {
+          if (errEl) { errEl.textContent = t('rewards.penaltyCatalogAddInvalid', { max: 100 }); errEl.hidden = false; }
+          return;
+        }
+        addBtn.disabled = true;
+        try {
+          const res = await api.post('/rewards/consequences', { title: newTitle, points: newPoints });
+          if (res?.data) {
+            state.consequences = [...(state.consequences || []), res.data];
+            renderChips();
+            const chip = panel.querySelector(`.rw-penalty-chip[data-catalog-id="${res.data.id}"]`);
+            chip?.click();
+          }
+          panel.querySelector('#rw-penalty-new-title').value = '';
+          panel.querySelector('#rw-penalty-new-points').value = '';
+          if (errEl) errEl.hidden = true;
+        } catch (err) {
+          if (errEl) { errEl.textContent = rewardsErrorSentence(err); errEl.hidden = false; }
+        } finally {
+          addBtn.disabled = false;
+        }
+      });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const errEl = panel.querySelector('#rw-penalty-error');
@@ -1478,9 +1630,16 @@ function openPenaltyModal(presetMemberId = null) {
         try {
           await api.post('/rewards/penalty', {
             user_id: Number(panel.querySelector('#rw-penalty-member').value),
-            amount: Math.trunc(Number(panel.querySelector('#rw-penalty-points').value)),
+            amount: Math.trunc(Number(pointsInput.value)),
             category: panel.querySelector('#rw-penalty-category').value || undefined,
-            reason: panel.querySelector('#rw-penalty-reason').value.trim(),
+            reason: reasonInput.value.trim(),
+            // Die Kennung nur mitgeben, solange die Vorlage noch die Quelle des
+            // Textes ist - hat der Mensch Grund oder Punkte weitereditiert,
+            // bucht die Route, was dasteht, und die Kennung waere eine Mitgift
+            // ohne Braeutigam.
+            catalog_consequence_id: pickedCatalogId
+              && reasonInput.value.trim() === (state.consequences || []).find((c) => c.id === pickedCatalogId)?.title
+                ? pickedCatalogId : undefined,
           });
           closeModal({ force: true, context: modalContext });
           toast(t('rewards.penaltyToast'));
@@ -1509,6 +1668,89 @@ async function retractPenalty(ledgerId, btn) {
     btn.disabled = false;
     toast(rewardsErrorSentence(err), 'danger');
   }
+}
+
+/**
+ * Vorlage des Konsequenzen-Katalogs bearbeiten: Titel und Punkte, deaktivieren
+ * oder loeschen (admin-seitige Schutzregel der Route: active statt Loeschen).
+ * Der Katalog ist dieselbe Ebene wie der Praemien-Katalog - er bekommt
+ * deshalb denselben Bearbeitungsdialog, nur auf seine Tabelle.
+ */
+function openConsequenceEditModal(id, afterSave) {
+  if (readOnly()) return;
+  const item = (state.consequences || []).find((c) => c.id === id);
+  if (!item) return;
+  openModal({
+    staged: false,
+    title: t('rewards.penaltyCatalogEditTitle'),
+    content: `
+      <form id="rw-consequence-edit-form" novalidate>
+        <div class="modal-grid modal-grid--2">
+          <div class="form-group">
+            <label class="label" for="rw-consequence-edit-title">${esc(t('rewards.penaltyCatalogEditNameLabel'))}${REQUIRED_MARK}</label>
+            <input class="input" id="rw-consequence-edit-title" required maxlength="120" value="${esc(item.title)}">
+          </div>
+          <div class="form-group">
+            <label class="label" for="rw-consequence-edit-points">${esc(t('rewards.penaltyCatalogAddPointsLabel'))}${REQUIRED_MARK}</label>
+            <input class="input" id="rw-consequence-edit-points" type="number" inputmode="numeric" min="1" max="100" step="1" required value="${Number(item.points)}">
+          </div>
+        </div>
+        ${formSwitchRowHtml({ label: t('rewards.activeLabel'), checked: item.active === 1, id: 'rw-consequence-edit-active' })}
+        <div id="rw-consequence-edit-error" class="form-error" role="alert" hidden></div>
+        <div class="modal-panel__footer modal-panel__footer--plain">
+          <button type="button" class="btn btn--danger-outline" id="rw-consequence-edit-delete">${esc(t('common.delete'))}</button>
+          <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
+          <button type="submit" class="btn btn--primary" id="rw-consequence-edit-submit">${esc(t('common.save'))}</button>
+        </div>
+      </form>`,
+    onSave: async (panel) => {
+      const errEl = panel.querySelector('#rw-consequence-edit-error');
+      const submit = panel.querySelector('#rw-consequence-edit-submit');
+      const title = String(panel.querySelector('#rw-consequence-edit-title').value || '').trim();
+      const points = Math.trunc(Number(panel.querySelector('#rw-consequence-edit-points').value));
+      const active = panel.querySelector('#rw-consequence-edit-active').checked;
+      if (!title || title.length > 120 || !Number.isFinite(points) || points < 1 || points > 100) {
+        if (errEl) { errEl.textContent = t('rewards.penaltyCatalogAddInvalid', { max: 100 }); errEl.hidden = false; }
+        return;
+      }
+      submit.disabled = true;
+      try {
+        const res = await api.put(`/rewards/consequences/${id}`, { title, points, active });
+        if (res?.data) {
+          state.consequences = (state.consequences || []).map((c) => (c.id === id ? res.data : c));
+          toast(t('rewards.penaltyCatalogSavedToast'));
+          if (afterSave) afterSave();
+        }
+      } catch (err) {
+        submit.disabled = false;
+        if (errEl) { errEl.textContent = rewardsErrorSentence(err); errEl.hidden = false; }
+      }
+    },
+  });
+  // Loeschen ist die Route, die den Katalogeintrag entfernt; gebuchte
+  // Konsequenzen bleiben (Snapshot im Ledger, Migration 283).
+  setTimeout(() => {
+    document.querySelector('#rw-consequence-edit-delete')?.addEventListener('click', async () => {
+      const modalContext = captureModalContext();
+      // Der Geloeschte-Hinweis bleibt erhalten - der Dialog nennt seine Folgen
+      // ('gebuchte Konsequenzen bleiben'), so wie es der Audit-Guard verlangt.
+      const ok = await confirmOverModal(t('rewards.penaltyCatalogConfirmDeleteTitle'), {
+        confirmLabel: t('common.delete'),
+        danger: true,
+        detail: t('rewards.penaltyCatalogConfirmDelete', { title: item.title }),
+      });
+      if (!ok) return;
+      try {
+        await api.delete(`/rewards/consequences/${id}`);
+        state.consequences = (state.consequences || []).filter((c) => c.id !== id);
+        closeModal({ force: true, context: modalContext });
+        toast(t('rewards.penaltyCatalogDeletedToast'));
+        if (afterSave) afterSave();
+      } catch (err) {
+        toast(rewardsErrorSentence(err), 'danger');
+      }
+    });
+  }, 0);
 }
 
 function openRewardModal(item) {

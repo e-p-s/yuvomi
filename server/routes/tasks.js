@@ -459,6 +459,7 @@ function mayEditTaskDefinition(task, req) {
   return lock.created_by === (req.authUserId || req.session?.userId);
 }
 
+
 const LOCKED_ERROR = { error: 'This task is locked; only its creator and administrators can change it.', code: 403, reason: 'task_locked' };
 
 /**
@@ -1512,8 +1513,12 @@ router.put('/:id', (req, res) => {
     const locked = lockedRequested ?? task.locked;
     // Freigabe-Pflicht ist Definition (wer darf erledigt buchen?), nicht
     // Umgang: dasselbe Recht wie die Sperre, desselben Grundes wegen.
-    const requiresApprovalRequested = req.body.requires_approval !== undefined ? (req.body.requires_approval ? 1 : 0) : null;
-    const requiresApproval = requiresApprovalRequested ?? task.requires_approval;
+    // Normalisiert auf 0/1: die Aufgabe kommt als 0/1 aus der Datenbank, der
+    // Leib ist ein Boolean - ohne diese Norm vergliche ich Boolean gegen 1 und
+    // halte jedes unveraenderte Mitschicken fuer eine Aenderung.
+    const requiresApprovalRequested = req.body.requires_approval !== undefined
+      ? (req.body.requires_approval ? 1 : 0) : null;
+    const requiresApproval = requiresApprovalRequested ?? (task.requires_approval ? 1 : 0);
 
     // Vor dem Update festhalten: die Rückrichtung vergleicht damit, ob sich die
     // Tags wirklich geändert haben (#586).
@@ -1539,7 +1544,18 @@ router.put('/:id', (req, res) => {
     // Aufgabe zurueck, und "Feld mitgeschickt = Aenderungsversuch" wuerde
     // deshalb genau das abweisen, was offen bleiben soll: das Abhaken aus dem
     // Bearbeiten-Formular schickt Titel und Termin unveraendert mit.
-    if (!mayEditTaskDefinition(task, req)) {
+    // Die Freigabepflicht ist Definition, auch an einer UNGESPERRTEN Aufgabe:
+    // niemand ausser Ersteller:in und Admins darf nachtraeglich bestimmen, dass
+    // ein Check-in einer Bestaetigung braucht (oder nicht). Die Sperre selbst
+    // vergleicht mayEditTaskDefinition unten nur, wenn sie greift - dieser
+    // Guard gilt immer.
+        if (requiresApprovalRequested !== null
+        && requiresApprovalRequested !== (task.requires_approval ? 1 : 0)
+        && !isAdminRequest(req)
+        && task.created_by !== (req.authUserId || req.session?.userId)) {
+      return res.status(403).json({ ...LOCKED_ERROR, code: 403, reason: 'task_locked' });
+    }
+            if (!mayEditTaskDefinition(task, req)) {
       const wanted = {
         title: title.trim(), description, category, priority,
         start_date, due_date, due_time,
@@ -1569,7 +1585,7 @@ router.put('/:id', (req, res) => {
       // Die Sperre selbst zu loesen ist der erste Zug, den jemand versuchen
       // wuerde, der sie umgehen will.
       if (lockedRequested !== null && lockedRequested !== task.locked) touchesDefinition = true;
-      if (requiresApprovalRequested !== null && requiresApprovalRequested !== task.requires_approval) touchesDefinition = true;
+      if (requiresApprovalRequested !== null && requiresApprovalRequested !== (task.requires_approval ? 1 : 0)) touchesDefinition = true;
 
       // Rotation ist Definition (#830): Modus und Ablieferungsreihenfolge sind
       // genau das, was ein Kind sonst ueber die Sperre hebt - dieselbe
@@ -1688,9 +1704,18 @@ router.put('/:id', (req, res) => {
         { ...updated, tags_key: tagsKey(updated.tags) },
       );
 
+      // Der Check-in wird am selben Uebergang getragen wie in PATCH /:id/status:
+      // wer abgehakt hat (checkin_by_user_id) und an welchem Kalendertag der
+      // Haushalt-Zeitzone (checkin_at). Beides liest spawnRecurrenceFollowup
+      // unten - ohne diesen Schritt waere die Folgeinstanz blind.
+      if (status === 'done' && task.status !== 'done') {
+        db.get().prepare('UPDATE tasks SET checkin_by_user_id = ?, checkin_at = ? WHERE id = ?')
+          .run(req.authUserId || req.session.userId, new Date().toISOString(), req.params.id);
+      }
+
       // Das Status-Dropdown im Bearbeiten-Formular hakt genauso ab wie die Checkbox -
       // also muss es die Serie genauso weiterschreiben. Grundlage ist die frisch
-      // gelesene Zeile, damit im selben Zug geänderte Regel/Fälligkeit schon zählen.
+      // gelesene Zeile, damit im selben Zug geaenderte Regel/Faelligkeit schon zaehlen.
       if (status === 'done' && task.status !== 'done') spawned = spawnRecurrenceFollowup(updated);
       // Und es sagt genauso, wann es weitergeht (#1620): dieselbe Regel wie in
       // PATCH /:id/status, ueber denselben Helfer.
@@ -1965,14 +1990,27 @@ function spawnRecurrenceFollowup(task) {
   // (task-rotation.js); deaktivierten Koepfen faellt nichts zu (#1381). Ohne
   // Modus ist das null und alles bleibt exakt beim heutigen Verhalten -
   // Assignment-Kopie wie zuvor. Wer abhakt, zaehlt nicht: der Zeiger folgt der
-  // Serie.
-  const rotation = pickRotationTarget(db.get(), task);
-  // Der Checkende erbt die Serie (#2422, Punkt 3): wer die letzte Instanz
-  // erledigt hat, soll die naechste bekommen - nicht der, der sie je
-  // zugewiesen bekam. Das gilt erst recht bei Freigabepflicht: die Punkte
-  // wandern an `checkin_by_user_id`, und wem die naechste Instanz gehoert,
-  // entscheidet dasselbe Recht. Ohne Check-in (reine Zeitplan-Serien) bleibt
-  // die bisherige Zuweisung der Massstab.
+  // Serie. Hat jemand anderes abgehakt als der Inhaber (checkin_by_user_id),
+  // uebernimmt der Checkende den Zeiger: der uebergegebene pointer ist seine
+  // Pool-Position, die Reihezaehlung startet hinter ihm - sonst kaeme der
+  // Checkende in der Rotation nie dran (der alte Zeiger fuehrte weiter am
+  // fruheren Inhaber entlang).
+  const rotation = (() => {
+    if (!task.rotation_mode) return null;
+    const checker = task.checkin_by_user_id ?? null;
+    if (checker) {
+      const row = db.get().prepare(
+        'SELECT position FROM task_rotation_pool WHERE task_id = ? AND user_id = ?'
+      ).get(task.id, checker);
+      if (row) {
+        const entry = nextRotationEntry(rotationPoolRows(db.get(), task.id), {
+          pointer: row.position, assignee: null, lastUser: checker,
+        });
+        return entry ? { userId: entry.user_id, position: entry.position } : null;
+      }
+    }
+    return pickRotationTarget(db.get(), task);
+  })();
   const carriedAssignees = (() => {
     const ids = [...existingAssignments];
     if (task.checkin_by_user_id && task.checkin_by_user_id !== task.assigned_to) {
@@ -2015,6 +2053,9 @@ function spawnRecurrenceFollowup(task) {
       // gesperrt wurde. created_by wandert oben mit, also bleiben Ersteller:in
       // und Admins auch an der Folgeinstanz berechtigt.
       task.locked ? 1 : 0,
+      // Und die Freigabepflicht: jede Instanz einer Serie braucht die
+      // Bestaetigung, nicht nur die erste.
+      task.requires_approval ? 1 : 0,
       task.id,
       syncTarget?.accountId ?? null, syncTarget?.listUrl ?? null,
       // Die Serie reist als WERT mit, nicht als Verweis (#1603).
@@ -2260,7 +2301,19 @@ router.patch('/:id/status', (req, res) => {
 
       // Wiederkehrende Aufgabe: nächste Instanz erstellen wenn erledigt
       if (status === 'done' && prev.status !== 'done') {
-        spawned = spawnRecurrenceFollowup(db.get().prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id));
+        {
+          const fresh = db.get().prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+          // Jeder Check-in traegt die handelnde Person (oder den benannten
+          // Erlediger): die Folgeinstanz soll dem gehoeren, der abgehakt hat.
+          // done_by_user_id ist die benannte Erledigerin (Wandtabletten-Fall):
+          // sie ist die Checkende, nicht der Schalterdruecker.
+          const checkinUser = (doneByUserId != null ? doneByUserId : (req.authUserId || req.session.userId));
+          db.get().prepare('UPDATE tasks SET checkin_by_user_id = ?, checkin_at = ? WHERE id = ?')
+            .run(checkinUser, todayKey(db.get()), fresh.id);
+          fresh.checkin_by_user_id = checkinUser;
+          fresh.checkin_at = todayKey(db.get());
+                    spawned = spawnRecurrenceFollowup(fresh);
+        }
       }
       // Nach dem Spawn, in derselben Transaktion; die Regel steht im Helfer.
       nextDueDate = nextDueDateAfter(req, prev.id, prev.status, status);

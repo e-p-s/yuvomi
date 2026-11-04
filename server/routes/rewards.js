@@ -978,7 +978,149 @@ function penaltyPermissionRefusal(d, actorId, targetId) {
   return null;
 }
 
+// Konsequenten-Katalog (Migration 283): die Vorlagen hinter der Straf-Vergabe.
+// Eltern haben ihre Standard-Faelle nicht jedes Mal frei zu tippen - ein
+// Eintrag fuellt Titel und Punkte in POST /penalty (catalog_consequence_id),
+// freies Editieren bleibt. Pflege wie der Praemien-Katalog: Admin-only,
+// `active` statt Loeschen, Sortierung ueber sort_order.
+
+/** Ein Katalogeintrag, so wie die Routen ihn ausliefern. */
+function consequenceRow(d, id) {
+  return d.prepare('SELECT * FROM reward_consequence_catalog WHERE id = ?').get(id);
+}
+
+const CONSEQUENCE_NOT_FOUND = { error: 'Consequence not found.', code: 404, reason: 'rewards_consequence_not_found' };
+
+/** Titel, Punkte und Beschreibung lesen; returns { error } when invalid. */
+function readConsequenceInput(body, existing = {}) {
+  const rawTitle = body?.title !== undefined ? String(body.title) : existing.title;
+  const title = rawTitle == null ? '' : String(rawTitle).trim();
+  if (!title || title.length > 120) return { error: 'title is required (1..120 characters).' };
+  // Punkte sind Pflicht, wenn keine fruehere Zeile sie liefert (POST ohne
+  // Vorlage): sonst stoesst die Tabelle ihre CHECK mit 500 durch, und ein
+  // 500 ist eine Antwort, die der Nutzer nicht versteht.
+  if (body?.points === undefined && existing.points === undefined) {
+    return { error: 'points is required (1..100).' };
+  }
+  let points = existing.points;
+  if (body?.points !== undefined) {
+    points = toInt(body.points);
+    if (!Number.isFinite(points) || points < 1 || points > MAX_PENALTY) {
+      return { error: `points must be 1..${MAX_PENALTY}.` };
+    }
+  }
+  const description = body?.description === undefined ? existing.description ?? null
+    : (body.description === null ? null : String(body.description).trim().slice(0, 500) || null);
+  const sort_order = body?.sort_order !== undefined && Number.isFinite(toInt(body.sort_order))
+    ? toInt(body.sort_order) : (existing.sort_order ?? 0);
+  return { title, points, description, sort_order };
+}
+
+// GET /consequences — Vorlagen. Admin sieht auch inaktive (?all=1), die
+// Vergabe-Oberflaeche nimmt nur die aktiven.
+router.get('/consequences', (req, res) => {
+  try {
+    const all = isAdminRequest(req) && req.query.all === '1';
+    const rows = db.get().prepare(`
+      SELECT * FROM reward_consequence_catalog
+      ${all ? '' : 'WHERE active = 1'}
+      ORDER BY active DESC, sort_order ASC, id ASC
+    `).all();
+    res.json({ data: rows });
+  } catch (err) {
+    log.error('GET /consequences error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// POST /consequences — Vorlage anlegen (Admin).
+router.post('/consequences', requireAdmin, (req, res) => {
+  try {
+    const d = db.get();
+    const input = readConsequenceInput(req.body);
+    if (input.error) return res.status(400).json({ error: input.error, code: 400 });
+    // Die naechste Zeile rueckt ans Ende der Liste, wenn kein Wunschwert kam.
+    const sort_order = req.body?.sort_order !== undefined
+      ? input.sort_order
+      : (d.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM reward_consequence_catalog').get().n);
+    const result = d.prepare(`
+      INSERT INTO reward_consequence_catalog (title, points, description, sort_order, created_by)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(input.title, input.points, input.description, sort_order, actingUser(req));
+    res.status(201).json({ data: consequenceRow(d, result.lastInsertRowid) });
+  } catch (err) {
+    log.error('POST /consequences error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// PUT /consequences/:id — Vorlage bearbeiten (Admin). Fehlendes Feld =
+// unveraendert, gesendetes null leert die Beschreibung (dasselbe Vokabular wie
+// PATCH /catalog).
+router.put('/consequences/:id', requireAdmin, (req, res) => {
+  try {
+    const d = db.get();
+    const id = toInt(req.params.id);
+    const existing = consequenceRow(d, id);
+    if (!existing) return res.status(404).json(CONSEQUENCE_NOT_FOUND);
+    const input = readConsequenceInput(req.body, existing);
+    if (input.error) return res.status(400).json({ error: input.error, code: 400 });
+    const active = req.body?.active !== undefined
+      ? (req.body.active === true || req.body.active === 1 ? 1 : 0) : existing.active;
+    d.prepare(`
+      UPDATE reward_consequence_catalog
+      SET title = ?, points = ?, description = ?, sort_order = ?, active = ?,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+      WHERE id = ?
+    `).run(input.title, input.points, input.description, input.sort_order, active, id);
+    res.json({ data: consequenceRow(d, id) });
+  } catch (err) {
+    log.error('PUT /consequences/:id error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// POST /consequences/:id/toggle — an/aus (Admin). Deaktivieren ist der Weg
+// statt Loeschen: eine Familie, die eine Vorlage nicht mehr zeigt, verliert
+// nicht ihren Text.
+router.post('/consequences/:id/toggle', requireAdmin, (req, res) => {
+  try {
+    const d = db.get();
+    const id = toInt(req.params.id);
+    const existing = consequenceRow(d, id);
+    if (!existing) return res.status(404).json(CONSEQUENCE_NOT_FOUND);
+    const active = existing.active === 1 ? 0 : 1;
+    d.prepare(`
+      UPDATE reward_consequence_catalog SET active = ?,
+        updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+      WHERE id = ?
+    `).run(active, id);
+    res.json({ data: consequenceRow(d, id) });
+  } catch (err) {
+    log.error('POST /consequences/:id/toggle error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+// DELETE /consequences/:id — Vorlage loeschen (Admin). Gebuchte Konsequenzen
+// haengen nicht als Fremdschluessel am Katalog (ihr Text steht als Snapshot im
+// Ledger), ein Loeschen gefaehrdet also keine Buchung.
+router.delete('/consequences/:id', requireAdmin, (req, res) => {
+  try {
+    const result = db.get().prepare('DELETE FROM reward_consequence_catalog WHERE id = ?').run(toInt(req.params.id));
+    if (result.changes === 0) return res.status(404).json(CONSEQUENCE_NOT_FOUND);
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('DELETE /consequences/:id error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
 // POST /penalty — Konsequenz buchen. Schalter an + Elter/Admin gegen Kind.
+// Optional catalog_consequence_id: ein Katalogeintrag fuellt Grund und Punkte,
+// freies Editieren bleibt (gesetzte reason/amount ueberschreiben die Vorlage);
+// eine DEAKTIVIERTE Vorlage ist 400 - was die Familie ausgeschaltet hat,
+// bucht sie nicht, auch nicht ueber eine alte Kennung.
 router.post('/penalty', (req, res) => {
   try {
     const d = db.get();
@@ -995,11 +1137,32 @@ router.post('/penalty', (req, res) => {
     const refusal = penaltyPermissionRefusal(d, actor, userId);
     if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.status });
 
-    const amount = toInt(req.body?.amount);
+    // Katalog-Vorlage (optional): Titel und Punkte uebernehmen, freies
+    // Editieren bleibt - ein mitgeschickter reason/amount ueberschreibt die
+    // Vorlage. Eine deaktivierte Vorlage ist 400: was die Familie
+    // ausgeschaltet hat, bucht sie nicht, auch nicht ueber eine alte Kennung.
+    // Uebernommene Punkte durchlaufen dieselbe 1..100-Pruefung wie freie.
+    let template = null;
+    const rawTemplateId = req.body?.catalog_consequence_id;
+    if (rawTemplateId !== undefined && rawTemplateId !== null && rawTemplateId !== '') {
+      const templateId = toInt(rawTemplateId);
+      template = Number.isFinite(templateId)
+        ? d.prepare('SELECT * FROM reward_consequence_catalog WHERE id = ?').get(templateId) : null;
+      if (!template) {
+        return res.status(400).json({ error: 'Consequence template not found.', code: 400, reason: 'rewards_consequence_not_found' });
+      }
+      if (template.active !== 1) {
+        return res.status(400).json({ error: 'This consequence template is switched off.', code: 400, reason: 'rewards_consequence_disabled' });
+      }
+    }
+
+    const amount = req.body?.amount !== undefined && req.body.amount !== null && req.body.amount !== ''
+      ? toInt(req.body.amount) : (template ? template.points : NaN);
     if (!Number.isFinite(amount) || amount < 1 || amount > MAX_PENALTY) {
       return res.status(400).json({ error: `amount must be 1..${MAX_PENALTY}.`, code: 400 });
     }
-    const rawReason = req.body?.reason != null ? String(req.body.reason).trim() : '';
+    const rawReason = req.body?.reason !== undefined && req.body.reason !== null
+      ? String(req.body.reason).trim() : (template ? String(template.title) : '');
     if (rawReason.length < 2) {
       return res.status(400).json({ error: 'reason is required (2..200 characters).', code: 400 });
     }

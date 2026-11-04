@@ -7,6 +7,7 @@ import { backupPaths } from './backup.js';
 import { dashboardPaths } from './dashboard.js';
 import { tasksPaths } from './tasks.js';
 import { rewardsPaths } from './rewards.js';
+import { mediaTimePaths } from './media-time.js';
 import { shoppingPaths } from './shopping.js';
 import { mealsPaths } from './meals.js';
 import { recipesPaths } from './recipes.js';
@@ -47,6 +48,7 @@ export function buildPaths() {
     ...dashboardPaths(),
     ...tasksPaths(),
     ...rewardsPaths(),
+    ...mediaTimePaths(),
     ...shoppingPaths(),
     ...mealsPaths(),
     ...recipesPaths(),

@@ -12062,6 +12062,208 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 281,
+    description: 'media time: devices and quotas (server-side ledger, trustee model)',
+    // Bildschirmzeit-Kontingente (docs/medienzeit-konzept.md, Entscheidungen in
+    // docs/medienzeit-entscheidungen.md): der Server ist die einzige Autoritaet
+    // (Ledger), ein Klient meldet nur, erlauben entscheidet der Server.
+    // Treuhender-Modell: Anreiz, kein Zwang - es gibt keine Sperrpfade.
+    //
+    // media_time_devices: das Geraet, das meldet, und sein Token. Der Klartext
+    // des Tokens steht NIE in dieser Tabelle - nur der sha256-Hash, derselbe
+    // Weg wie display_devices und api_tokens. `revoked_at` statt Loeschen:
+    // Sessions behalten ihr Geraet.
+    // media_time_quotas: das Tageskontingent pro Kind in Minuten. Der
+    // Punktetausch hat EINEN Kurs fuer den ganzen Haushalt (Praeferenz
+    // media_time_exchange_rate, Entscheidung 2: 'NEIN - ein Kurs fuer alle'),
+    // deshalb KEINE Kurs-Spalten pro Kind. Der Tages-Cap ist pro Kind als
+    // Wert da, seine Hartheit ist Haushalt (media_time_hard_cap, Entscheidung 4).
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS media_time_devices (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name              TEXT    NOT NULL,
+          platform          TEXT,
+          device_token_hash TEXT    NOT NULL UNIQUE,
+          last_seen_at      TEXT,
+          revoked_at        TEXT,
+          created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_time_devices_user
+          ON media_time_devices(user_id);
+        CREATE TABLE IF NOT EXISTS media_time_quotas (
+          user_id           INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          daily_minutes     INTEGER NOT NULL DEFAULT 0 CHECK (daily_minutes >= 0 AND daily_minutes <= 1440),
+          max_daily_minutes INTEGER CHECK (max_daily_minutes IS NULL OR (max_daily_minutes >= 0 AND max_daily_minutes <= 1440)),
+          enabled           INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          updated_by        INTEGER REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+    },
+  },
+  {
+    version: 282,
+    description: 'media time: usage sessions, app exceptions, device inventory (classification)',
+    // Die Sessions: der Rohwert, den ein Geraet meldet (Entscheidung 6: Roh-
+    // zeiten speichern, Paket + Start/Ende, Aufbewahrung 90 Tage). Anhaengig
+    // von 281 - media_time_sessions verweist auf media_time_devices.
+    //
+    // minute_key wird SERVERSEITIG bei Annahme gesetzt (Haushaltszone via
+    // todayKey), nie vom Geraet: die Geraetuhr ist fuer den Tag irrelevant.
+    // session_key ist die Idempotenz gegen Nachmeldungen (UNIQUE je Geraet).
+    // classification wird bei Annahme resolved: exception-match (laengster
+    // Prefix zuerst) > system_component (fail-open, nie Abzug) > 'unknown' -
+    // ein unbekanntes Paket frisst NIE still Kontingent (Treuhender-Modell),
+    // es erscheint als unknown_min in GET /today und die Eltern entscheiden.
+    // exception_rule_id haelt die Regel, die griff; bei Exception-Aenderung
+    // wird die Klassifikation NEU berechnet (adjust-Philosophie: der Rohwert
+    // bleibt, nie rueck-editiert).
+    //
+    // media_time_app_exceptions: revoked_at statt Loeschen. user_id NULL =
+    // Haushalts-Default fuer alle Kinder. Die Yuvomi-eigene App ist hart
+    // ausgenommen (server-seitige Konstante, keine loeschbare Zeile - sonst
+    // muesste das Kind die App oeffnen, um Zeit zu sehen, und verbraucht Zeit).
+    // exempt_from 'quota' = nicht abziehen, in der Historie sichtbar;
+    // 'history' = aus Abzug UND Auswertung raus; 'charged' = die Gegenrichtung
+    // (Eltern-UI-Bestaetigung 'Ja, abziehen').
+    //
+    // 'credit' (adjust-Session): ein Punktetausch schreibt sie - gekaufte
+    // Minuten erhoehen das Kontingent des Tages, sie sind kein Verbrauch.
+    //
+    // media_time_device_inventory: was auf dem Geraet installiert ist
+    // (Eltern-UI 'neu installiert?'), UNIQUE je Geraet und Paket.
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS media_time_sessions (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_key       TEXT    NOT NULL,
+          user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          device_id         INTEGER REFERENCES media_time_devices(id) ON DELETE SET NULL,
+          package_name      TEXT,
+          app_label         TEXT,
+          started_at        TEXT    NOT NULL,
+          ended_at          TEXT,
+          used_minutes      INTEGER NOT NULL DEFAULT 0 CHECK (used_minutes >= 0),
+          minute_key        TEXT    NOT NULL,
+          kind              TEXT    NOT NULL DEFAULT 'foreground'
+                                  CHECK (kind IN ('foreground', 'screen_on', 'service')),
+          system_component  INTEGER NOT NULL DEFAULT 0 CHECK (system_component IN (0, 1)),
+          classification    TEXT    NOT NULL DEFAULT 'unknown'
+                                  CHECK (classification IN ('charged', 'exempt', 'system', 'unknown', 'credit')),
+          exception_rule_id INTEGER REFERENCES media_time_app_exceptions(id) ON DELETE SET NULL,
+          source            TEXT    NOT NULL DEFAULT 'apk'
+                                  CHECK (source IN ('apk', 'pwa', 'manual', 'adjust', 'backfill', 'win')),
+          reported_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          updated_at        TEXT,
+          UNIQUE (device_id, session_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_time_sessions_user_day
+          ON media_time_sessions(user_id, minute_key);
+        CREATE INDEX IF NOT EXISTS idx_media_time_sessions_pkg
+          ON media_time_sessions(package_name);
+        CREATE TABLE IF NOT EXISTS media_time_app_exceptions (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          match_type   TEXT    NOT NULL CHECK (match_type IN ('exact', 'prefix', 'glob')),
+          pattern      TEXT    NOT NULL,
+          exempt_from  TEXT    NOT NULL DEFAULT 'quota'
+                               CHECK (exempt_from IN ('quota', 'history', 'charged')),
+          note         TEXT,
+          created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          revoked_at   TEXT,
+          UNIQUE (user_id, match_type, pattern)
+        );
+        CREATE TABLE IF NOT EXISTS media_time_device_inventory (
+          id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+          device_id              INTEGER NOT NULL REFERENCES media_time_devices(id) ON DELETE CASCADE,
+          package_name           TEXT    NOT NULL,
+          version_name           TEXT,
+          system_app             INTEGER NOT NULL DEFAULT 0 CHECK (system_app IN (0, 1)),
+          first_seen_at          TEXT    NOT NULL,
+          last_seen_at           TEXT    NOT NULL,
+          first_install_estimate TEXT,
+          UNIQUE (device_id, package_name)
+        );
+      `);
+    },
+  },
+  {
+    version: 283,
+    description: 'rewards: consequence catalog (editable penalty templates)',
+    // Der Katalog zu den Konsequenzen (Migration 279): Eltern haben ihre
+    // Standard-Faelle (Zimmer nicht aufgeraeumt, Zu-spaet-gekommen) nicht
+    // jedes Mal frei zu tippen - ein Katalogeintrag fuellt Grund und Punkte
+    // in der Straf-Vergabe, freies Editieren bleibt (POST /penalty nimmt
+    // deshalb optional catalog_consequence_id an und uebernimmt title/points).
+    // Dieselbe Form wie reward_catalog (70): haushaltsweit, Pflege durch
+    // Admin/Eltern, `active` statt Loeschen - gebuchte Ledger-Zeilen tragen
+    // ihren Text als Snapshot in `reason` und haengen nie als Fremdschluessel
+    // am Katalog (kein REFERENCES: ein geloeschter Eintrag darf keine Buchung
+    // gefaehrden).
+    //
+    // Die Vorlagen tragen denselben Rahmen wie die Straf-Route selbst
+    // (MAX_PENALTY = 100): eine Vorlage, deren Punkte die Vergabe nicht
+    // buchen kann, ist ein Regal mit kaputten Glaesern. Die CHECK-Spanne
+    // 1..100 haelt die Tabelle davon ab, Werte zu halten, die keine Route je
+    // annimmt; die Oberflaeche zeigt die 100 als Grenze.
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS reward_consequence_catalog (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          title       TEXT    NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+          points      INTEGER NOT NULL CHECK(points BETWEEN 1 AND 100),
+          description TEXT,
+          sort_order  INTEGER NOT NULL DEFAULT 0,
+          active      INTEGER NOT NULL DEFAULT 1,
+          created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+          updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_reward_consequence_catalog_active
+          ON reward_consequence_catalog(active, sort_order);
+      `);
+      // Nur in eine leere Tabelle: eine Familie, die den Katalog schon pflegt
+      // (zweiter Lauf, eingespielte Backups), bekommt keine Vorlagen doppelt.
+      const rows = database
+            .prepare('SELECT COUNT(*) AS n FROM reward_consequence_catalog').get().n;
+          // Idempotenter Nachtrag statt seed-in-leere-Tabelle: eine Familie, die den
+          // Katalog schon pflegt (seed lief schon durch), bekommt die neuen Vorlagen
+          // trotzdem - aber keine Familie bekommt eine Vorlage doppelt.
+          const insert = database.prepare(
+            'INSERT INTO reward_consequence_catalog (title, points, sort_order) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM reward_consequence_catalog WHERE title = ?)',
+          );
+          const run = (title, points, order) => insert.run(title, points, order, title);
+          {
+            const templates = [
+          // Schulnoten als Konsequenz: die Punkte groeesser als eine
+          // typische Aufgabenpraemie (1..5), damit die Note ins Gewicht
+          // faellt. 4- ist der milde Fall, 6 der schwerste - und bleibt
+          // weit unter den hartenFaellen (Luegen 20).
+          ['Note 4-', 4],
+          ['Note 5', 8],
+          ['Note 6', 15],
+          ['Hausaufgaben vergessen', 10],
+          ['Zimmer nicht aufgeraeumt', 5],
+          ['Unordnung im Bad', 5],
+          ['Nichts abgewaschen', 5],
+          ['Zu spaet nach Hause gekommen', 15],
+          ['Luegen', 20],
+          ['Streit ohne Streitkultur', 10],
+          ['Medienzeit ueberzogen', 10],
+          ['Handy beim Essen', 5],
+          ['Absage ohne Grund', 5],
+        ];
+        for (const [i, [title, points]] of templates.entries()) {
+          run(title, points, i);
+        }
+      }
+    },
+  },
 ];
 
 /**

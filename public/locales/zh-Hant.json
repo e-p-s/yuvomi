@@ -715,7 +715,9 @@
         "seriesDoneNamed": "「{{title}}」已完成 - 下次到期：{{date}}",
         "kanbanRestore": "恢復",
         "errorTagGone": "此標籤已不存在。",
-        "createdByDetail": "建立者：{{name}}"
+        "createdByDetail": "建立者：{{name}}",
+        "task_approval_admin_only": "只有管理員才能核准或拒絕任務。",
+        "task_approval_not_pending": "此任務當前未在等待核准。"
     },
     "shopping": {
         "itemsRemovedToast_one": "已刪除 {{count}} 件商品。",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "允許後果",
         "rewardsPenaltiesHint": "父母可以因不良行為扣分（房間不整齊、吼叫、晚睡）。原因必填，且僅小孩與父母可見；兄弟姊妹看不到。",
         "taskCreatedByVisibleLabel": "顯示建立者",
-        "taskCreatedByVisibleHint": "任務詳細頁會在任務記錄了建立者時顯示建立人。關閉時不顯示任何內容。"
+        "taskCreatedByVisibleHint": "任務詳細頁會在任務記錄了建立者時顯示建立人。關閉時不顯示任何內容。",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "歡迎回來。你的家，盡在一處。",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "撤回後果",
         "penaltyRetractedToast": "後果已撤回",
         "ledgerPenaltyRetracted": "後果已撤回",
-        "penaltyNoChild": "這個家庭還沒有小孩. 後果需要一個小孩作為對象。"
+        "penaltyNoChild": "這個家庭還沒有小孩. 後果需要一個小孩作為對象。",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "開啟日曆",
@@ -6873,5 +6900,19 @@
         "custom": "自訂顏色",
         "chooseCustom": "選擇自訂顏色",
         "standard": "預設顏色"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "螢幕時間請求不完整。",
+            "media_time_device_required": "此事件需要裝置，而不是帳戶。",
+            "media_time_disabled": "此家庭的螢幕時間已關閉。",
+            "media_time_forbidden": "你缺少此項的家长權限。",
+            "media_time_not_a_child": "螢幕時間僅適用於本家庭的孩子。",
+            "media_time_no_quota": "這個孩子今天沒有安排螢幕時間。",
+            "media_time_exchange_off": "此家庭目前關閉了積分兌換。",
+            "media_time_cap_reached": "今日的兌換螢幕時間已達上限。",
+            "media_time_insufficient_points": "積分不足以兌換所請求的螢幕時間。",
+            "media_time_unauthenticated": "此螢幕時間操作需要已登入的帳戶或裝置。"
+        }
     }
 }

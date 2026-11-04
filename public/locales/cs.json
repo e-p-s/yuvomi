@@ -778,7 +778,9 @@
         "seriesDoneNamed": "„{{title}}“ hotovo - příště: {{date}}",
         "kanbanRestore": "Obnovit",
         "errorTagGone": "Tento štítek už neexistuje.",
-        "createdByDetail": "Vytvořil {{name}}"
+        "createdByDetail": "Vytvořil {{name}}",
+        "task_approval_admin_only": "Úlohy schvaluje nebo zamítá pouze správce.",
+        "task_approval_not_pending": "Tento úkol zrovna nečeká na schválení."
     },
     "shopping": {
         "importMealsPreviewMeals_few": "{{count}} jídla",
@@ -3652,7 +3654,19 @@
         "rewardsPenaltiesLabel": "Povolit důsledky",
         "rewardsPenaltiesHint": "Rodiče mohou strhnout body za neposlušnost (nepořádek, křik, pozdě do postele). Důvod je povinný a zůstává viditelný dítěti a rodičům; sourozenci ho nevidí.",
         "taskCreatedByVisibleLabel": "Zobrazit tvůrce",
-        "taskCreatedByVisibleHint": "Detail úkolu uvádí osobu, která úkol vytvořila, pokud úkol tvůrce nese. Vypnuto nic nezobrazí."
+        "taskCreatedByVisibleHint": "Detail úkolu uvádí osobu, která úkol vytvořila, pokud úkol tvůrce nese. Vypnuto nic nezobrazí.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Vítejte zpět. Váš domov na jednom místě.",
@@ -6461,7 +6475,20 @@
         "penaltyRetract": "Vzít důsledek zpět",
         "penaltyRetractedToast": "Důsledek vzat zpět",
         "ledgerPenaltyRetracted": "Důsledek vzat zpět",
-        "penaltyNoChild": "V domácnosti zatím není žádné dítě. důsledek potřebuje dítě jako cíl."
+        "penaltyNoChild": "V domácnosti zatím není žádné dítě. důsledek potřebuje dítě jako cíl.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Otevřít kalendář",
@@ -7056,5 +7083,19 @@
         "custom": "Vlastní barva",
         "chooseCustom": "Vybrat vlastní barvu",
         "standard": "Výchozí barva"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "Žádost o čas u obrazovky byla neúplná.",
+            "media_time_device_required": "Tato událost potřebuje zařízení, ne účet.",
+            "media_time_disabled": "Čas u obrazovky je v této domácnosti vypnutý.",
+            "media_time_forbidden": "K tomu vám chybí práva rodiče.",
+            "media_time_not_a_child": "Čas u obrazovky platí jen pro děti v této domácnosti.",
+            "media_time_no_quota": "Toto dítě má na dnešek naplánovaný nulový čas u obrazovky.",
+            "media_time_exchange_off": "Výměna bodů je v této domácnosti právě vypnutá.",
+            "media_time_cap_reached": "Dnešní maximum směněného času u obrazovky je dosaženo.",
+            "media_time_insufficient_points": "Na požadovaný čas u obrazovky není dostatek bodů.",
+            "media_time_unauthenticated": "Tato akce média potřebuje přihlášený účet nebo zařízení."
+        }
     }
 }

@@ -34,6 +34,11 @@ const SCOPE_MODULES = [
   { key: 'documents',    prefixes: ['documents'] },
   { key: 'health',       prefixes: ['health'] },
   { key: 'rewards',      prefixes: ['rewards'] },
+  // Medienzeit: der Tracker laeuft mit eigenem media_time_devices-Token (ein
+  // api_tokens-Eintrag kind 'device'), die Scope-Regel gilt ihm nicht - sie
+  // griffe nur, wenn req.authScopes gesetzt waere. Die Verwaltungs-Pfade
+  // (/today, /quotas, /devices, ...) fragen dieses Modul.
+  { key: 'media_time',   prefixes: ['media-time'] },
   { key: 'housekeeping', prefixes: ['housekeeping'] },
   { key: 'waste',        prefixes: ['waste'] },
   { key: 'weather',      prefixes: ['weather'] },

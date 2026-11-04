@@ -715,7 +715,9 @@
         "seriesDoneNamed": "«{{title}}» utført - neste gang: {{date}}",
         "kanbanRestore": "Gjenopprett",
         "errorTagGone": "Denne etiketten finnes ikke lenger.",
-        "createdByDetail": "Opprettet av {{name}}"
+        "createdByDetail": "Opprettet av {{name}}",
+        "task_approval_admin_only": "Bare en administrator godkjenner eller avslar oppgaver.",
+        "task_approval_not_pending": "Denne oppgaven venter ikke pa godkjenning akkurat naa."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} vare slettet.",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "Tillat konsekvenser",
         "rewardsPenaltiesHint": "Foreldre kan trekke poenger for uønsket atferd (urerom, skriking, sengetid for seint). Årsaken er obligatorisk og vises for barnet og foreldrene; søsken ser den ikke.",
         "taskCreatedByVisibleLabel": "Vis oppretter",
-        "taskCreatedByVisibleHint": "Oppgavedetaljene navngir personen som opprettet oppgaven, når oppgaven har en oppretter. Avlåst viser den ingenting."
+        "taskCreatedByVisibleHint": "Oppgavedetaljene navngir personen som opprettet oppgaven, når oppgaven har en oppretter. Avlåst viser den ingenting.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Velkommen tilbake. Hjemmet ditt samlet på ett sted.",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "Trekk tilbake konsekvens",
         "penaltyRetractedToast": "Konsekvens trukket tilbake",
         "ledgerPenaltyRetracted": "Konsekvens trukket tilbake",
-        "penaltyNoChild": "Det finnes ingen barn i husstanden ennå. en konsekvens krever et barn som mål."
+        "penaltyNoChild": "Det finnes ingen barn i husstanden ennå. en konsekvens krever et barn som mål.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Åpne kalender",
@@ -6873,5 +6900,19 @@
         "custom": "Egen farge",
         "chooseCustom": "Velg egen farge",
         "standard": "Standardfarge"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "Skjermtidsforesporselen var ufullstendig.",
+            "media_time_device_required": "Denne hendelsen trenger en enhet, ikke en konto.",
+            "media_time_disabled": "Skjermtid er slaatt av i dette hjemmet.",
+            "media_time_forbidden": "Du mangler foreldrerettigheter for dette.",
+            "media_time_not_a_child": "Skjermtid gjelder bare for barn i dette hjemmet.",
+            "media_time_no_quota": "Dette barnet har ingen planlagt skjermtid i dag.",
+            "media_time_exchange_off": "Poengveksling er for tiden slaatt av i dette hjemmet.",
+            "media_time_cap_reached": "Maksimalt ombyttet skjermtid for i dag er naadd.",
+            "media_time_insufficient_points": "Det er ikke nok poeng til den onskede skjermtiden.",
+            "media_time_unauthenticated": "Denne skjermtidshandlingen trenger en pavlogget konto eller en enhet."
+        }
     }
 }

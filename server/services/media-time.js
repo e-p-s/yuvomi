@@ -1,0 +1,454 @@
+/**
+ * Modul: Medienzeit (Bildschirmzeit-Kontingente)
+ * Zweck: Die Regel-Engine hinter /api/v1/media-time (docs/medienzeit-konzept.md,
+ *        docs/medienzeit-android-tracker.md). Der Server ist die einzige
+ *        Autoritaet: ein Klient meldet Nutzung, erlauben entscheidet der Server.
+ *        Grundprinzip ist das Treuhender-Modell - Anreiz, kein Zwang. Es gibt
+ *        serverseitig keinen Sperrpfad, nur Antworten, die ein Klient zeigen kann.
+ * Abhaengigkeiten: better-sqlite3-Handle (synchron), wird vom Aufrufer uebergeben
+ *        (d-passing wie services/rewards.js).
+ *
+ * WARUM DIE KLASSIFIKATION FAIL-OPEN IST: ein unbekanntes Paket (neu
+ * installiert, anderer Fork mit anderem Paketnamen) darf nicht still
+ * Tageskontingent fressen - der Verdacht traefe das Kind zu Unrecht. Es wird
+ * als classification='unknown' gefuehrt und erscheint in GET /today als
+ * unknown_min; die Eltern entscheiden ("abziehen? / Ausnahme?"). Grobe
+ * Anomalie (> X h/Tag unbekannt) ist spaeter moeglich, ist hier nicht noetig.
+ *
+ * ROHDATEN WERDEN NIE RUECK-EDITIERT: started_at/ended_at/used_minutes bleiben,
+ * wie ein Geraet sie gemeldet hat. Aendert sich eine Ausnahme, wird die
+ * classification der betroffenen Sessions NEU berechnet (adjust-Philosophie wie
+ * reward_ledger: korrigieren, nicht radieren).
+ */
+
+import crypto from 'node:crypto';
+
+import { householdTimeZone, todayKey, utcToWall, daysBetweenDateKeys } from '../utils/timezone.js';
+
+/**
+ * Das Yuvomi-eigene Paket ist hart ausgenommen (fix, nicht loeschbar): das Kind
+ * oeffnet die App, um seinen Rest zu sehen - diese Zeit darf nie Kontingent
+ * kosten. Serverseitige Konstante, damit kein API-Aufruf sie entfernen kann.
+ */
+export const YUVOMI_PACKAGE = 'de.eps.yuvomi';
+
+/** Session-Quellen, die die Tabelle akzeptiert ('win' fuer den Windows-Agent). */
+export const MEDIA_TIME_SOURCES = Object.freeze(['apk', 'pwa', 'manual', 'adjust', 'backfill', 'win']);
+
+/** Minuten, ab denen der Klient "nearing" zeigen soll (unter 5 Rest). */
+export const NEARING_THRESHOLD_MIN = 5;
+
+/** Ein Sync nimmt maximal so viele Sessions pro Aufruf an (Puffer-Schutz). */
+export const MAX_SESSIONS_PER_SYNC = 200;
+
+/** Laufende Sessions ueber dieser Dauer kappen (Minuten): vergessenes Segment. */
+export const STALE_SESSION_CAP_MIN = 12 * 60;
+
+/** Online-Definition: ein Geraet gilt als online, wenn es <= 12 h gemeldet hat. */
+export const TRACKER_ONLINE_WINDOW_HOURS = 12;
+
+// Medienzeit: Praeferenz-Schluessel (sync_config) als einzige Wahrheit fuer
+// Server und UI. media_time_quiet_hours_global ist die GLOBALE
+// Haushalt-Ruhezeit ('HH:MM-HH:MM', Default leer/AUS) - sichtbar fuer alle
+// Haushaltsmitglieder als Signal, nie als Zwang. media_time_exchange_rate ist
+// EIN Kurs fuer den ganzen Haushalt ('points:minutes', z. B. '10:15'), nie pro
+// Kind. media_time_hard_cap ('1' Default = hart, '0' = kaufbar) entscheidet,
+// ob max_daily_minutes hart oder erstehbar ist. media_time_enabled ist das
+// Hauptregal des Haushalts (Default AUS).
+export const MEDIA_TIME_ENABLED_KEY = 'media_time_enabled';
+export const MEDIA_TIME_QUIET_HOURS_KEY = 'media_time_quiet_hours_global';
+export const MEDIA_TIME_EXCHANGE_RATE_KEY = 'media_time_exchange_rate';
+export const MEDIA_TIME_HARD_CAP_KEY = 'media_time_hard_cap';
+
+export function hashDeviceToken(token) {
+  return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
+}
+
+function isoNow() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/** Der Tag (YYYY-MM-DD) in Haushaltszone; die Geraetuhr ist dafuer egal. */
+export function mediaTimeDayKey(d, now = new Date()) {
+  return todayKey(d, now);
+}
+
+/**
+ * Haushaltsschalter media_time_enabled (sync_config, Default AUS): eine Familie
+ * ohne Medienzeit soll den ganzen Code-Pfad nie sehen muessen.
+ */
+export function mediaTimeEnabled(d) {
+  const row = d.prepare("SELECT value FROM sync_config WHERE key = 'media_time_enabled'").get();
+  return !!row && row.value === '1';
+}
+
+/**
+ * Die GLOBALE Haushalts-Ruhezeit (Praeferenz media_time_quiet_hours_global,
+ * 'HH:MM-HH:MM', Default leer/AUS). Entscheidung des Nutzers: die Ruhezeit ist
+ * GLOBAL pro Haushalt (nicht pro Kind) und sichtbar fuer ALLE
+ * Haushaltsmitglieder (Dashboard + Kindersicht zeigen 'Ruhezeit aktiv - noch
+ * X Min') - als Signal, nicht als Zwang.
+ * Ueberschreitet das Fenster Mitternacht (21:00-06:00), gilt es ueber den
+ * Tagwechsel hinweg.
+ */
+export function mediaTimeQuietWindow(d) {
+  const raw = d.prepare("SELECT value FROM sync_config WHERE key = 'media_time_quiet_hours_global'").get()?.value;
+  return parseQuietHours(raw);
+}
+
+/**
+ * Punktetausch: EIN Kurs fuer den ganzen Haushalt (Entscheidung 2: 'ein Kurs
+ * fuer alle') - nie pro Kind. Gespeichert als 'points:minutes'
+ * (z. B. '10:15' = 10 Punkte bringen 15 Minuten); leer/NULL = Tausch aus.
+ */
+export function mediaTimeExchangeRate(d) {
+  const raw = d.prepare("SELECT value FROM sync_config WHERE key = 'media_time_exchange_rate'").get()?.value;
+  return parseExchangeRate(raw);
+}
+
+/** 'points:minutes' parsen; null bei leer/ungueltig. */
+export function parseExchangeRate(raw) {
+  if (typeof raw !== 'string') return null;
+  const m = /^(\d{1,4}):(\d{1,4})$/.exec(raw.trim());
+  if (!m) return null;
+  const points = Number(m[1]);
+  const minutes = Number(m[2]);
+  if (points < 1 || minutes < 1 || minutes > 1440) return null;
+  return { points, minutes };
+}
+
+/**
+ * Harter Cap (Entscheidung 4, Schalter): media_time_hard_cap, Default HART
+ * ('1'). '0' = kaufbar: gekaufte Minuten heben den max_daily_minutes ueber
+ * den Tag hinaus an.
+ */
+export function mediaTimeHardCap(d) {
+  const row = d.prepare("SELECT value FROM sync_config WHERE key = 'media_time_hard_cap'").get();
+  return !row || row.value !== '0';
+}
+
+/** 'HH:MM-HH:MM' parsen; null bei leer/ungueltig. */
+export function parseQuietHours(raw) {
+  if (typeof raw !== 'string') return null;
+  const m = /^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/.exec(raw.trim());
+  if (!m) return null;
+  const [, fh, fm, th, tm] = m;
+  const from = `${fh}:${fm}`;
+  const to = `${th}:${tm}`;
+  if (+fh > 23 || +fm > 59 || +th > 23 || +tm > 59) return null;
+  return { from, to };
+}
+
+/** Steht der Haushalt gerade in der globalen Ruhezeit? (fur jede Antwort, die
+ * das Signal zeigen soll, unabhangig davon, wer fragt - Entscheidung 8.) */
+export function quietWindowActive(d, now = new Date()) {
+  const window = mediaTimeQuietWindow(d);
+  if (!window) return false;
+  return wallTimeInWindow(householdWallTime(d, now), window);
+}
+
+/** Ist eine Wanduhrzeit ('HH:MM') innerhalb des Quiet-Fensters? */
+function wallTimeInWindow(hhmm, { from, to }) {
+  if (from === to) return false;
+  return from < to
+    ? (hhmm >= from && hhmm < to)
+    : (hhmm >= from || hhmm < to);
+}
+
+/** Wanduhrzeit (HH:MM) der Haushaltszone fuer einen Zeitpunkt. */
+export function householdWallTime(d, now = new Date()) {
+  const iso = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
+  return utcToWall(iso, householdTimeZone(d))?.time ?? iso.slice(11, 16);
+}
+
+/**
+ * Geraet per Token suchen (Tracker-Pfade). Das Geraet muss einem Kind
+ * gehoeren - das Geraet selbst ist die Identitaet des Kindes. Revoked: null.
+ */
+export function deviceByTokenHash(d, tokenHash) {
+  if (typeof tokenHash !== 'string' || tokenHash.length !== 64) return null;
+  const row = d.prepare(`
+    SELECT dev.*, u.family_role, u.deactivated_at
+    FROM media_time_devices dev
+    JOIN users u ON u.id = dev.user_id
+    WHERE dev.device_token_hash = ? AND dev.revoked_at IS NULL
+  `).get(tokenHash);
+  if (!row || row.deactivated_at) return null;
+  return row;
+}
+
+/**
+ * Aktive Ausnahmen fuer ein Kind: Haushalts-Default (user_id NULL) plus die
+ * eigenen des Kindes. Sortiert fuer die Klassifikation: exact zuerst, dann
+ * prefix mit laengstem Pattern zuerst, dann glob.
+ */
+export function activeExceptionRules(d, userId) {
+  return d.prepare(`
+    SELECT * FROM media_time_app_exceptions
+    WHERE revoked_at IS NULL AND (user_id IS NULL OR user_id = ?)
+  `).all(userId);
+}
+
+/**
+ * Muster gegen einen Paketnamen. Saubere Patterns (nur [A-Za-z0-9._-]) werden
+ * per Stringvergleich entschieden; nur Patterns mit Glob-Zeichen brauchen die
+ * Regex (Uebersetzung: * -> .*, ? -> ., alles andere literal).
+ */
+export function packageMatches(rule, packageName) {
+  if (typeof packageName !== 'string' || packageName.length === 0) return false;
+  const pattern = String(rule.pattern ?? '');
+  if (rule.match_type === 'exact') return packageName === pattern;
+  if (rule.match_type === 'prefix') return packageName.startsWith(pattern);
+  if (/^[A-Za-z0-9._-]+$/.test(pattern)) {
+    if (pattern.includes('*')) {
+      const parts = pattern.split('*');
+      const re = new RegExp(`^${parts.map(escapeRegex).join('.*')}$`);
+      return re.test(packageName);
+    }
+    if (pattern.includes('?')) {
+      const re = new RegExp(`^${pattern.split('').map((c) => (c === '?' ? '.' : escapeRegex(c))).join('')}$`);
+      return re.test(packageName);
+    }
+    return packageName === pattern;
+  }
+  const re = new RegExp(`^${pattern.split(/([*?])/).map((p) => (p === '*' ? '.*' : p === '?' ? '.' : escapeRegex(p))).join('')}$`);
+  return re.test(packageName);
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Die Regel, die zuerst greift (exact > prefix lang > glob), oder null.
+ * "Laengster Prefix zuerst" ist hier hart kodiert: eine Ausnahme
+ * 'com.example.school' gewinnt gegen 'com.example', auch wenn die kuerzere
+ * zuerst angelegt wurde.
+ */
+export function matchExceptionRule(rules, packageName) {
+  if (!packageName) return null;
+  const rank = { exact: 0, prefix: 1, glob: 2 };
+  const sorted = [...rules].sort((a, b) =>
+    (rank[a.match_type] - rank[b.match_type])
+    || (String(b.pattern).length - String(a.pattern).length));
+  for (const rule of sorted) {
+    if (packageMatches(rule, packageName)) return rule;
+  }
+  return null;
+}
+
+/**
+ * Klassifikation einer gemeldeten Session bei Annahme:
+ *   1. Yuvomi-Paket -> 'exempt' (hart, ohne Zeile)
+ *   2. Exception-Match -> 'exempt' (exempt_from 'quota' oder 'history') oder
+ *      'charged' (Gegenrichtung: Eltern-UI-Bestaetigung "Ja, abziehen")
+ *   3. system_component=1 -> 'system' (fail-open, nie Abzug)
+ *   4. sonst 'unknown' (NIE still abziehen)
+ */
+export function classifySession(d, userId, { packageName, systemComponent }) {
+  if (packageName === YUVOMI_PACKAGE) {
+    return { classification: 'exempt', ruleId: null, exemptFrom: 'quota' };
+  }
+  const rules = activeExceptionRules(d, userId);
+  const rule = matchExceptionRule(rules, packageName);
+  if (rule) {
+    if (rule.exempt_from === 'charged') {
+      return { classification: 'charged', ruleId: rule.id, exemptFrom: 'charged' };
+    }
+    return { classification: 'exempt', ruleId: rule.id, exemptFrom: rule.exempt_from };
+  }
+  if (systemComponent) return { classification: 'system', ruleId: null, exemptFrom: 'system' };
+  return { classification: 'unknown', ruleId: null, exemptFrom: 'unknown' };
+}
+
+/**
+ * Kontingent-Berechnung fuer einen Tag.
+ * charged = Summe used_minutes aller Sessions des Tages mit
+ * classification='charged' (exceptions exempt/system/unknown sind draussen).
+ * Punktetausch: ein Kauf schreibt eine adjust-Session (classification
+ * 'exempt', used_minutes = die erkauften Minuten). Diese Minuten sind dem
+ * Kind GESCHENKT, nicht verbraucht - sie werden vom Verbrauch abgezogen.
+ * Der Rohwert der Zeile bleibt, wie er gemeldet wurde (nie rueck-editiert);
+ * die Rechenregel steht hier, nicht in der Tabelle.
+ * quota = daily_minutes der media_time_quotas (fehlende Zeile = 0 Min,
+ * enabled=0 = kein Kontingentspiel => state 'ok' ohne Abzugspflicht zeigen).
+ */
+export function dayUsage(d, userId, dayKey) {
+  const row = d.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN classification = 'charged' THEN used_minutes ELSE 0 END), 0) AS charged_min,
+      COALESCE(SUM(CASE WHEN classification = 'exempt' THEN used_minutes ELSE 0 END), 0) AS exempt_min,
+      COALESCE(SUM(CASE WHEN classification = 'system' THEN used_minutes ELSE 0 END), 0) AS system_min,
+      COALESCE(SUM(CASE WHEN classification = 'unknown' THEN used_minutes ELSE 0 END), 0) AS unknown_min
+    FROM media_time_sessions
+    WHERE user_id = ? AND minute_key = ? AND classification <> 'credit'
+  `).get(userId, dayKey);
+  return {
+    charged_min: row.charged_min,
+    exempt_min: row.exempt_min,
+    system_min: row.system_min,
+    unknown_min: row.unknown_min,
+  };
+}
+
+/**
+ * Gekaufte Minuten eines Tages: adjust-Sessions mit classification 'credit'
+ * (Punktetausch, Entscheidung 2 + 4). Sie erhoehen das Kontingent des Tages,
+ * sie sind kein Verbrauch - die Zeile traegt den Kauf als eigene Historie.
+ */
+export function dayCredit(d, userId, dayKey) {
+  const row = d.prepare(`
+    SELECT COALESCE(SUM(used_minutes), 0) AS credit_min
+    FROM media_time_sessions
+    WHERE user_id = ? AND minute_key = ? AND classification = 'credit'
+  `).get(userId, dayKey);
+  return row.credit_min;
+}
+
+export function quotaRow(d, userId) {
+  return d.prepare('SELECT * FROM media_time_quotas WHERE user_id = ?').get(userId) ?? null;
+}
+
+/**
+ * Der Zustand fuer einen Klienten (sync/heartbeat-Antwort und /today):
+ * state = 'quiet' (Zeitfenster aktiv) | 'exceeded' | 'nearing' | 'ok'.
+ * Quiet gewinnt - ein Fenster ist die haushaltweite Aussage "Bildschirmfreie
+ * Zeit", unabhaengig vom Rest.
+ */
+export function quotaState(d, userId, now = new Date()) {
+  const dayKey = mediaTimeDayKey(d, now);
+  const usage = dayUsage(d, userId, dayKey);
+  const quota = quotaRow(d, userId);
+  // Kontingent des Tages (Entscheidung 2 + 4): Basis daily_minutes plus
+  // gekaufte Minuten (adjust-Session mit classification 'credit'). Bei hartem
+  // Cap (media_time_hard_cap, Default) bleibt max_daily_minutes trotzdem die
+  // Obergrenze; bei kaufbarem Cap ('0') darf das Kontingent bis dorthin, oder
+  // ohne Cap offen, wachsen.
+  const base = quota && quota.enabled === 1 ? quota.daily_minutes : 0;
+  const credit = dayCredit(d, userId, dayKey);
+  const hardCap = mediaTimeHardCap(d);
+  let quotaMin = base + credit;
+  if (hardCap && quota && quota.max_daily_minutes != null) {
+    quotaMin = Math.min(quotaMin, quota.max_daily_minutes);
+  }
+  const remaining = Math.max(0, quotaMin - usage.charged_min);
+  const quiet = mediaTimeQuietWindow(d);
+  const quietActive = quiet ? wallTimeInWindow(householdWallTime(d, now), quiet) : false;
+  let state = 'ok';
+  if (quietActive) state = 'quiet';
+  else if (quotaMin > 0 && remaining <= 0) state = 'exceeded';
+  else if (quotaMin > 0 && remaining < NEARING_THRESHOLD_MIN) state = 'nearing';
+  return {
+    day: dayKey,
+    quota_min: quotaMin,
+    used_min: usage.charged_min,
+    remaining_min: remaining,
+    charged_min: usage.charged_min,
+    exempt_min: usage.exempt_min,
+    unknown_min: usage.unknown_min,
+    purchased_min: credit,
+    max_daily_minutes: quota?.max_daily_minutes ?? null,
+    hard_cap: hardCap,
+    quiet_active: quietActive,
+    state,
+  };
+}
+
+/**
+ * Klassifikation ALLER Sessions eines Kindes neu berechnen (nach
+ * Exception-Aenderung). Die Rohwerte bleiben; nur classification und
+ * exception_rule_id wandern. returns: Anzahl betroffener Zeilen.
+ */
+export function reclassifyForUser(d, userId) {
+  // package_name IS NULL faehlt hier bewusst NICHT als Ausschluss: eine
+  // Rohzeile ohne Paket ist per Definition 'unknown' (fail-open) und muss
+  // mitwandern, sobald eine Regel greift oder eine Regel zurueckgenommen
+  // wird - sonst bleibt die Klassifikation still stehen. Der Ausschluss
+  // waere ausserdem ein Loch gegenueber pruneRawSessions (das ohne
+  // Paket-Bedingung loescht): eine Session koennte aus der Neueklassifikation
+  // entkommen und trotzdem aus der Aufbewahrung fallen.
+  const rows = d.prepare(`
+    SELECT id, package_name, system_component, classification, exception_rule_id FROM media_time_sessions
+    WHERE user_id = ? AND classification <> 'credit'
+  `).all(userId);
+  const rules = activeExceptionRules(d, userId);
+  const write = d.prepare('UPDATE media_time_sessions SET classification = ?, exception_rule_id = ? WHERE id = ?');
+  let changed = 0;
+  for (const row of rows) {
+    let next = { classification: 'unknown', ruleId: null };
+    if (row.package_name === YUVOMI_PACKAGE) next = { classification: 'exempt', ruleId: null };
+    else {
+      const rule = matchExceptionRule(rules, row.package_name);
+      if (rule) {
+        next = rule.exempt_from === 'charged'
+          ? { classification: 'charged', ruleId: rule.id }
+          : { classification: 'exempt', ruleId: rule.id };
+      } else if (row.system_component) {
+        next = { classification: 'system', ruleId: null };
+      }
+    }
+    // 'changed' zaehlt NUR echte inhaltliche Wanderungen (Zeile 1: 'nur die
+    // Zeile mit dem unbekannten Paket wandert'). Ein Satz, der den Zustand nur
+    // bestaetigt oder die Regel-Id nachtraegt (exception_rule_id fehlte bei
+    // Erstanlage), ist keine Aenderung der Klassifikation und zaehlt nicht mit.
+    if (String(row.classification ?? '') !== String(next.classification)
+      || (row.exception_rule_id ?? null) !== (next.ruleId ?? null)) {
+      write.run(next.classification, next.ruleId, row.id);
+      changed += 1;
+    } else if ((row.exception_rule_id ?? null) === null && next.ruleId !== null) {
+      // Wertgleich, aber die Regel-Id kann fehlen (exact-Regel vor Erstanlage):
+      // sicherheitshalber schreiben, ohne dass es als Aenderung zaehlt.
+      write.run(next.classification, next.ruleId, row.id);
+    }
+  }
+  return changed;
+}
+
+/**
+ * Version der aktiven Ausnahmen fuer einen Klienten-Cache: eine Zahl, die sich
+ * bei jeder Anlegung/Ruecknahme aendert (max id, Revocations zaehlen mit).
+ * Deterministisch und guenstig.
+ */
+export function exceptionsVersion(d) {
+  const row = d.prepare(`
+    SELECT COALESCE(MAX(id), 0) AS max_id,
+           COALESCE(SUM(CASE WHEN revoked_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS revoked_n
+    FROM media_time_app_exceptions
+  `).get();
+  return row.max_id * 1000 + row.revoked_n;
+}
+
+/**
+ * Aufbewahrung der Rohzeiten (Entscheidung 6: Paket + Start/Ende, ~90 Tage).
+ * Loescht NUR Sessions aelter als der Aufbewahrungszeitraum (minute_key alt,
+ * created_at alt - beide, damit eine spaete Nachmeldung eines alten Tages
+ * nicht sofort faellt). Der Aggregat bleibt: dayUsage liest danach 0, und die
+ * Dashboard-Zahlen stehen in keiner Tabelle, die hiervon abhaengt. Laeuft bei
+ * Bedarf (Scheduler kann sie spaeter aufrufen); ein Lauf ist idempotent.
+ */
+export const RAW_RETENTION_DAYS = 90;
+
+export function pruneRawSessions(d, now = new Date()) {
+  const cutoff = new Date(now.getTime() - RAW_RETENTION_DAYS * 24 * 3600 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const cutoffDay = new Date(now.getTime() - RAW_RETENTION_DAYS * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const info = d.prepare(
+    "DELETE FROM media_time_sessions WHERE created_at < ? AND minute_key < ? AND classification <> 'credit'",
+  ).run(cutoff, cutoffDay);
+  return info.changes;
+}
+
+/** Tracker-Status fuer GET /today: letztes Geraet des Kindes, online-Flag. */
+export function trackerStatus(d, userId, now = new Date()) {
+  const device = d.prepare(`
+    SELECT last_seen_at FROM media_time_devices
+    WHERE user_id = ? AND revoked_at IS NULL
+    ORDER BY (last_seen_at IS NULL) ASC, last_seen_at DESC
+    LIMIT 1
+  `).get(userId);
+  let online = false;
+  if (device?.last_seen_at) {
+    const seen = new Date(device.last_seen_at).getTime();
+    online = Number.isFinite(seen) && (now.getTime() - seen) <= TRACKER_ONLINE_WINDOW_HOURS * 3600 * 1000;
+  }
+  return { last_seen_at: device?.last_seen_at ?? null, online };
+}

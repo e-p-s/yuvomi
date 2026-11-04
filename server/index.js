@@ -72,6 +72,7 @@ import splitExpensesRouter from './routes/split-expenses.js';
 import weatherRouter from './routes/weather.js';
 import preferencesRouter from './routes/preferences.js';
 import screensaverRouter from './routes/screensaver.js';
+import mediaTimeRouter from './routes/media-time.js';
 import remindersRouter from './routes/reminders.js';
 import searchRouter from './routes/search.js';
 import familyRouter from './routes/family.js';
@@ -824,6 +825,10 @@ app.use('/api/v1/documents/dms', dmsRouter);
 app.use('/api/v1/documents', documentsRouter);
 app.use('/api/v1/split-expenses', splitExpensesRouter);
 app.use('/api/v1/weather', weatherRouter);
+// Medienzeit (Bildschirmzeit-Kontingente): Tracker meldet per Gerate-Token,
+// Verwaltung per Session (Eltern/Admin). Server ist die Autoritaet, der Klient
+// meldet nur (docs/medienzeit-konzept.md).
+app.use('/api/v1/media-time', mediaTimeRouter);
 app.use('/api/v1/preferences', preferencesRouter);
 app.use('/api/v1/screensaver', screensaverRouter);
 app.use('/api/v1/reminders', remindersRouter);

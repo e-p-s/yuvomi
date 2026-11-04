@@ -733,7 +733,9 @@
         "seriesDoneNamed": "«{{title}}» انجام شد - دفعهٔ بعد: {{date}}",
         "kanbanRestore": "بازیابی",
         "errorTagGone": "این برچسب دیگر وجود ندارد.",
-        "createdByDetail": "ایجادشده توسط {{name}}"
+        "createdByDetail": "ایجادشده توسط {{name}}",
+        "task_approval_admin_only": "فقط مدیر وظایف را تأیید یا رد می‌کند.",
+        "task_approval_not_pending": "این وظيفة اکنون در انتظار تأیید نیست."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} مورد حذف شد.",
@@ -3551,7 +3553,19 @@
         "rewardsPenaltiesLabel": "اجازهٔ پیامدها",
         "rewardsPenaltiesHint": "والدین می‌توانند به‌خاطر بدرفتاری امتیاز کم کنند (اتاق نامرتب، داد و بیداد، دیر خوابیدن). دلیل الزامی است و برای کودک و والدین دیده می‌شود؛ خواهر و برادر آن را نمی‌بینند.",
         "taskCreatedByVisibleLabel": "نمایش ایجادکننده",
-        "taskCreatedByVisibleHint": "نمای جزئیات تسک نام کسی را که تسک را ایجاد کرده نشان می‌دهد، اگر تسک ایجادکننده داشته باشد. خاموش باشد چیزی نشان نمی‌دهد."
+        "taskCreatedByVisibleHint": "نمای جزئیات تسک نام کسی را که تسک را ایجاد کرده نشان می‌دهد، اگر تسک ایجادکننده داشته باشد. خاموش باشد چیزی نشان نمی‌دهد.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "دوباره خوش آمدید. خانهٔ شما در یک جا.",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "بازگرداندن پیامد",
         "penaltyRetractedToast": "پیامد بازگردانده شد",
         "ledgerPenaltyRetracted": "پیامد بازگردانده شد",
-        "penaltyNoChild": "هنوز کودکی در این خانه نیست. پیامد به یک کودک به‌عنوان هدف نیاز دارد."
+        "penaltyNoChild": "هنوز کودکی در این خانه نیست. پیامد به یک کودک به‌عنوان هدف نیاز دارد.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "باز کردن تقویم",
@@ -6873,5 +6900,19 @@
         "custom": "رنگ دلخواه",
         "chooseCustom": "انتخاب رنگ دلخواه",
         "standard": "رنگ پیش‌فرض"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "درخواست زمان صفحه کامل نبود.",
+            "media_time_device_required": "این رویداد به دستگاه نیاز دارد، نه حساب.",
+            "media_time_disabled": "زمان صفحه در این خانه خاموش است.",
+            "media_time_forbidden": "شما حقوق والدین برای این کار را ندارید.",
+            "media_time_not_a_child": "زمان صفحه فقط برای کودکان این خانه اعمال می‌شود.",
+            "media_time_no_quota": "برای این کودک امروز زمان صفحه‌ای برنامه‌ریزی نشده است.",
+            "media_time_exchange_off": "تعادل امتیازها در حال حاضر در این خانه خاموش است.",
+            "media_time_cap_reached": "حداکثر زمان صفحهٔ مبادله‌شدهٔ امروز رسیده است.",
+            "media_time_insufficient_points": "امتیاز کافی برای زمان صفحهٔ خواسته‌شده وجود ندارد.",
+            "media_time_unauthenticated": "این کنش زمان صفحه به حساب واردشده یا دستگاه نیاز دارد."
+        }
     }
 }

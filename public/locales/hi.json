@@ -715,7 +715,9 @@
         "seriesDoneNamed": "\"{{title}}\" पूर्ण - अगली बार: {{date}}",
         "kanbanRestore": "पुनर्स्थापित करें",
         "errorTagGone": "यह टैग अब मौजूद नहीं है।",
-        "createdByDetail": "{{name}} ने बनाया"
+        "createdByDetail": "{{name}} ने बनाया",
+        "task_approval_admin_only": "केवल प्रशासक कार्य को स्वीकृत या अस्वीकृत करते हैं।",
+        "task_approval_not_pending": "यह कार्य इस समय स्वीकृति की प्रतीक्षा में नहीं है।"
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} आइटम हटाया गया।",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "परिणाम की अनुमति दें",
         "rewardsPenaltiesHint": "अभिभावक खराब व्यवहार (बिखरा कमरा, चिल्लाना, देर से सोना) पर घटा सकते हैं। कारण अनिवार्य है और बच्चे व अभिभावकों को दिखता है; भाई-बहन नहीं देखते।",
         "taskCreatedByVisibleLabel": "बनाने वाला दिखाएँ",
-        "taskCreatedByVisibleHint": "कार्य विवरण दृश्य उस व्यक्ति का नाम दिखाता है जिसने कार्य बनाया, यदि कार्य में बनाने वाला दर्ज है। बंद रहने पर कुछ नहीं दिखता।"
+        "taskCreatedByVisibleHint": "कार्य विवरण दृश्य उस व्यक्ति का नाम दिखाता है जिसने कार्य बनाया, यदि कार्य में बनाने वाला दर्ज है। बंद रहने पर कुछ नहीं दिखता।",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "फिर से स्वागत है। आपका घर, एक ही जगह।",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "परिणाम वापस लें",
         "penaltyRetractedToast": "परिणाम वापस लिया गया",
         "ledgerPenaltyRetracted": "परिणाम वापस लिया गया",
-        "penaltyNoChild": "इस घर में अभी कोई बच्चा नहीं. परिणाम के लिए बच्चा चाहिए।"
+        "penaltyNoChild": "इस घर में अभी कोई बच्चा नहीं. परिणाम के लिए बच्चा चाहिए।",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "कैलेंडर खोलें",
@@ -6873,5 +6900,19 @@
         "custom": "अपना रंग",
         "chooseCustom": "अपना रंग चुनें",
         "standard": "डिफ़ॉल्ट रंग"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "स्क्रीन समय का अनुरोध अधूरा था।",
+            "media_time_device_required": "इस घटना के लिए खाते नहीं, उपकरण चाहिए।",
+            "media_time_disabled": "इस घर में स्क्रीन समय बंद है।",
+            "media_time_forbidden": "आपके पास इसके लिए अभिभावक अधिकार नहीं हैं।",
+            "media_time_not_a_child": "स्क्रीन समय केवल इस घर के बच्चों पर लागू होता है।",
+            "media_time_no_quota": "इस बच्चे के लिए आज कोई स्क्रीन समय निर्धारित नहीं है।",
+            "media_time_exchange_off": "इस घर में बिंदु विनिमय वर्तमान में बंद है।",
+            "media_time_cap_reached": "आज का exchanged स्क्रीन समय की अधिकतम सीमा पहुँच गई है।",
+            "media_time_insufficient_points": "अनुरोधित स्क्रीन समय के लिए पर्याप्त बिंदु नहीं हैं।",
+            "media_time_unauthenticated": "इस स्क्रीन समय क्रिया के लिए साइन-इन खाता या उपकरण चाहिए।"
+        }
     }
 }

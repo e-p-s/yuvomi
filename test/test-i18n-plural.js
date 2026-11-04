@@ -263,6 +263,7 @@ test('jede Pluralvariante hat einen zählenden Basisschlüssel in allen Locales'
  */
 const PLURAL_EXCEPTIONS = {
   // --- kein Substantiv nach der Zahl -------------------------------------
+  'rewards.ledgerLateDecayInsteadOf': 'NO_NOUN',
   'contacts.selectCount': 'NO_NOUN',
   'contacts.importSelectedStatus': 'NO_NOUN',
   'contacts.importDetailBirthday': 'NO_NOUN',

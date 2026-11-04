@@ -715,7 +715,9 @@
         "seriesDoneNamed": "«{{title}}» hecho - próxima vez: {{date}}",
         "kanbanRestore": "Restaurar",
         "errorTagGone": "Esta etiqueta ya no existe.",
-        "createdByDetail": "Creada por {{name}}"
+        "createdByDetail": "Creada por {{name}}",
+        "task_approval_admin_only": "Solo un administrador aprueba o rechaza tareas.",
+        "task_approval_not_pending": "Esta tarea no espera aprobación en este momento."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} artículo eliminado.",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "Permitir consecuencias",
         "rewardsPenaltiesHint": "Los padres pueden restar puntos por mal comportamiento (cuarto sin orden, gritos, acostarse tarde). El motivo es obligatorio y sigue visible para el niño y los padres; los hermanos no lo ven.",
         "taskCreatedByVisibleLabel": "Mostrar creador",
-        "taskCreatedByVisibleHint": "La vista de detalles de la tarea indica quién la creó, cuando la tarea tiene creador. Desactivada, no muestra nada."
+        "taskCreatedByVisibleHint": "La vista de detalles de la tarea indica quién la creó, cuando la tarea tiene creador. Desactivada, no muestra nada.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Bienvenido de nuevo. Tu hogar en un solo lugar.",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "Retirar consecuencia",
         "penaltyRetractedToast": "Consecuencia retirada",
         "ledgerPenaltyRetracted": "Consecuencia retirada",
-        "penaltyNoChild": "Aún no hay ningún niño en este hogar: la consecuencia necesita un niño como destino."
+        "penaltyNoChild": "Aún no hay ningún niño en este hogar: la consecuencia necesita un niño como destino.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Abrir calendario",
@@ -6873,5 +6900,19 @@
         "custom": "Color personalizado",
         "chooseCustom": "Elegir un color personalizado",
         "standard": "Color predeterminado"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "La solicitud de tiempo de pantalla estaba incompleta.",
+            "media_time_device_required": "Este evento necesita un dispositivo, no una cuenta.",
+            "media_time_disabled": "El tiempo de pantalla está desactivado en este hogar.",
+            "media_time_forbidden": "Te faltan los derechos de padre para esto.",
+            "media_time_not_a_child": "El tiempo de pantalla solo aplica a los niños de este hogar.",
+            "media_time_no_quota": "Este niño no tiene tiempo de pantalla previsto para hoy.",
+            "media_time_exchange_off": "El canje de puntos está desactivado actualmente en este hogar.",
+            "media_time_cap_reached": "Se alcanzó el máximo de tiempo de pantalla canjeado para hoy.",
+            "media_time_insufficient_points": "No hay suficientes puntos para el tiempo de pantalla solicitado.",
+            "media_time_unauthenticated": "Esta acción de tiempo de pantalla requiere una cuenta iniciada o un dispositivo."
+        }
     }
 }

@@ -1,12 +1,17 @@
 import { api } from '/api.js';
 import { t } from '/i18n.js';
-import { captureOpenContext, confirmModal, isModalContextCurrent } from '/components/modal.js';
+import { captureOpenContext, confirmModal, isModalContextCurrent, refocusAfterRender } from '/components/modal.js';
 import { settingRowHtml, settingSwitchRowHtml } from '/settings/components.js';
 import { getPreferences, savePreferences } from '/settings/preferences-cache.js';
 import { errorSentence } from '/utils/friendly-error.js';
+import { esc, REQUIRED_MARK } from '/utils/html.js';
 
 // Spiegelt MAX_POINTS in server/routes/tasks.js.
 const MAX_TASK_POINTS = 10000;
+// Spiegelt MAX_PENALTY in server/routes/rewards.js: der Katalog hort genau dort
+// auf, wo die Vergabe aufhoert - eine Vorlage ueber der Grenze waere ein Glas,
+// das kein Gast bekommt.
+const MAX_CONSEQUENCE_POINTS = 100;
 
 // KEIN AN/AUS-SCHALTER MEHR (Re-Critique 2026-09-27, A7 P1-3): "Belohnungen
 // aktivieren" stand hier UND in Aktive Module - zwei Schalter fuer denselben
@@ -76,6 +81,30 @@ function renderPage(container, preferences) {
         })}
       </div>
     </section>
+    <!-- KONSEQUENZEN-KATALOG (Migration 283): die Vorlagen hinter der
+         Straf-Vergabe. Unsichtbar, solange der Schalter oben aus ist - eine
+         Familie ohne Strafsystem pflegt kein Regal, das sie nie oeffnet. -->
+    <section class="settings-section" id="rewards-consequence-catalog" data-penalties-enabled="${preferences.rewards_penalties_enabled === true ? '1' : ''}" hidden>
+      <div class="row-carrier settings-group">
+        <div id="rewards-consequence-list" class="settings-consequence-list"
+             aria-label="${esc(t('settings.rewardsConsequenceListLabel'))}"></div>
+        <form class="settings-row-form" id="rewards-consequence-create-form" novalidate autocomplete="off">
+          <label class="form-label" for="rewards-consequence-title">${esc(t('settings.rewardsConsequenceAddLabel'))} ${REQUIRED_MARK}</label>
+          <div class="settings-consequence-create">
+            <input class="form-input" type="text" id="rewards-consequence-title"
+                   maxlength="120" required
+                   placeholder="${esc(t('settings.rewardsConsequenceAddPlaceholder'))}">
+            <input class="form-input" type="number" id="rewards-consequence-points" inputmode="numeric"
+                   min="1" max="${MAX_CONSEQUENCE_POINTS}" step="1" required
+                   aria-label="${esc(t('settings.rewardsConsequencePointsLabel'))} ${REQUIRED_MARK}">
+            <button type="submit" class="btn btn--secondary" id="rewards-consequence-create">
+              ${esc(t('settings.rewardsConsequenceAdd'))}
+            </button>
+          </div>
+          <div id="rewards-consequence-error" class="form-error" role="alert" hidden></div>
+        </form>
+      </div>
+    </section>
   `);
 }
 
@@ -115,6 +144,8 @@ function bindEvents(container, preferences) {
     try {
       await savePreferences({ rewards_penalties_enabled: penaltyToggle.checked });
       preferences.rewards_penalties_enabled = penaltyToggle.checked;
+      // Der Katalog folgt dem Schalter: aus ist das Regal zu, an geht es auf.
+      applyConsequenceVisibility(container, penaltyToggle.checked);
       window.yuvomi?.showToast(t('settings.rewardsSaved'), 'success');
     } catch (error) {
       penaltyToggle.checked = !penaltyToggle.checked;
@@ -141,6 +172,188 @@ function bindEvents(container, preferences) {
   });
 
   bindDefaultPoints(container, preferences);
+  bindConsequenceCatalog(container, preferences);
+}
+
+/** Der Katalogabschnitt haengt am Schalter: sichtbar nur, wenn Konsequenzen an sind. */
+function applyConsequenceVisibility(container, enabled) {
+  const section = container.querySelector('#rewards-consequence-catalog');
+  if (!section) return;
+  section.hidden = !enabled;
+}
+
+/**
+ * Konsequenzen-Katalog (Migration 283): Liste der Vorlagen mit Schalter
+ * (an/aus) und Losch-Knopf, dazu eine Zeile 'Eintrag anlegen'. Ladt nur, wenn
+ * der Schalter an ist - die Seite bleibt schnell, wo das Regal zu ist.
+ * Das Loeschen ist der Toggle-Pfad der Praemienpflege: der Schalter deaktiviert
+ * (sichtbar bleibt der Text), der Loesch-Knopf entfernt die Zeile.
+ */
+export function bindConsequenceCatalog(container, preferences) {
+  const section = container.querySelector('#rewards-consequence-catalog');
+  if (!section) return;
+  applyConsequenceVisibility(container, preferences.rewards_penalties_enabled === true);
+  if (preferences.rewards_penalties_enabled !== true) return;
+
+  const list = container.querySelector('#rewards-consequence-list');
+  const form = container.querySelector('#rewards-consequence-create-form');
+  const titleInput = container.querySelector('#rewards-consequence-title');
+  const pointsInput = container.querySelector('#rewards-consequence-points');
+  const errorEl = container.querySelector('#rewards-consequence-error');
+  if (!form || !titleInput || !pointsInput) return;
+
+  const showError = (message) => {
+    if (!errorEl) return;
+    errorEl.textContent = message;
+    errorEl.hidden = false;
+    // Das Feld war leer bzw. ungueltig: aria-invalid zeigt, wo es fehlt.
+    titleInput.setAttribute('aria-invalid', 'true');
+    pointsInput.setAttribute('aria-invalid', 'true');
+  };
+  const clearError = () => {
+    if (errorEl) errorEl.hidden = true;
+    titleInput.removeAttribute('aria-invalid');
+    pointsInput.removeAttribute('aria-invalid');
+  };
+
+  let items = [];
+
+  // Zeilen über die DOM-API, nicht als Markup-String: der Audit-Guard erlaubt
+  // kein innerHTML unter public/, und die Titel sind Haushalt-Eingaben.
+  function rowEl(item) {
+    const row = document.createElement('div');
+    row.className = 'settings-consequence-row';
+    row.dataset.id = String(item.id);
+
+    const title = document.createElement('span');
+    title.className = 'settings-consequence-title';
+    title.textContent = item.title;
+    row.appendChild(title);
+
+    const points = document.createElement('span');
+    points.className = 'settings-consequence-points';
+    points.textContent = String(Number(item.points));
+    row.appendChild(points);
+
+    const toggleLabel = document.createElement('label');
+    toggleLabel.className = 'toggle-row settings-consequence-toggle';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'rw-consequence-active';
+    box.dataset.id = String(item.id);
+    box.checked = Boolean(item.active);
+    box.setAttribute('aria-label', `${t('settings.rewardsConsequenceActiveLabel')} · ${item.title}`);
+    const boxHidden = document.createElement('span');
+    boxHidden.className = 'visually-hidden';
+    boxHidden.textContent = t('settings.rewardsConsequenceActiveLabel');
+    toggleLabel.append(box, boxHidden);
+    row.appendChild(toggleLabel);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn btn--ghost btn--sm rw-consequence-delete';
+    del.dataset.id = String(item.id);
+    del.setAttribute('aria-label', `${t('settings.rewardsConsequenceDelete')} · ${item.title}`);
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', 'trash-2');
+    icon.setAttribute('aria-hidden', 'true');
+    del.appendChild(icon);
+    row.appendChild(del);
+    return row;
+  }
+
+  function renderList() {
+    if (!list?.isConnected) return;
+    list.replaceChildren();
+    if (!items.length) {
+      const hint = document.createElement('p');
+      hint.className = 'form-hint';
+      hint.textContent = t('settings.rewardsConsequenceEmpty');
+      list.appendChild(hint);
+    } else {
+      for (const item of items) list.appendChild(rowEl(item));
+    }
+    list.querySelectorAll?.('.rw-consequence-active').forEach((box) => {
+      box.addEventListener('change', async () => {
+        box.disabled = true;
+        try {
+          const res = await api.post(`/rewards/consequences/${box.dataset.id}/toggle`);
+          const updated = res?.data;
+          items = items.map((it) => (it.id === updated?.id ? updated : it));
+          renderList();
+          refocusAfterRender();
+          window.yuvomi?.showToast(t('settings.rewardsConsequenceSaved'), 'success');
+        } catch (error) {
+          box.checked = !box.checked;
+          showError(errorSentence(error, 'settings.preferenceSaveFailed'));
+        } finally {
+          box.disabled = false;
+        }
+      });
+    });
+    list.querySelectorAll?.('.rw-consequence-delete').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const item = items.find((it) => String(it.id) === btn.dataset.id);
+        const confirmed = await confirmModal(t('settings.rewardsConsequenceDeleteConfirm'), {
+          confirmLabel: t('settings.rewardsConsequenceDelete'),
+          detail: item?.title ?? '',
+        });
+        if (!confirmed || !btn.isConnected) return;
+        btn.disabled = true;
+        try {
+          await api.delete(`/rewards/consequences/${btn.dataset.id}`);
+          items = items.filter((it) => String(it.id) !== btn.dataset.id);
+          renderList();
+          refocusAfterRender();
+          window.yuvomi?.showToast(t('settings.rewardsConsequenceDeleted'), 'success');
+        } catch (error) {
+          btn.disabled = false;
+          showError(errorSentence(error, 'settings.preferenceSaveFailed'));
+        }
+      });
+    });
+  }
+
+  async function load() {
+    try {
+      const res = await api.get('/rewards/consequences?all=1');
+      items = Array.isArray(res?.data) ? res.data : [];
+      renderList();
+      refocusAfterRender();
+    } catch {
+      // Ohne Liste bleibt das Anlegefeld bedienbar - die Vorlagen sind eine
+      // Erleichterung, keine Voraussetzung der Konsequenzen selbst.
+      renderList();
+      refocusAfterRender();
+    }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearError();
+    const title = String(titleInput.value ?? '').trim();
+    const points = Math.trunc(Number(pointsInput.value));
+    if (!title || title.length > 120 || !Number.isFinite(points) || points < 1 || points > MAX_CONSEQUENCE_POINTS) {
+      showError(t('settings.rewardsConsequenceInvalid', { max: MAX_CONSEQUENCE_POINTS }));
+      return;
+    }
+    const submit = container.querySelector('#rewards-consequence-create');
+    if (submit) submit.disabled = true;
+    try {
+      const res = await api.post('/rewards/consequences', { title, points });
+      if (res?.data) items = [...items, res.data];
+      titleInput.value = '';
+      pointsInput.value = '';
+      renderList();
+      window.yuvomi?.showToast(t('settings.rewardsConsequenceSaved'), 'success');
+    } catch (error) {
+      showError(errorSentence(error, 'settings.preferenceSaveFailed'));
+    } finally {
+      if (submit) submit.disabled = false;
+    }
+  });
+
+  load();
 }
 
 /**

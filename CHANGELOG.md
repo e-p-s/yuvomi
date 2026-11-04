@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   completion earned stands with the booking: later changes of the due date, the point value or the
   setting never rewrite booked amounts, and for every late earning the ledger shows the base it came
   from and how many days it was late.
+- **Consequence catalog (opt-in templates, with school grades).** The catalog
+  behind the "Konsequenz" button gets three grade entries on update: "Note 4-"
+  costs 4 points, "Note 5" costs 8, "Note 6" costs 15 - a bad grade costs more
+  than a single errand earns (typically 1-5), the six stays under "Luegen" (20).
+  Existing households get the new templates without losing their own (the
+  seed adds per title and never duplicates). Each template is editable right in
+  the dialog: the pencil on a chip opens title, points, active and delete, so
+  the catalog is managed where consequences are booked, migration 283.
 
 ## [2.85.0] - 2026-11-04
 

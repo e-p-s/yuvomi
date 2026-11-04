@@ -895,7 +895,9 @@
         "seriesDoneNamed": "تم إنجاز «{{title}}» - المرة القادمة: {{date}}",
         "kanbanRestore": "استعادة",
         "errorTagGone": "هذا الوسم لم يعد موجودًا.",
-        "createdByDetail": "أُنشئت بواسطة {{name}}"
+        "createdByDetail": "أُنشئت بواسطة {{name}}",
+        "task_approval_admin_only": "لا يوافق على المهام أو يرفضها إلا المدير.",
+        "task_approval_not_pending": "هذه المهمة لا تنتظر موافقة في هذه اللحظة."
     },
     "shopping": {
         "importMealsPreviewMeals_few": "{{count}} وجبات",
@@ -3876,7 +3878,19 @@
         "rewardsPenaltiesLabel": "السماح بالعقوبات",
         "rewardsPenaltiesHint": "يمكن للوالدين خصم نقاط عند سوء السلوك (غرفة غير مرتبة، صراخ، تأخر النوم). السبب إلزامي ويبقى ظاهرًا للطفل والوالدين؛ لا يراه الإخوة.",
         "taskCreatedByVisibleLabel": "إظهار المُنشئ",
-        "taskCreatedByVisibleHint": "تذكر صفحة تفاصيل المهمة الشخص الذي أنشأها عندما تكون المهمة ذات مُنشئ. عند تركها مغلقة لا تعرض شيئًا."
+        "taskCreatedByVisibleHint": "تذكر صفحة تفاصيل المهمة الشخص الذي أنشأها عندما تكون المهمة ذات مُنشئ. عند تركها مغلقة لا تعرض شيئًا.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "مرحبًا بعودتك. منزلك في مكان واحد.",
@@ -6754,7 +6768,20 @@
         "penaltyRetract": "سحب العقوبة",
         "penaltyRetractedToast": "تم سحب العقوبة",
         "ledgerPenaltyRetracted": "تم سحب العقوبة",
-        "penaltyNoChild": "لا يوجد طفل في هذا المنزل بعد. العقوبة تحتاج إلى طفل."
+        "penaltyNoChild": "لا يوجد طفل في هذا المنزل بعد. العقوبة تحتاج إلى طفل.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "فتح التقويم",
@@ -7391,5 +7418,19 @@
         "custom": "لون مخصص",
         "chooseCustom": "اختر لونًا مخصصًا",
         "standard": "اللون الافتراضي"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "كان طلب وقت الشاشة غير مكتمل.",
+            "media_time_device_required": "يحتاج هذا الحدث إلى جهاز، لا إلى حساب.",
+            "media_time_disabled": "وقت الشاشة متوقف في هذا المنزل.",
+            "media_time_forbidden": "تنقصك حقوق الوالدة لهذا الأمر.",
+            "media_time_not_a_child": "وقت الشاشة يسري فقط على أطفال هذا المنزل.",
+            "media_time_no_quota": "لا يوجد وقت شاشة مخطط لهذا الطفل اليوم.",
+            "media_time_exchange_off": "تبديل النقاط متوقف حاليًا في هذا المنزل.",
+            "media_time_cap_reached": "وصلت إلى الحد الأقصى لوقت الشاشة المبدّل اليوم.",
+            "media_time_insufficient_points": "لا توجد نقاط كافية لوقت الشاشة المطلوب.",
+            "media_time_unauthenticated": "يحتاج إجراء وقت الشاشة هذا إلى حساب مسجّل أو جهاز."
+        }
     }
 }

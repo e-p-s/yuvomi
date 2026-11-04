@@ -715,7 +715,9 @@
         "seriesDoneNamed": "“{{title}}” done - next due {{date}}",
         "kanbanRestore": "Restore",
         "errorTagGone": "This tag no longer exists.",
-        "createdByDetail": "Created by {{name}}"
+        "createdByDetail": "Created by {{name}}",
+        "task_approval_admin_only": "Only an administrator approves or rejects tasks.",
+        "task_approval_not_pending": "This task is not awaiting approval right now."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} item deleted.",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "Allow consequences",
         "rewardsPenaltiesHint": "Parents can deduct points for misbehaviour (untidy room, yelling, late bedtime). The reason is mandatory and stays visible to the child and parents; siblings do not see it.",
         "taskCreatedByVisibleLabel": "Show creator",
-        "taskCreatedByVisibleHint": "The task detail view names the person who created the task, when the task carries a creator. Left off, it shows nothing."
+        "taskCreatedByVisibleHint": "The task detail view names the person who created the task, when the task carries a creator. Left off, it shows nothing.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Welcome back. Your home in one place.",
@@ -6305,7 +6319,20 @@
             "ritual": "Bedtime ritual (rambamba)",
             "other": "Other"
         },
-        "penaltyNoChild": "No child exists in this household yet. a consequence needs a child as its target."
+        "penaltyNoChild": "No child exists in this household yet. a consequence needs a child as its target.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Open calendar",
@@ -6873,5 +6900,19 @@
         "custom": "Custom color",
         "chooseCustom": "Choose a custom color",
         "standard": "Default color"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "The screen time request was incomplete.",
+            "media_time_device_required": "This event needs a device, not an account.",
+            "media_time_disabled": "Screen time is turned off in this household.",
+            "media_time_forbidden": "You lack the parent rights for this.",
+            "media_time_not_a_child": "Screen time applies only to children in this household.",
+            "media_time_no_quota": "This child has no screen time planned for today.",
+            "media_time_exchange_off": "Point exchange is currently turned off in this household.",
+            "media_time_cap_reached": "The maximum exchanged screen time for today is reached.",
+            "media_time_insufficient_points": "There are not enough points for the requested screen time.",
+            "media_time_unauthenticated": "This screen time action needs a signed-in account or a device."
+        }
     }
 }

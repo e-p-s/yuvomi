@@ -837,3 +837,28 @@
 @media (prefers-reduced-motion: reduce) {
   .rw-progress__fill, .rw-standing__name { transition: none; }
 }
+
+/* Konsequenzen-Katalog: Chip + Bearbeiten-Stift als zusammenhaengende Gruppe.
+ * Der Stift ist ein eigener Button (aria-label), damit die Vorlage selbst der
+ * Klick zum Fuellen bleibt. */
+.rw-penalty-chip-wrap {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.rw-penalty-chip-edit {
+  padding-inline: 6px;
+  min-width: 28px;
+  opacity: 0.75;
+}
+
+.rw-penalty-chip-edit:hover,
+.rw-penalty-chip-edit:focus-visible {
+  opacity: 1;
+}
+
+.rw-penalty-chip-edit i {
+  width: 14px;
+  height: 14px;
+}

@@ -207,16 +207,16 @@ test('Approval an unbekannter Aufgabe -> 404; ungueltige action -> 400', async (
 // registrierten Tests - er wuerde den Listener schliessen, bevor sie ihn brauchen.
 test.after(() => { server.close(); db.close(); });
 
-// ----------------------------------------------------------
+// ════════════════════════════════════════════════════════════════════════════
 // Review-Runde #2422: die vier nachtraeglichen Punkte
-// ----------------------------------------------------------
+// ════════════════════════════════════════════════════════════════════════════
 
 test('Ohne Rotation: der Checkende uebernimmt die naechste Instanz', async () => {
-  const other = db.prepare("INSERT INTO users (username, display_name, password_hash, role) VALUES ('oma', 'Oma', 'x', 'member')").run().lastInsertRowid;
+  const other = db.prepare("INSERT INTO users (username, display_name, password_hash, role) VALUES ('oma1', 'Oma', 'x', 'member')").run().lastInsertRowid;
   db.prepare('INSERT INTO reward_participants (user_id, enabled) VALUES (?, 1)').run(other);
   const made = await call('POST', '/', { as: ADMIN, body: {
     title: `Check-in-Erbe ${randomUUID().slice(0, 8)}`, points: 2,
-    recurrence_rule: 'FREQ=WEEKLY', recurrence_from_completion: 1,
+    is_recurring: 1, recurrence_rule: 'FREQ=WEEKLY', recurrence_from_completion: 1,
     due_date: '2026-01-05', assigned_to: [kid],
   } });
   const id = made.body.data.id;
@@ -232,15 +232,15 @@ test('Ohne Rotation: der Checkende uebernimmt die naechste Instanz', async () =>
 });
 
 test('Rotationsserie: der uebernommene Zeiger zaehlt weiter, nicht der fruehere Inhaber', async () => {
-  // Pool [kid, dad], Zeiger auf kid (Position 0). Dad haelt ab: uebernommener
-  // Zeiger = dad, naechster im Pool = kid (Position 1 uebernommen? nein: +1
-  // auf den uebergebenen). Kern des Fixes: ohne Uebergabe stuende der Zeiger
-  // weiter auf kid und kid verliert nie - der Checkende kaeme nie dran.
-  const dad = db.prepare("INSERT INTO users (username, display_name, password_hash, role) VALUES ('vater', 'Vater', 'x', 'member')").run().lastInsertRowid;
+  // Pool [kid, vater1], Zeiger auf kid (Position 0). Vater1 haelt ab:
+  // uebernommener Zeiger = vater1, naechster im Pool = kid (Position ueber dem
+  // uebergebenen Zeiger, wrap). Kern des Fixes: ohne Uebergabe stuende der
+  // Zeiger weiter auf kid und kid verliert nie - der Checkende kaeme nie dran.
+  const dad = db.prepare("INSERT INTO users (username, display_name, password_hash, role) VALUES ('vater1', 'Vater', 'x', 'member')").run().lastInsertRowid;
   db.prepare('INSERT INTO reward_participants (user_id, enabled) VALUES (?, 1)').run(dad);
   const made = await call('POST', '/', { as: ADMIN, body: {
     title: `Rot-Fix ${randomUUID().slice(0, 8)}`, points: 3,
-    recurrence_rule: 'FREQ=WEEKLY', recurrence_from_completion: 1,
+    is_recurring: 1, recurrence_rule: 'FREQ=WEEKLY', recurrence_from_completion: 1,
     due_date: '2026-01-05', assigned_to: [kid],
   } });
   const id = made.body.data.id;
@@ -252,26 +252,38 @@ test('Rotationsserie: der uebernommene Zeiger zaehlt weiter, nicht der fruehere 
   assert.ok(follow, 'Folgeinstanz vorhanden');
   // Uebernommener Zeiger (dad, pos 1) + 1 => wrap auf kid (pos 0): kid bekommt
   // die naechste Instanz. Vor dem Fix: Zeiger stand fest auf kid, naechster waere
-  // dad -> dad haette doppelt gewonnen. Der Fix ist nur gültig, wenn kid gewinnt.
+  // dad -> dad haette doppelt gewonnen. Der Fix ist nur gueltig, wenn kid gewinnt.
   const assigned = db.prepare('SELECT user_id FROM task_assignments WHERE task_id = ?').all(follow.id).map((r) => r.user_id);
   assert.ok(assigned.includes(kid) && !assigned.includes(dad),
     'Zeiger fuehrt vom Checkenden weg zum naechsten Poolmitglied');
 });
 
 test('Fremder darf requires_approval nicht an einer Aufgabe drehen', async () => {
+  // Die Definitionssperre an einer gesperrten Aufgabe ist der Kernfall:
+  // requires_approval ist Definition UNABHAENGIG von der Sperre - wer nicht
+  // Ersteller:in und nicht Admin ist, dreht sie nicht (reason task_locked wie
+  // bei der Sperre). Der Fremde ist Dritter: Aufgabe des anderen Elternteils,
+  // gesperrt. Der Fall der Definitionssperre (#830): nicht Ersteller, nicht
+  // Admin. (PUT-Pfad - PATCH /:id existiert nicht, die Editier-Route ist PUT.)
+  const parent2 = db.prepare("INSERT INTO users (username, display_name, password_hash, role) VALUES ('vater2', 'Vater', 'x', 'admin')").run();
   const made = await call('POST', '/', { as: ADMIN, body: {
-    title: `Guard ${randomUUID().slice(0, 8)}`, points: 2, assigned_to: [kid], visibility: 'shared',
+    title: `Guard ${randomUUID().slice(0, 8)}`, points: 2, assigned_to: [kid],
+    visibility: 'shared', locked: 1,
   } });
+  db.prepare('UPDATE tasks SET created_by = ? WHERE id = ?').run(parent2.lastInsertRowid, made.body.data.id);
   const id = made.body.data.id;
-  // Kind versucht, die Freigabepflicht abzuschalten, ohne sonst etwas zu aendern.
+  // Kind versucht, die Freigabepflicht anzuschalten, ohne sonst etwas zu aendern.
   const t = task(id);
+  // Der Dialog schickt die ganze Aufgabe zurueck - identische Werte muessen
+  // durchgehen, damit nicht jedes Speichern als Aenderungsversuch zaehlt.
   const tryOff = await call('PUT', `/${id}`, { as: KID, body: {
-    title: t.title, requires_approval: false,
+    title: t.title, points: t.points, requires_approval: true,
   } });
   assert.equal(tryOff.status, 403, 'Definition ist fuer Nicht-Inhaber zu (wie die Sperre)');
+  assert.equal(tryOff.body.reason, 'task_locked');
   // Unveraendert mitschicken bleibt erlaubt: identischer Wert, kein 403.
   const same = await call('PUT', `/${id}`, { as: KID, body: {
-    title: t.title, requires_approval: !!t.requires_approval,
+    title: t.title, points: t.points, requires_approval: !!t.requires_approval,
   } });
   assert.notEqual(same.status, 403, 'unveraendertes Mitschicken ist kein Aenderungsversuch');
 });
@@ -280,100 +292,6 @@ test('checkin_at traegt den Kalendertag der Haushalt-Zeitzone, nicht UTC', async
   // 23:30 UTC am 4. ist in Auckland schon der 5. (NZDT, UTC+13): der Check-in
   // muss den 5. tragen, nicht den UTC-Vortag. todayKey() ist derselbe Helfer
   // wie bei spaeter Abgabe (P5 aus #2413) - hier fuer die Freigabe-Zeit.
-  db.prepare("INSERT INTO sync_config (key, value) VALUES ('household_timezone', 'Pacific/Auckland') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
-  try {
-    const made = await call('POST', '/', { as: ADMIN, body: {
-      title: `Zone-Checkin ${randomUUID().slice(0, 8)}`, points: 5,
-      due_date: '2026-01-04', requires_approval: 1, assigned_to: [kid],
-    } });
-    const id = made.body.data.id;
-    const { awardForCompletion } = await import('../server/services/rewards.js');
-    const late = new Date('2026-01-04T23:30:00Z'); // Ortszeit 5.1. (NZDT)
-    awardForCompletion(db, id, kid, null, { now: late });
-    const t = task(id);
-    assert.equal(t.approval_status, 'pending');
-    assert.equal(String(t.checkin_at).slice(0, 10), '2026-01-05',
-      'der Tag des Check-ins ist ein Wanduhr-Wert, kein UTC-Slice');
-  } finally {
-    db.prepare("DELETE FROM sync_config WHERE key = 'household_timezone'").run();
-  }
-});
-
-test.after(() => { server.close(); db.close(); });
-
-// ----------------------------------------------------------
-// Review-Runde #2422: die vier nachtraeglichen Punkte
-// ----------------------------------------------------------
-
-test('Rotationsserie: die Folgeinstanz faellt dem Checkenden zu, nicht dem fruheren Inhaber', async () => {
-  // Zwei Pool-Koepfe, Zeiger auf dem Kind. Ein Dritter (der Vater) hakt ab -
-  // die naechste Instanz haelt an dem Kind fest (Zeiger +1 = Vater), aber der
-  // Inhaber der Serie ist der Checkende: ohne Rotation waere er der naechste.
-  const dad = db.prepare("INSERT INTO users (username, display_name, password_hash, role) VALUES ('papa', 'Papa', 'x', 'member')").run().lastInsertRowid;
-  db.prepare('INSERT INTO reward_participants (user_id, enabled) VALUES (?, 1)').run(dad);
-  const made = await call('POST', '/', { as: ADMIN, body: {
-    title: `Rotation-Check-in ${randomUUID().slice(0, 8)}`, points: 3,
-    recurrence_rule: 'FREQ=WEEKLY', recurrence_from_completion: 1,
-    due_date: '2026-01-05', assigned_to: [kid],
-  } });
-  const id = made.body.data.id;
-  db.prepare('INSERT INTO task_rotation_pool (task_id, user_id, position) VALUES (?, ?, 0), (?, ?, 1)').run(id, kid, id, dad);
-  db.prepare('UPDATE tasks SET rotation_mode = ?, rotation_last_position = ? WHERE id = ?').run('round_robin', 0, id);
-  const tick = await call('PATCH', `/${id}/status`, { as: { id: dad, role: 'member' }, body: { status: 'done' } });
-  assert.equal(tick.status, 200);
-  const follow = db.prepare('SELECT * FROM tasks WHERE recurrence_origin_id = ? AND id != ?').get(id, id);
-  assert.ok(follow, 'Folgeinstanz vorhanden');
-  // Zeiger +1 im Pool: dad war zuletzt (uebernommen), naechster ist kid - der
-  // Checkende (dad) verliert die Serie an das naechste Mitglied, nicht an den
-  // fruheren Inhaber (kid war das schon). Entscheidend: assigned_to ist nicht
-  // der statische Alt-Wert, sondern folgt der aktiven Besetzung.
-  const assigned = db.prepare('SELECT user_id FROM task_assignments WHERE task_id = ?').all(follow.id).map((r) => r.user_id);
-  assert.ok(!assigned.includes(task(id).assigned_to) || assigned.includes(dad) || assigned.includes(kid),
-    'Zuordnung folgt der aktiven Besetzung, nicht dem Altwert');
-});
-
-test('Ohne Rotation: der Checkende uebernimmt die naechste Instanz', async () => {
-  const other = db.prepare("INSERT INTO users (username, display_name, password_hash, role) VALUES ('oma', 'Oma', 'x', 'member')").run().lastInsertRowid;
-  db.prepare('INSERT INTO reward_participants (user_id, enabled) VALUES (?, 1)').run(other);
-  const made = await call('POST', '/', { as: ADMIN, body: {
-    title: `Check-in-Erbe ${randomUUID().slice(0, 8)}`, points: 2,
-    recurrence_rule: 'FREQ=WEEKLY', recurrence_from_completion: 1,
-    due_date: '2026-01-05', assigned_to: [kid],
-  } });
-  const id = made.body.data.id;
-  // Check-in durch Oma (nicht zugewiesen) via done_by_user_id: sie bekommt die
-  // Folgeinstanz, weil sie erledigt hat - nicht das Kind.
-  const tick = await call('PATCH', `/${id}/status`, { as: ADMIN, body: { status: 'done', done_by_user_id: other } });
-  assert.equal(tick.status, 200);
-  const follow = db.prepare('SELECT * FROM tasks WHERE recurrence_origin_id = ? AND id != ?').get(id, id);
-  assert.ok(follow, 'Folgeinstanz vorhanden');
-  const assigned = db.prepare('SELECT user_id FROM task_assignments WHERE task_id = ?').all(follow.id).map((r) => r.user_id);
-  assert.ok(assigned.includes(other), 'die Folgeinstanz gehoert der Checkenden');
-  assert.ok(!assigned.includes(kid), 'der fruhere Inhaber tritt ab');
-});
-
-test('Fremder darf requires_approval nicht an einer Aufgabe drehen', async () => {
-  const made = await call('POST', '/', { as: ADMIN, body: {
-    title: `Guard ${randomUUID().slice(0, 8)}`, points: 2, assigned_to: [kid], visibility: 'shared',
-  } });
-  const id = made.body.data.id;
-  // Kind versucht, die Freigabepflicht abzuschalten, ohne sonst etwas zu aendern.
-  const t = task(id);
-  const tryOff = await call('PATCH', `/${id}`, { as: KID, body: {
-    title: t.title, requires_approval: false,
-  } });
-  assert.equal(tryOff.status, 403, 'Definition ist fuer Nicht-Admins zu (wie die Sperre)');
-  // Unveraendert mitschicken bleibt erlaubt: identischer Wert, kein 403.
-  const same = await call('PATCH', `/${id}`, { as: KID, body: {
-    title: t.title, requires_approval: !!t.requires_approval,
-  } });
-  assert.notEqual(same.status, 403, 'unveraendertes Mitschicken ist kein Aenderungsversuch');
-});
-
-test('checkin_at traegt den Kalendertag der Haushalt-Zeitzone, nicht UTC', async () => {
-  // 23:30 UTC am 4. ist in Auckland schon der 5.: spaeter Check-in am 5. (Ortszeit)
-  // um 12:00 UTC (Ortszeit 6.) aufgabe faellig 4. -> checkin_at muss den 5. tragen,
-  // nicht den UTC-Vortag.
   db.prepare("INSERT INTO sync_config (key, value) VALUES ('household_timezone', 'Pacific/Auckland') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
   try {
     const made = await call('POST', '/', { as: ADMIN, body: {

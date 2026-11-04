@@ -673,6 +673,14 @@ router.get('/', (req, res) => {
         // Strafsystem soll den Schalter nie sehen muessen (umgekehrte Logik
         // zum approval-Schalter, der per Default an ist).
         rewards_penalties_enabled: cfgGet('rewards_penalties_enabled') === '1',
+        // Medienzeit (Bildschirmzeit-Kontingente): Default AUS - eine Familie
+        // ohne Medienzeit soll den Schalter nie sehen muessen (dieselbe
+        // umgekehrte Logik wie bei den Konsequenzen). Der Tracker liest ihn
+        // bei jedem Sync; aus ist der ganze Zweig 403.
+        media_time_enabled: cfgGet('media_time_enabled') === '1',
+        media_time_quiet_hours_global: cfgGet('media_time_quiet_hours_global') || null,
+        media_time_exchange_rate: cfgGet('media_time_exchange_rate') || null,
+        media_time_hard_cap: cfgGet('media_time_hard_cap') !== '0',
         tasks_subtasks_expanded: cfgGet('tasks_subtasks_expanded') === '1',
         tasks_default_points: parseTaskDefaultPoints(cfgGet('tasks_default_points')),
         countdown_grace_days: parseCountdownGraceDays(cfgGet('countdown_grace_days')),
@@ -755,7 +763,7 @@ router.put('/', (req, res) => {
   try {
     database = db.get();
     database.exec('BEGIN');
-    const { visible_meal_types, meal_type_names, currency, date_format, time_format, week_start, region, timezone, timezone_hint_dismissed, language, app_name, dashboard_widgets, dashboard_today_glance, dashboard_widgets_phone, dashboard_widgets_default, dashboard_today_glance_default, disabled_modules, hidden_modules, module_order, mobile_nav_order, housekeeping_payment_tasks, budget_mode, calendar_default_duration, calendar_default_reminders, calendar_default_assign_me, calendar_default_target, health_cycle_enabled, health_cycle_enabled_user, health_prevention_notify_caregivers, rewards_require_approval, rewards_penalties_enabled, tasks_subtasks_expanded, tasks_default_points, tasks_default_target, tasks_default_visibility, tasks_default_locked, tasks_late_decay_enabled, task_created_by_visible, schedule_hidden_templates, countdown_grace_days, weather_provider, weather_lat, weather_lon, weather_city, weather_units, weather_auto_locate, weather_user, holiday_country, holiday_subdivision, holiday_group, holiday_show_public, holiday_show_school, holiday_public_color, holiday_school_color } = req.body;
+    const { visible_meal_types, meal_type_names, currency, date_format, time_format, week_start, region, timezone, timezone_hint_dismissed, language, app_name, dashboard_widgets, dashboard_today_glance, dashboard_widgets_phone, dashboard_widgets_default, dashboard_today_glance_default, disabled_modules, hidden_modules, module_order, mobile_nav_order, housekeeping_payment_tasks, budget_mode, calendar_default_duration, calendar_default_reminders, calendar_default_assign_me, calendar_default_target, health_cycle_enabled, health_cycle_enabled_user, health_prevention_notify_caregivers, rewards_require_approval, rewards_penalties_enabled, media_time_enabled, media_time_quiet_hours_global, media_time_exchange_rate, media_time_hard_cap, tasks_subtasks_expanded, tasks_default_points, tasks_default_target, tasks_default_visibility, tasks_default_locked, tasks_late_decay_enabled, task_created_by_visible, schedule_hidden_templates, countdown_grace_days, weather_provider, weather_lat, weather_lon, weather_city, weather_units, weather_auto_locate, weather_user, holiday_country, holiday_subdivision, holiday_group, holiday_show_public, holiday_show_school, holiday_public_color, holiday_school_color } = req.body;
 
     // Welche Quickstart-Vorlagen der Schichtplan-Schnellstart zeigt - wie
     // disabled_modules haushaltweit und admin-only, nicht wie hidden_modules
@@ -1257,6 +1265,73 @@ router.put('/', (req, res) => {
       cfgSet('rewards_penalties_enabled', rewards_penalties_enabled ? '1' : '0');
     }
 
+    // Medienzeit: derselbe Haushaltsschalter-Stil wie rewards_penalties_enabled,
+    // Default AUS (Admin-only, echtes Bool).
+    if (media_time_enabled !== undefined) {
+      if (!isAdminRequest(req)) {
+        return res.status(403).json({ error: 'Admin access required.', code: 403 });
+      }
+      if (typeof media_time_enabled !== 'boolean') {
+        return res.status(400).json({ error: 'media_time_enabled must be a boolean', code: 400 });
+      }
+      cfgSet('media_time_enabled', media_time_enabled ? '1' : '0');
+    }
+
+    // Medienzeit-Ruhezeit: GLOBALE Haushalt-Ruhezeit (Entscheidung: ruhig gilt
+    // fuer alle, nie pro Kind) im Stil 'HH:MM-HH:MM', Default leer/AUS.
+    if (media_time_quiet_hours_global !== undefined) {
+      if (!isAdminRequest(req)) {
+        return res.status(403).json({ error: 'Admin access required.', code: 403 });
+      }
+      if (media_time_quiet_hours_global === null || media_time_quiet_hours_global === '') {
+        cfgSet('media_time_quiet_hours_global', '');
+      } else {
+        if (typeof media_time_quiet_hours_global !== 'string'
+          || !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(media_time_quiet_hours_global)) {
+          return res.status(400).json({ error: 'media_time_quiet_hours_global must be "HH:MM-HH:MM" or null', code: 400 });
+        }
+        const [fh, fm, th, tm] = media_time_quiet_hours_global.split(/[-:]/).map(Number);
+        if (fh > 23 || fm > 59 || th > 23 || tm > 59) {
+          return res.status(400).json({ error: 'media_time_quiet_hours_global must be "HH:MM-HH:MM" or null', code: 400 });
+        }
+        cfgSet('media_time_quiet_hours_global', media_time_quiet_hours_global);
+      }
+    }
+
+    // Medienzeit-Punktetausch: EIN Kurs fuer den ganzen Haushalt (Entscheidung:
+    // ein Preis fuer alle) im Stil 'points:minutes' (z. B. '10:15'), Default
+    // leer = Tausch aus.
+    if (media_time_exchange_rate !== undefined) {
+      if (!isAdminRequest(req)) {
+        return res.status(403).json({ error: 'Admin access required.', code: 403 });
+      }
+      if (media_time_exchange_rate === null || media_time_exchange_rate === '') {
+        cfgSet('media_time_exchange_rate', '');
+      } else {
+        if (typeof media_time_exchange_rate !== 'string'
+          || !/^\d{1,4}:\d{1,4}$/.test(media_time_exchange_rate)) {
+          return res.status(400).json({ error: 'media_time_exchange_rate must be "points:minutes" or null', code: 400 });
+        }
+        const [pts, mins] = media_time_exchange_rate.split(':').map(Number);
+        if (pts < 1 || mins < 1 || mins > 1440) {
+          return res.status(400).json({ error: 'media_time_exchange_rate must be "points:minutes" or null', code: 400 });
+        }
+        cfgSet('media_time_exchange_rate', media_time_exchange_rate);
+      }
+    }
+
+    // Medienzeit-Cap: hart oder kaufbar (Entscheidung: einstellbarer Schalter,
+    // Default hart). true = max_daily_minutes ist Endstation.
+    if (media_time_hard_cap !== undefined) {
+      if (!isAdminRequest(req)) {
+        return res.status(403).json({ error: 'Admin access required.', code: 403 });
+      }
+      if (typeof media_time_hard_cap !== 'boolean') {
+        return res.status(400).json({ error: 'media_time_hard_cap must be a boolean', code: 400 });
+      }
+      cfgSet('media_time_hard_cap', media_time_hard_cap ? '1' : '0');
+    }
+
     // Ersteller-Anzeige an der Aufgabe: Default AUS - dieselbe Haushaltsschalter-
     // Form wie rewards_penalties_enabled, Admin-only, echtes Bool als Antwort.
     if (task_created_by_visible !== undefined) {
@@ -1572,6 +1647,14 @@ router.put('/', (req, res) => {
         // Strafsystem soll den Schalter nie sehen muessen (umgekehrte Logik
         // zum approval-Schalter, der per Default an ist).
         rewards_penalties_enabled: cfgGet('rewards_penalties_enabled') === '1',
+        // Medienzeit (Bildschirmzeit-Kontingente): Default AUS - eine Familie
+        // ohne Medienzeit soll den Schalter nie sehen muessen (dieselbe
+        // umgekehrte Logik wie bei den Konsequenzen). Der Tracker liest ihn
+        // bei jedem Sync; aus ist der ganze Zweig 403.
+        media_time_enabled: cfgGet('media_time_enabled') === '1',
+        media_time_quiet_hours_global: cfgGet('media_time_quiet_hours_global') || null,
+        media_time_exchange_rate: cfgGet('media_time_exchange_rate') || null,
+        media_time_hard_cap: cfgGet('media_time_hard_cap') !== '0',
         tasks_subtasks_expanded: cfgGet('tasks_subtasks_expanded') === '1',
         tasks_default_points: parseTaskDefaultPoints(cfgGet('tasks_default_points')),
         countdown_grace_days: parseCountdownGraceDays(cfgGet('countdown_grace_days')),

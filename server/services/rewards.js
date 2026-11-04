@@ -307,7 +307,7 @@ function lateDecay(d, task, today) {
  * @param {Date}   [opts.now]  Ersetzbar für Tests - Zeitpunkt der Buchung UND
  *                             der Tag, an dem der Serien-Deckel misst.
  */
-export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null, { now = new Date(), asAdmin = false } = {}) {
+export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null, { now = new Date(), asAdmin = false, completedOn = null } = {}) {
   const task = d.prepare('SELECT id, points, title, recurrence_series_id, due_date, requires_approval FROM tasks WHERE id = ?').get(taskId);
   // Freigabe-Pflicht: ein Check-in durch Nicht-Admins bucht nichts, er meldet
   // die Aufgabe nur zur Bestaetigung an (`approval_status = 'pending'`). Der
@@ -321,7 +321,11 @@ export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null,
     // eingecheckt - die Freigabe entscheidet ueber die Punkte dieses Menschen.
     const checkinBy = doneByUserId ?? actingUserId;
     if (!asAdmin) {
-      d.prepare("UPDATE tasks SET approval_status = 'pending', checkin_at = ?, checkin_by_user_id = ?, reject_note = NULL, approved_by = NULL, approved_at = NULL WHERE id = ?").run(stamp, checkinBy, taskId);
+      // checkin_at traegt den Wanduhr-Tag der Haushalt-Zeitzone (todayKey),
+      // nicht den UTC-Stempel: oestlich von UTC ist der UTC-Slice einen Tag zu
+      // frueh. Die Freigabe-UI und die Punkte (P5 spaeter Abgabe) lesen denselben
+      // Tag - beide muessen sich auf ihn verlassen koennen.
+      d.prepare("UPDATE tasks SET approval_status = 'pending', checkin_at = ?, checkin_by_user_id = ?, reject_note = NULL, approved_by = NULL, approved_at = NULL WHERE id = ?").run(`${todayKey(d, now)}T${stamp.slice(11)}`, checkinBy, taskId);
       return;
     }
     d.prepare("UPDATE tasks SET approval_status = 'approved', approved_by = ?, approved_at = ?, checkin_at = ?, reject_note = NULL WHERE id = ?").run(actingUserId || null, stamp, stamp, taskId);
@@ -337,7 +341,9 @@ export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null,
     const series = seriesOfTask(d, task);
     const zone = householdTimeZone(d);
     const today = todayKey(d, now);
-    const decay = lateDecay(d, task, today);
+    // Spaete Bestaetigung: der Spaetabzug bemisst am Check-in-Tag, nicht am
+    // Bestaetigungstag (die Freigabe aendert nichts daran, wann erledigt wurde).
+    const decay = lateDecay(d, task, completedOn ?? today);
     const since = ledgerTimestamp(new Date(now.getTime() - SERIES_LOOKBACK_MS));
     for (const uid of new Set(targets)) {
       if (net.get(taskId, uid).net > 0) continue;

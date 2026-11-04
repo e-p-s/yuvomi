@@ -349,6 +349,141 @@ const taskInputProperties = {
   },
 };
 
+// Medienzeit (Bildschirmzeit-Kontingente): Praeferenz-Schluessel in sync_config
+// als einzige Wahrheit. media_time_quiet_hours_global ist die GLOBALE
+// Haushalt-Ruhezeit ('HH:MM-HH:MM', Default leer/AUS) - sichtbar fuer alle
+// Haushaltsmitglieder als Signal, nie als Zwang. media_time_exchange_rate ist
+// EIN Kurs fuer den ganzen Haushalt ('points:minutes', z. B. '10:15'), nie pro
+// Kind. media_time_hard_cap ('1' Default = hart, '0' = kaufbar) entscheidet,
+// ob max_daily_minutes hart oder erstehbar ist. media_time_enabled ist das
+// Hauptregal des Haushalts (Default AUS).
+
+// Medienzeit (Bildschirmzeit-Kontingente): die Antwortfelder der Routen, flach
+// wie taskProperties - ein erzeugtes Modell soll keine verschachtelten Teile
+// bekommen. server/routes/media-time.js ist die Quelle jedes Feldes.
+// Die Regex-Muster liegen in Konstanten, damit kein Backslash durch einen
+// Editier-Loop laufen muss.
+const MT_TIME_RE = '^[0-9]{2}:[0-9]{2}$';
+const MT_RANGE_RE = '^[0-9]{2}:[0-9]{2}-[0-9]{2}:[0-9]{2}$';
+const MT_RATE_RE = '^[0-9]{1,4}:[0-9]{1,4}$';
+
+export const mediaTimeProperties = {
+  user_id: { type: 'integer', description: 'The child the row belongs to.' },
+  day: isoDay('The household calendar day the numbers stand for (set server-side, never by the device clock).'),
+  enabled: { type: 'boolean', description: 'Whether the household has media time switched on.' },
+  quota_min: { type: 'integer', minimum: 0, description: 'Minutes allowed today: the daily quota plus bought minutes, up to the cap when the cap is hard.' },
+  used_min: { type: 'integer', minimum: 0, description: 'Charged minutes used today.' },
+  remaining_min: { type: 'integer', minimum: 0, description: 'quota_min minus used_min, floored at 0.' },
+  charged_min: { type: 'integer', minimum: 0, description: 'Sum of usage minutes classified as charged.' },
+  exempt_min: { type: 'integer', minimum: 0, description: 'Usage minutes of app exceptions (never charged, still visible in history).' },
+  unknown_min: { type: 'integer', minimum: 0, description: 'Usage minutes of packages no rule covers. Fail-open: never charged; the parents decide from here.' },
+  purchased_min: { type: 'integer', minimum: 0, description: 'Minutes bought with points today (they raise quota_min instead of counting as usage).' },
+  max_daily_minutes: { type: ['integer', 'null'], minimum: 0, maximum: 1440, description: 'The per-child daily cap, null when uncapped.' },
+  hard_cap: { type: 'boolean', description: 'Whether the household treats the cap as final (true) or as buyable up to (false).' },
+  quiet: {
+    type: ['object', 'null'],
+    description: 'The GLOBAL household quiet window (media_time_quiet_hours_global), visible to every member as a signal, never as a lock. Null when off.',
+    properties: {
+      from: { type: 'string', pattern: MT_TIME_RE, description: 'Start, wall clock HH:MM.' },
+      to: { type: 'string', pattern: MT_TIME_RE, description: 'End, wall clock HH:MM; before the start means it crosses midnight.' },
+    },
+  },
+  quiet_active: { type: 'boolean', description: 'Whether the quiet window covers the current household wall time.' },
+  exchange: {
+    type: ['object', 'null'],
+    description: 'The ONE household exchange rate (points buy minutes for every child the same way), null when the exchange is off.',
+    properties: {
+      points: { type: 'integer', minimum: 1, description: 'Points the household asks for one block.' },
+      minutes: { type: 'integer', minimum: 1, maximum: 1440, description: 'Minutes the block adds to the day.' },
+    },
+  },
+  state: {
+    type: 'string',
+    enum: ['ok', 'nearing', 'exceeded', 'quiet'],
+    description: 'What a tracker shows: under five minutes left is nearing; the quiet window wins over everything. A signal, never an enforced block.',
+  },
+  tracker: {
+    type: 'object',
+    description: 'The tracker of the child: when its device last reported and whether it counts as online (within 12 hours).',
+    properties: {
+      last_seen_at: { type: ['string', 'null'], format: 'date-time', description: 'UTC instant of the last report, null when the device never reported.' },
+      online: { type: 'boolean', description: 'True when a device of this child reported within the last 12 hours.' },
+    },
+  },
+  accepted: { type: 'integer', minimum: 0, description: 'Sessions stored or updated by this sync.' },
+  rejected: {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        session_key: { type: ['string', 'null'], description: 'The key of the refused session.' },
+        reason: { type: 'string', description: 'Why it was refused (a reason code, e.g. media_time_bad_request).' },
+      },
+    },
+    description: 'Sessions this sync refused, with the reason per key.',
+  },
+  server_day: isoDay('The household day the server counts right now - the client clock is never the authority.'),
+  server_time: utcStamp('UTC instant of the answer, to the second (clock_offset reference).'),
+  exceptions_version: { type: 'integer', minimum: 0, description: 'Changes with every exception upsert and revoke: the client cache invalidates on it.' },
+  version: { type: 'integer', minimum: 0, description: 'Exception rules version after the change.' },
+  ok: { type: 'boolean', description: 'Heartbeat recorded.' },
+  items: {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer' },
+        user_id: { type: ['integer', 'null'], description: 'Null is the household default: the rule applies to every child.' },
+        match_type: { type: 'string', enum: ['exact', 'prefix', 'glob'] },
+        pattern: { type: 'string', description: 'Package name or pattern (glob: * and ?).' },
+        exempt_from: { type: 'string', enum: ['quota', 'history', 'charged'], description: 'quota never charged but visible in history, history out of charge and evaluation, charged the parent confirmed charging.' },
+        note: { type: ['string', 'null'] },
+        created_at: utcStamp('UTC instant of creation, to the second.'),
+      },
+    },
+  },
+  daily_minutes: { type: 'integer', minimum: 0, maximum: 1440, description: 'Base minutes per day for this child.' },
+  updated_at: utcStamp('UTC instant of the last change, to the second.'),
+  updated_by: { type: ['integer', 'null'], description: 'Who set it last.' },
+  display_name: { type: 'string' },
+  username: { type: 'string' },
+  purchase_id: { type: 'string', description: 'Stands in the ledger reason (media_time:<purchase_id>) and in the session key of the credit row.' },
+  minutes: { type: 'integer', minimum: 1, description: 'Minutes the purchase adds to the day.' },
+  points_spent: { type: 'integer', minimum: 1, description: 'Points booked off the ledger.' },
+  id: { type: 'integer' },
+  name: { type: 'string' },
+  platform: { type: ['string', 'null'] },
+  last_seen_at: { type: ['string', 'null'], format: 'date-time', description: 'UTC instant of the last device report.' },
+  revoked_at: { type: ['string', 'null'], format: 'date-time', description: 'Set on revoke instead of deleting.' },
+  created_at: utcStamp('UTC instant of creation, to the second.'),
+  token: { type: 'string', description: 'The device token, present exactly once: on creation.' },
+  note: { type: ['string', 'null'] },
+  revoked: { type: 'boolean' },
+  package_name: { type: 'string' },
+  version_name: { type: ['string', 'null'] },
+  system_app: { type: 'integer', enum: [0, 1] },
+  first_seen_at: utcStamp('UTC instant the package first appeared on the device.'),
+  first_install_estimate: { type: ['string', 'null'], description: 'Best effort from the device, may be null.' },
+  session_key: { type: 'string', description: 'Idempotency key of the session (unique per device).' },
+  minute_key: isoDay('Household day of the session, set server-side at arrival.'),
+  started_at: { type: 'string', description: 'Device-local ISO8601 with offset; only its difference to ended_at matters.' },
+  ended_at: { type: ['string', 'null'], description: 'Null while the segment runs (a heartbeat extends it; the server caps running segments at 12 hours).' },
+  used_minutes: { type: 'integer', minimum: 0, description: 'Minutes of the segment as reported.' },
+  reported_by: { type: ['integer', 'null'], description: 'Whose account booked it.' },
+  retention_days: { type: 'integer', minimum: 1, description: 'Days raw session rows (package, start, end) are kept before pruning; aggregates stay.' },
+  range: { type: ['string', 'null'], pattern: MT_RANGE_RE, description: 'Quiet window "HH:MM-HH:MM", null when off.' },
+  wall_time: { type: 'string', pattern: MT_TIME_RE, description: 'Current household wall-clock time (HH:MM).' },
+};
+
+const mediaTimeQuotaFields = {
+  user_id: mediaTimeProperties.user_id,
+  daily_minutes: mediaTimeProperties.daily_minutes,
+  max_daily_minutes: mediaTimeProperties.max_daily_minutes,
+  enabled: { type: 'integer', enum: [0, 1], description: '0 suspends the quota without deleting it.' },
+  updated_at: mediaTimeProperties.updated_at,
+  updated_by: mediaTimeProperties.updated_by,
+};
+
 export const schemas = {
         CalendarImportInput: {
           type: 'object',
@@ -3623,5 +3758,324 @@ export const schemas = {
         },
         WasteMappingProfileImportCommitResponse: {
           type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/WasteMappingProfileImportCommitResult' } },
+        },
+        // ------------------------------------------------------------------
+        // Medienzeit (server/routes/media-time.js): Felder aus mediaTimeProperties.
+        // ------------------------------------------------------------------
+        MediaTimeQuota: {
+          type: 'object',
+          required: ['user_id', 'daily_minutes', 'enabled'],
+          properties: mediaTimeQuotaFields,
+        },
+        MediaTimeQuotaListResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeQuota' } } },
+        },
+        MediaTimeQuotaResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeQuota' } },
+        },
+        MediaTimeQuotaInput: {
+          type: 'object',
+          required: ['daily_minutes'],
+          properties: {
+            daily_minutes: { type: 'integer', minimum: 0, maximum: 1440 },
+            max_daily_minutes: { type: ['integer', 'null'], minimum: 0, maximum: 1440 },
+            enabled: { type: 'integer', enum: [0, 1] },
+          },
+        },
+        MediaTimeTodayData: {
+          type: 'object',
+          required: ['user_id', 'day', 'enabled', 'quota_min', 'used_min', 'remaining_min',
+            'charged_min', 'exempt_min', 'unknown_min', 'quiet_active', 'state', 'tracker'],
+          properties: {
+            user_id: mediaTimeProperties.user_id,
+            day: mediaTimeProperties.day,
+            enabled: mediaTimeProperties.enabled,
+            quota_min: mediaTimeProperties.quota_min,
+            used_min: mediaTimeProperties.used_min,
+            remaining_min: mediaTimeProperties.remaining_min,
+            charged_min: mediaTimeProperties.charged_min,
+            exempt_min: mediaTimeProperties.exempt_min,
+            unknown_min: mediaTimeProperties.unknown_min,
+            purchased_min: mediaTimeProperties.purchased_min,
+            max_daily_minutes: mediaTimeProperties.max_daily_minutes,
+            hard_cap: mediaTimeProperties.hard_cap,
+            quiet: mediaTimeProperties.quiet,
+            quiet_active: mediaTimeProperties.quiet_active,
+            exchange: mediaTimeProperties.exchange,
+            state: mediaTimeProperties.state,
+            wall_time: mediaTimeProperties.wall_time,
+            tracker: mediaTimeProperties.tracker,
+          },
+        },
+        MediaTimeTodayResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeTodayData' } },
+        },
+        MediaTimeQuotaState: {
+          type: 'object',
+          required: ['remaining_min', 'used_min', 'state'],
+          properties: {
+            remaining_min: mediaTimeProperties.remaining_min,
+            used_min: mediaTimeProperties.used_min,
+            quota_min: mediaTimeProperties.quota_min,
+            quiet_active: mediaTimeProperties.quiet_active,
+            state: mediaTimeProperties.state,
+          },
+        },
+        MediaTimeTrackerSyncInput: {
+          type: 'object',
+          description: 'Sessions of the tracker, replayed by the client. session_key is the idempotency key (unique per device).',
+          properties: {
+            device_time: { type: ['string', 'null'], description: 'Device-local ISO8601 with offset, informational only.' },
+            sessions: {
+              type: 'array',
+              maxItems: 200,
+              items: {
+                type: 'object',
+                required: ['session_key', 'started_at'],
+                properties: {
+                  session_key: { type: 'string', maxLength: 200 },
+                  package: { type: ['string', 'null'], maxLength: 200 },
+                  app_label: { type: ['string', 'null'], maxLength: 200 },
+                  started_at: { type: 'string', description: 'Device-local ISO8601 with offset.' },
+                  ended_at: { type: ['string', 'null'], description: 'Null while the segment runs.' },
+                  foreground_ms: { type: 'integer', minimum: 0, description: 'Active foreground milliseconds (clipped by the client).' },
+                  screen_on_ms: { type: 'integer', minimum: 0, description: 'Overlap with screen-on time; informational, never the charge basis.' },
+                  kind: { type: 'string', enum: ['foreground', 'screen_on', 'service'], description: 'Only foreground can ever be charged.' },
+                  system: { type: 'integer', enum: [0, 1], description: '1 for launcher/phone/settings-style components: implicit exception, never charged.' },
+                },
+              },
+            },
+            inventory_delta: {
+              type: ['array', 'null'],
+              items: {
+                type: 'object',
+                required: ['package'],
+                properties: {
+                  package: { type: 'string', maxLength: 200 },
+                  version_name: { type: ['string', 'null'], maxLength: 100 },
+                  system_app: { type: 'integer', enum: [0, 1] },
+                  first_install_estimate: { type: ['string', 'null'] },
+                },
+              },
+            },
+          },
+        },
+        MediaTimeTrackerSyncData: {
+          type: 'object',
+          required: ['accepted', 'rejected', 'server_day', 'server_time', 'quota', 'exceptions_version'],
+          properties: {
+            accepted: mediaTimeProperties.accepted,
+            rejected: mediaTimeProperties.rejected,
+            server_day: mediaTimeProperties.server_day,
+            server_time: mediaTimeProperties.server_time,
+            quota: { $ref: '#/components/schemas/MediaTimeQuotaState' },
+            exceptions_version: mediaTimeProperties.exceptions_version,
+          },
+        },
+        MediaTimeTrackerSyncResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeTrackerSyncData' } },
+        },
+        MediaTimeTrackerHeartbeatInput: {
+          type: 'object',
+          required: ['session_key'],
+          properties: {
+            session_key: { type: 'string', maxLength: 200 },
+            package: { type: ['string', 'null'], maxLength: 200 },
+            used_minutes: { type: 'integer', minimum: 0, description: 'Minutes so far; the higher of stored and sent wins.' },
+            running: { type: 'boolean', description: 'Informational: the segment is still open.' },
+          },
+        },
+        MediaTimeHeartbeatData: {
+          type: 'object',
+          required: ['ok', 'quota'],
+          properties: {
+            ok: mediaTimeProperties.ok,
+            quota: { $ref: '#/components/schemas/MediaTimeQuotaState' },
+          },
+        },
+        MediaTimeHeartbeatResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeHeartbeatData' } },
+        },
+        MediaTimeExceptionsListData: {
+          type: 'object',
+          required: ['items', 'version'],
+          properties: {
+            items: mediaTimeProperties.items,
+            version: mediaTimeProperties.version,
+          },
+        },
+        MediaTimeExceptionsListResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeExceptionsListData' } },
+        },
+        MediaTimeExceptionUpsert: {
+          type: 'object',
+          required: ['match_type', 'pattern'],
+          properties: {
+            user_id: { type: ['integer', 'null'], description: 'Null is the household default for every child.' },
+            match_type: { type: 'string', enum: ['exact', 'prefix', 'glob'] },
+            pattern: { type: 'string', minLength: 1, maxLength: 200 },
+            exempt_from: { type: 'string', enum: ['quota', 'history', 'charged'], description: 'Default quota. The Yuvomi app package cannot be listed.' },
+            note: { type: ['string', 'null'], maxLength: 500 },
+          },
+        },
+        MediaTimeExceptionsPutInput: {
+          type: 'object',
+          properties: {
+            upsert: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeExceptionUpsert' } },
+            revoke: { type: 'array', items: { type: 'integer' }, description: 'Ids to revoke; revoking sets revoked_at, nothing is deleted.' },
+          },
+        },
+        MediaTimeExceptionsVersionResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { type: 'object', required: ['version'], properties: { version: mediaTimeProperties.version } } },
+        },
+        MediaTimeQuietHoursData: {
+          type: 'object',
+          required: ['enabled', 'range'],
+          properties: {
+            enabled: { type: 'boolean' },
+            range: mediaTimeProperties.range,
+            active_now: mediaTimeProperties.quiet_active,
+          },
+        },
+        MediaTimeQuietHoursResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeQuietHoursData' } },
+        },
+        MediaTimeQuietHoursInput: {
+          type: 'object',
+          required: ['range'],
+          properties: { range: mediaTimeProperties.range },
+        },
+        MediaTimeSettingsData: {
+          type: 'object',
+          required: ['enabled', 'hard_cap'],
+          properties: {
+            enabled: mediaTimeProperties.enabled,
+            exchange: mediaTimeProperties.exchange,
+            hard_cap: mediaTimeProperties.hard_cap,
+            retention_days: mediaTimeProperties.retention_days,
+          },
+        },
+        MediaTimeSettingsResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeSettingsData' } },
+        },
+        MediaTimeSettingsInput: {
+          type: 'object',
+          properties: {
+            exchange: {
+              description: 'ONE rate for the whole household: "points:minutes" (e.g. "10:15"), {points, minutes}, or null/empty to turn the exchange off.',
+              oneOf: [
+                { type: 'string', pattern: '^\\d{1,4}:\\d{1,4}$' },
+                { type: 'null' },
+                { type: 'object', required: ['points', 'minutes'], properties: { points: { type: 'integer', minimum: 1 }, minutes: { type: 'integer', minimum: 1, maximum: 1440 } } },
+              ],
+            },
+            hard_cap: { type: 'boolean', description: 'Default true: max_daily_minutes is final. False: it can be bought up to.' },
+          },
+        },
+        MediaTimePurchaseInput: {
+          type: 'object',
+          properties: {
+            user_id: { type: ['integer', 'null'], description: 'A child, parents/admin only; defaults to the caller.' },
+            quantity: { type: 'integer', minimum: 1, maximum: 100, description: 'Blocks at the household rate, default 1.' },
+          },
+        },
+        MediaTimePurchaseData: {
+          type: 'object',
+          required: ['purchase_id', 'minutes', 'points_spent', 'quota'],
+          properties: {
+            purchase_id: mediaTimeProperties.purchase_id,
+            minutes: mediaTimeProperties.minutes,
+            points_spent: mediaTimeProperties.points_spent,
+            quota: { $ref: '#/components/schemas/MediaTimeQuotaState' },
+          },
+        },
+        MediaTimePurchaseResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimePurchaseData' } },
+        },
+        MediaTimePurchaseItem: {
+          type: 'object',
+          properties: {
+            session_key: mediaTimeProperties.session_key,
+            minute_key: mediaTimeProperties.minute_key,
+            started_at: mediaTimeProperties.started_at,
+            used_minutes: mediaTimeProperties.used_minutes,
+            reported_by: mediaTimeProperties.reported_by,
+            created_at: mediaTimeProperties.created_at,
+          },
+        },
+        MediaTimePurchasesResponse: {
+          type: 'object', required: ['data'],
+          properties: {
+            data: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { $ref: '#/components/schemas/MediaTimePurchaseItem' } } } },
+          },
+        },
+        MediaTimeDevice: {
+          type: 'object',
+          required: ['id', 'user_id', 'name'],
+          properties: {
+            id: mediaTimeProperties.id,
+            user_id: mediaTimeProperties.user_id,
+            name: mediaTimeProperties.name,
+            platform: mediaTimeProperties.platform,
+            last_seen_at: mediaTimeProperties.last_seen_at,
+            revoked_at: mediaTimeProperties.revoked_at,
+            created_at: mediaTimeProperties.created_at,
+          },
+        },
+        MediaTimeDeviceListResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeDevice' } } },
+        },
+        MediaTimeDeviceCreateInput: {
+          type: 'object',
+          required: ['user_id', 'name'],
+          properties: {
+            user_id: { type: 'integer', minimum: 1 },
+            name: { type: 'string', minLength: 1, maxLength: 100 },
+            platform: { type: ['string', 'null'], maxLength: 40 },
+          },
+        },
+        MediaTimeDeviceCreateData: {
+          type: 'object',
+          required: ['id', 'user_id', 'name', 'token'],
+          properties: {
+            id: mediaTimeProperties.id,
+            user_id: mediaTimeProperties.user_id,
+            name: mediaTimeProperties.name,
+            token: { type: 'string', description: 'The device token, shown exactly once.' },
+            note: { type: ['string', 'null'] },
+          },
+        },
+        MediaTimeDeviceCreateResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeDeviceCreateData' } },
+        },
+        MediaTimeInventoryItem: {
+          type: 'object',
+          required: ['package_name', 'first_seen_at', 'last_seen_at'],
+          properties: {
+            package_name: mediaTimeProperties.package_name,
+            version_name: mediaTimeProperties.version_name,
+            system_app: mediaTimeProperties.system_app,
+            first_seen_at: mediaTimeProperties.first_seen_at,
+            last_seen_at: { type: 'string', format: 'date-time', description: 'UTC instant of the last sighting.' },
+            first_install_estimate: mediaTimeProperties.first_install_estimate,
+          },
+        },
+        MediaTimeInventoryResponse: {
+          type: 'object', required: ['data'],
+          properties: {
+            data: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeInventoryItem' } } } },
+          },
         },
 };

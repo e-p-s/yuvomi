@@ -733,7 +733,9 @@
         "seriesDoneNamed": "„{{title}}“ erledigt - nächstes Mal am {{date}}",
         "kanbanRestore": "Wiederherstellen",
         "errorTagGone": "Dieses Stichwort gibt es nicht mehr.",
-        "createdByDetail": "Angelegt von {{name}}"
+        "createdByDetail": "Angelegt von {{name}}",
+        "task_approval_admin_only": "Nur ein Administrator gibt Aufgaben frei oder lehnt sie ab.",
+        "task_approval_not_pending": "Diese Aufgabe wartet in diesem Moment auf keine Freigabe."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} Artikel gelöscht.",
@@ -3551,7 +3553,19 @@
         "rewardsPenaltiesLabel": "Konsequenzen erlauben",
         "rewardsPenaltiesHint": "Eltern können auf Fehlverhalten Punkte abziehen (schlechtes Zimmer, Geschrei, zu spät ins Bett). Der Grund ist Pflicht und bleibt für das Kind und die Eltern sichtbar; Geschwister sehen ihn nicht.",
         "taskCreatedByVisibleLabel": "Ersteller anzeigen",
-        "taskCreatedByVisibleHint": "Die Aufgabendetailseite nennt die Person, die die Aufgabe angelegt hat, wenn sie einen Ersteller trägt. Aus gelassen zeigt sie nichts."
+        "taskCreatedByVisibleHint": "Die Aufgabendetailseite nennt die Person, die die Aufgabe angelegt hat, wenn sie einen Ersteller trägt. Aus gelassen zeigt sie nichts.",
+        "rewardsConsequenceListLabel": "Konsequenzen-Vorlagen",
+        "rewardsConsequenceActiveLabel": "Aktiv",
+        "rewardsConsequenceAddLabel": "Neue Konsequenz-Vorlage",
+        "rewardsConsequenceAddPlaceholder": "Grund, z.B. Zimmer nicht aufgeraeumt",
+        "rewardsConsequencePointsLabel": "Punkte",
+        "rewardsConsequenceAdd": "Anlegen",
+        "rewardsConsequenceDelete": "Loeschen",
+        "rewardsConsequenceDeleteConfirm": "Konsequenz-Vorlage \"{{title}}\" loeschen? Gebuchte Konsequenzen bleiben erhalten.",
+        "rewardsConsequenceDeleted": "Vorlage geloescht",
+        "rewardsConsequenceEmpty": "Noch keine Vorlagen. Lege die erste an.",
+        "rewardsConsequenceInvalid": "Titel und Punkte (1-100) bitte ausfuellen.",
+        "rewardsConsequenceSaved": "Vorlage gespeichert"
     },
     "login": {
         "tagline": "Willkommen zurück. Dein Zuhause an einem Ort.",
@@ -6305,7 +6319,20 @@
             "ritual": "Ritual (Ramba Zamba)",
             "other": "Sonstiges"
         },
-        "penaltyNoChild": "In diesem Haushalt ist noch kein Kind angelegt. Konsequenzen brauchen ein Kind als Ziel."
+        "penaltyNoChild": "In diesem Haushalt ist noch kein Kind angelegt. Konsequenzen brauchen ein Kind als Ziel.",
+        "penaltyCatalogLabel": "Konsequenzen-Katalog (Vorlage antippen, Werte bleiben editierbar)",
+        "penaltyCatalogEdit": "Vorlage bearbeiten",
+        "penaltyCatalogEditTitle": "Konsequenz-Vorlage bearbeiten",
+        "penaltyCatalogEditNameLabel": "Grund",
+        "penaltyCatalogSavedToast": "Vorlage gespeichert",
+        "penaltyCatalogDeletedToast": "Vorlage geloescht. Gebuchte Konsequenzen bleiben.",
+        "penaltyCatalogConfirmDelete": "Vorlage \"{{title}}\" aus dem Katalog entfernen? Gebuchte Konsequenzen bleiben erhalten.",
+        "penaltyCatalogAddLabel": "Neue Konsequenz-Vorlage",
+        "penaltyCatalogAddPlaceholder": "Grund, z.B. Zimmer nicht aufgeraeumt",
+        "penaltyCatalogAddPointsLabel": "Punkte",
+        "penaltyCatalogAdd": "Vorlage anlegen",
+        "penaltyCatalogAddInvalid": "Titel und Punkte (1-100) bitte ausfuellen.",
+        "penaltyCatalogConfirmDeleteTitle": "Konsequenz-Vorlage aus dem Katalog entfernen?"
     },
     "datepicker": {
         "openCalendar": "Kalender öffnen",
@@ -6873,5 +6900,19 @@
         "custom": "Eigene Farbe",
         "chooseCustom": "Eigene Farbe wählen",
         "standard": "Standardfarbe"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "Die Medienzeit-Anfrage war unvollstaendig.",
+            "media_time_device_required": "Dieses Ereignis braucht ein Geraet, kein Konto.",
+            "media_time_disabled": "Die Bildschirmzeit ist in diesem Haushalt ausgeschaltet.",
+            "media_time_forbidden": "Dafuer fehlen dir die Rechte als Elternteil.",
+            "media_time_not_a_child": "Bildschirmzeit gilt nur fuer Kinder in diesem Haushalt.",
+            "media_time_no_quota": "Fuer dieses Kind ist fuer heute kein Medienzeit-Kontingent geplant.",
+            "media_time_exchange_off": "Der Punkte-Tausch ist in diesem Haushalt zur Zeit ausgeschaltet.",
+            "media_time_cap_reached": "Das Maximum an getauschter Medienzeit ist fuer heute erreicht.",
+            "media_time_insufficient_points": "Es sind nicht genug Punkte fuer die gewuenschte Medienzeit da.",
+            "media_time_unauthenticated": "Diese Medienzeit-Aktion braucht ein angemeldetes Konto oder ein Geraet."
+        }
     }
 }

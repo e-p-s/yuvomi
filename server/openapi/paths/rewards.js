@@ -41,7 +41,7 @@ export function rewardsPaths() {
         tag: 'Rewards',
         stateChanging: true,
         requestBody: jsonBody(null),
-        description: 'Body: { user_id, amount, reason, category? }. `amount` is 1..100 points taken from the child, `reason` the visible text (2..200 characters), `category` optional and one of `noten`, `zimmer`, `geschrei`, `bettzeit`, `ritual`, `other` - with a category the ledger line reads "<category>: <reason>". Only a parent or an administrator may do this, and only against a child; anyone else is 403. Answers 201 with { data: { user_id, balance } }. A household that has consequences turned off (the `rewards_penalties_enabled` setting, off by default) is 403 with `reason: "rewards_penalties_disabled"` - nothing is booked, whatever the client asks for. A child who does not take part in rewards is 400 with `reason: "rewards_not_participating"`; so are an amount outside 1..100, a missing or too short reason and an unknown category.',
+        description: 'Body: { user_id, amount?, reason?, category?, catalog_consequence_id? }. `amount` is 1..100 points taken from the child, `reason` the visible text (2..200 characters), `category` optional and one of `noten`, `zimmer`, `geschrei`, `bettzeit`, `ritual`, `other` - with a category the ledger line reads "<category>: <reason>". `catalog_consequence_id` (Katalog 283) takes an active template from GET /rewards/consequences: its title becomes the reason and its points the amount, and a sent `reason` or `amount` still wins over the template - the template fills the form, the parent edits it. An id that names no template is 400 with `reason: "rewards_consequence_not_found"`, a switched-off template is 400 with `reason: "rewards_consequence_disabled"`. Only a parent or an administrator may do this, and only against a child; anyone else is 403. Answers 201 with { data: { user_id, balance } }. A household that has consequences turned off (the `rewards_penalties_enabled` setting, off by default) is 403 with `reason: "rewards_penalties_disabled"` - nothing is booked, whatever the client asks for. A child who does not take part in rewards is 400 with `reason: "rewards_not_participating"`; so are an amount outside 1..100, a missing or too short reason and an unknown category.',
         responses: {
           201: { description: 'Consequence booked' },
           400: { $ref: '#/components/responses/BadRequest' },
@@ -66,6 +66,53 @@ export function rewardsPaths() {
           409: { description: 'The consequence was retracted already' },
           500: { $ref: '#/components/responses/InternalServerError' },
         },
+      }),
+    },
+    // Konsequenzen-Katalog (Migration 283): die Vorlagen hinter der
+    // Straf-Vergabe. Dieselbe Form wie der Praemien-Katalog: Pflege durch
+    // Admin/Eltern, `active` statt Loeschen, Sortierung ueber sort_order.
+    '/api/v1/rewards/consequences': {
+      get: op({
+        summary: 'List consequence templates (admin sees inactive with ?all=1)',
+        tag: 'Rewards',
+        description: 'Each template is { id, title, points, description, sort_order, active, created_by, created_at, updated_at }. `points` is 1..100 - the same frame POST /rewards/penalty books against. Without `all=1` (which only an administrator gets) the list holds the ACTIVE templates only: what a household switched off never reaches the issuing surface. Ordered active first, then `sort_order`, then id.',
+      }),
+      post: op({
+        summary: 'Create a consequence template',
+        tag: 'Rewards',
+        admin: true,
+        stateChanging: true,
+        requestBody: jsonBody(null),
+        description: 'Body: { title, points, description?, sort_order? }. `title` is 1..120 characters, `points` an integer 1..100 (the same frame the issuing route checks - a template nothing can book is a shelf with broken glasses); `description` is optional free text, capped at 500 characters. Without `sort_order` the template goes to the end of the list. Answers 201 with { data: <template> }; a title or points outside the frame is 400.',
+      }),
+    },
+    '/api/v1/rewards/consequences/{id}': {
+      put: op({
+        summary: 'Update a consequence template',
+        tag: 'Rewards',
+        admin: true,
+        params: [idParam()],
+        stateChanging: true,
+        requestBody: jsonBody(null),
+        description: 'Body: { title?, points?, description?, sort_order?, active? }. An absent field leaves it alone, a `description` of `null` clears it - the same field vocabulary as PATCH /rewards/catalog/{id}. The same frame as POST: title 1..120, points an integer 1..100. Answers 200 with { data: <template> }; an unknown id is 404 with `reason: "rewards_consequence_not_found"`.',
+      }),
+      delete: op({
+        summary: 'Delete a consequence template',
+        tag: 'Rewards',
+        admin: true,
+        params: [idParam()],
+        stateChanging: true,
+        description: 'Removes the template. Booked consequences are not linked to it - their text is a snapshot in the ledger - so a delete never endangers a booking. Switching a template off (POST /rewards/consequences/{id}/toggle) is the gentler path. An unknown id is 404.',
+      }),
+    },
+    '/api/v1/rewards/consequences/{id}/toggle': {
+      post: op({
+        summary: 'Switch a consequence template on or off',
+        tag: 'Rewards',
+        admin: true,
+        params: [idParam()],
+        stateChanging: true,
+        description: 'Flips `active`. A switched-off template leaves the list of GET /rewards/consequences and can no longer be issued: POST /rewards/penalty with its `catalog_consequence_id` is 400 with `reason: "rewards_consequence_disabled"` - what a household switched off it does not book, not even through an old id. Answers 200 with { data: <template> }; an unknown id is 404.',
       }),
     },
     '/api/v1/rewards/money': {
@@ -108,13 +155,23 @@ const CASE_REASONS = {
   },
   '/api/v1/rewards/bonus': { post: NOT_PARTICIPATING },
   // Konsequenzen: der Haushaltsschalter und die Teilnahme, dazu die
-  // Doppelt-Ruecknahme beim Zuruecknehmen.
+  // Doppelt-Ruecknahme beim Zuruecknehmen. Die Vergabe kennt zusaetzlich die
+  // Vorlage: eine Unbekannte und eine deaktivierte sind 400 (Katalog 283).
   '/api/v1/rewards/penalty': {
     post: '`rewards_penalties_disabled` (403, the household has consequences turned off), '
-      + NOT_PARTICIPATING,
+      + `${NOT_PARTICIPATING}, `
+      + '`rewards_consequence_not_found` (400, the catalog_consequence_id names no template), '
+      + '`rewards_consequence_disabled` (400, the template is switched off)',
   },
   '/api/v1/rewards/penalty/{id}': {
     delete: '`rewards_penalty_retracted` (409, the consequence was retracted already)',
+  },
+  '/api/v1/rewards/consequences/{id}': {
+    put: '`rewards_consequence_not_found` (404, the template does not exist)',
+    delete: '`rewards_consequence_not_found` (404, the template does not exist)',
+  },
+  '/api/v1/rewards/consequences/{id}/toggle': {
+    post: '`rewards_consequence_not_found` (404, the template does not exist)',
   },
   '/api/v1/rewards/money/accounts/{userId}': { delete: '`rewards_money_account_not_found` (404, there is no account)' },
   '/api/v1/rewards/money/plans/{userId}': { delete: '`rewards_money_plan_not_found` (404, there is no plan)' },

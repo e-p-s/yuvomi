@@ -715,7 +715,9 @@
         "seriesDoneNamed": "\"{{title}}\" tamamlandı - sıradaki: {{date}}",
         "kanbanRestore": "Geri yükle",
         "errorTagGone": "Bu etiket artık yok.",
-        "createdByDetail": "Oluşturan: {{name}}"
+        "createdByDetail": "Oluşturan: {{name}}",
+        "task_approval_admin_only": "Görevleri yalnızca bir yönetici onaylar veya reddeder.",
+        "task_approval_not_pending": "Bu görev şu anda onay beklemiyor."
     },
     "shopping": {
         "itemsRemovedToast_one": "{{count}} ürün silindi.",
@@ -3533,7 +3535,19 @@
         "rewardsPenaltiesLabel": "Sonuçlara izin ver",
         "rewardsPenaltiesHint": "Ebeveynler kötü davranış için (dağınık oda, bağırma, geç yatma) puan düşebilir. Neden zorunludur ve çocukla ebeveynlere görünür kalır; kardeşler görmez.",
         "taskCreatedByVisibleLabel": "Oluşturanı göster",
-        "taskCreatedByVisibleHint": "Görev ayrıntısı görünümü, görev bir oluşturucu taşıyorsa onu oluşturan kişiyi söyler. Kapalıyken hiçbir şey göstermez."
+        "taskCreatedByVisibleHint": "Görev ayrıntısı görünümü, görev bir oluşturucu taşıyorsa onu oluşturan kişiyi söyler. Kapalıyken hiçbir şey göstermez.",
+        "rewardsConsequenceListLabel": "Consequence templates",
+        "rewardsConsequenceActiveLabel": "Active",
+        "rewardsConsequenceAddLabel": "New consequence template",
+        "rewardsConsequenceAddPlaceholder": "Reason, e.g. room not tidied",
+        "rewardsConsequencePointsLabel": "Points",
+        "rewardsConsequenceAdd": "Add",
+        "rewardsConsequenceDelete": "Delete",
+        "rewardsConsequenceDeleteConfirm": "Delete consequence template \"{{title}}\"? Booked consequences remain.",
+        "rewardsConsequenceDeleted": "Template deleted",
+        "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
+        "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
+        "rewardsConsequenceSaved": "Template saved"
     },
     "login": {
         "tagline": "Tekrar hoş geldin. Evin tek bir yerde.",
@@ -6305,7 +6319,20 @@
         "penaltyRetract": "Sonucu geri al",
         "penaltyRetractedToast": "Sonuç geri alındı",
         "ledgerPenaltyRetracted": "Sonuç geri alındı",
-        "penaltyNoChild": "Bu hanede henüz çocuk yok. sonuç bir çocuk gerektirir."
+        "penaltyNoChild": "Bu hanede henüz çocuk yok. sonuç bir çocuk gerektirir.",
+        "penaltyCatalogLabel": "Consequence catalog (tap a template, values stay editable)",
+        "penaltyCatalogEdit": "Edit template",
+        "penaltyCatalogEditTitle": "Edit consequence template",
+        "penaltyCatalogEditNameLabel": "Reason",
+        "penaltyCatalogSavedToast": "Template saved",
+        "penaltyCatalogDeletedToast": "Template deleted. Booked consequences remain.",
+        "penaltyCatalogConfirmDelete": "Remove template \"{{title}}\" from the catalog? Booked consequences stay.",
+        "penaltyCatalogAddLabel": "New consequence template",
+        "penaltyCatalogAddPlaceholder": "Reason, e.g. room not tidied",
+        "penaltyCatalogAddPointsLabel": "Points",
+        "penaltyCatalogAdd": "Add template",
+        "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
     },
     "datepicker": {
         "openCalendar": "Takvimi aç",
@@ -6873,5 +6900,19 @@
         "custom": "Özel renk",
         "chooseCustom": "Özel renk seç",
         "standard": "Varsayılan renk"
+    },
+    "mediaTime": {
+        "errors": {
+            "media_time_bad_request": "Ekran süresi isteği eksikti.",
+            "media_time_device_required": "Bu olay hesap değil cihaz gerektiriyor.",
+            "media_time_disabled": "Bu hanede ekran süresi kapalı.",
+            "media_time_forbidden": "Bunun için ebeveyn yetkileriniz yok.",
+            "media_time_not_a_child": "Ekran süresi yalnızca bu hanedeki çocuklar için geçerlidir.",
+            "media_time_no_quota": "Bu çocuk için bugün ekran süresi planlanmadı.",
+            "media_time_exchange_off": "Puan takası bu hanede şu anda kapalı.",
+            "media_time_cap_reached": "Bugün için takas edilen ekran süresi sınırına ulaşıldı.",
+            "media_time_insufficient_points": "Istenen ekran süresi için yeterli puan yok.",
+            "media_time_unauthenticated": "Bu ekran süresi eylemi giriş yapmış bir hesap veya cihaz ister."
+        }
     }
 }
