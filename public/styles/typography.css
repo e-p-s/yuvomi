@@ -496,6 +496,8 @@
  * eine Groesse.
  * ------------------------------------------------------------------------ */
 .list-row__meta,
+/* Praemien- und Konsequenzkarte: Punktepreis und Inaktiv-Hinweis */
+.rw-reward-card__meta,
 /* Aufgaben: die Zeile und ihre Teile, die vorher je 12px trugen */
 .task-card__meta,
 .kanban-card__meta,

@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   completion earned stands with the booking: later changes of the due date, the point value or the
   setting never rewrite booked amounts, and for every late earning the ledger shows the base it came
   from and how many days it was late.
+- **Rewards tabs as a side rail (opt-in, device-local).** A new switch under
+  Settings -> Device ("Belohnungs-Reiter als Seitenleiste") pulls the three
+  entry points out of the header: on desktop (>=1024px) they stand in a left
+  column, on phones as a full list under the title - all three stay visible,
+  never hidden behind a gesture. Swiping over the content switches to the next
+  or previous tab (same gesture as calendar and budget, edge-swipe guarded so
+  the system "back" still wins at the screen edge). Like theme and wall mode
+  the choice lives on the device, not in the household.
+
 - **Consequence catalog (opt-in templates, with school grades).** The catalog
   behind the "Konsequenz" button gets three grade entries on update: "Note 4-"
   costs 4 points, "Note 5" costs 8, "Note 6" costs 15 - a bad grade costs more

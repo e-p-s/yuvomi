@@ -1,0 +1,86 @@
+/**
+ * Modul: Belohnungen - Reiter als Seitenleiste (Ansichtsoption)
+ * Zweck: Zieht die Reiter-Leiste der Belohnungen aus dem Kopf heraus: auf dem
+ *        Desktop (>=1024px) in eine linke Spalte, unterhalb davon als volle
+ *        Liste unter dem Titel. Angestoessen durch die Klasse
+ *        .rewards-tabs--side am Rahmen der Leiste (Schalter:
+ *        utils/rewards-tabs-side.js, geratelokales localStorage wie Wand-Modus).
+ * Abhaengigkeiten: rewards.css (Seitenwurzel), layout.css (Kopf-Regeln),
+ *                  tokens.css (Raum- und Breakpoint-Werte).
+ *
+ * Zwei Zwinge bestimmen die Selektoren:
+ * 1) Der Kopf (.page-toolbar__bar) ist eine Kopf-Klasse - Modul-CSS ueberschreibt
+ *    Koepfe nicht direkt (Audit-Guard 'der Modulkopf gehoert der Shell').
+ *    Alles haengt deshalb an .rewards-tabs--side, einer Nicht-Kopf-Klasse am
+ *    Rahmen selbst, und wirkt von dort mit :has() auf die Seite zurueck.
+ * 2) Die Seitenwurzel fuehrt per exaktem String ihr breites Mass
+ *    (test-dashboard-rewards.js, 'eine Kante fuer alle Reiter') - eine Klasse
+ *    an ihr waere eine zweite Kante. Auch darum: kein Root-Modifier.
+ */
+
+/* Mobil (<1024px): die Leiste verlaesst die Titelzeile und wird die volle Zeile
+ * unter dem Titel - alle drei Einstiege bleiben sichtbar. Der Tab-Wisch
+ * (utils/period-swipe.js) ist die Abkuerzung, nie die einzige Anzeige. */
+.rewards-tabs--side {
+  flex-basis: 100%;
+  order: 5;
+  overflow-x: visible;
+  scroll-snap-type: none;
+  gap: var(--space-1);
+}
+
+.rewards-tabs--side .sub-tab {
+  scroll-snap-align: none;
+}
+
+/* Desktop (>=1024px): Rail links. Die Seite steht auf einem Raster aus Kopf-
+ * zeile, Schmalspalte fuer die Reiter und Inhalt. :has() erkennt den Modus am
+ * Rahmen der Leiste, ohne dass die Wurzel eine Klasse tragen muss.
+ * align-self: start - die Spalte darf nicht in die Hoehen-Rastert werden. */
+@media (min-width: 1024px) {
+  .rewards-page:has(.rewards-tabs--side) {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-areas:
+      "head head"
+      "rail content";
+    align-items: start;
+    gap: var(--space-4);
+  }
+
+  .rewards-page:has(.rewards-tabs--side) > .page-toolbar {
+    grid-area: head;
+  }
+
+  /* Die Leiste ist ein Enkel (Kind des Kopfes) und wird zum Raster-Kind der
+   * Seite: grid-area wirkt, weil Grid die Auslegung uebernimmt - der Kopf gibt
+   * sie mit 'head' an den Rest weiter. */
+  .rewards-page:has(.rewards-tabs--side) .rewards-tabs--side {
+    grid-area: rail;
+    align-self: start;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    flex-basis: auto;
+    order: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+    padding-block: var(--space-2);
+  }
+
+  /* Rail-Eintraege: volle Breite, linke Ausrichtung - die Pille bleibt die
+   * geteilte Grammatik (sub-tabs.css), sie fuellt nur die Spalte. */
+  .rewards-page:has(.rewards-tabs--side) .rewards-tabs--side .sub-tab {
+    width: 100%;
+    justify-content: flex-start;
+    scroll-snap-align: none;
+    padding-inline: var(--space-3);
+  }
+
+  .rewards-page:has(.rewards-tabs--side) .rewards-content {
+    grid-area: content;
+    min-width: 0;
+  }
+}

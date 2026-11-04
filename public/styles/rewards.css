@@ -5,6 +5,8 @@
  * (die außerhalb von .rewards-page im Body rendern) greifen.
  */
 
+@import url('/styles/rewards-tabs-side.css');
+
 .rewards-page {
   --module-accent: var(--module-rewards);
   /* FAB-Freiraum wie im Budget: Listenende bleibt über dem FAB lesbar. */

@@ -3566,7 +3566,11 @@
         "rewardsConsequenceDeleted": "Vorlage geloescht",
         "rewardsConsequenceEmpty": "Noch keine Vorlagen. Lege die erste an.",
         "rewardsConsequenceInvalid": "Titel und Punkte (1-100) bitte ausfuellen.",
-        "rewardsConsequenceSaved": "Vorlage gespeichert"
+        "rewardsConsequenceSaved": "Vorlage gespeichert",
+        "rewardsTabsSideLabel": "Belohnungs-Reiter als Seitenleiste",
+        "rewardsTabsSideHint": "Auf dem Bildschirm stehen die Reiter links als Spalte, auf dem Handy als Liste unter dem Titel. Wischen ueber dem Inhalt wechselt den Reiter.",
+        "rewardsTabsSideOn": "Seitenleiste aktiv - wirksam auf der Belohnungen-Seite.",
+        "rewardsTabsSideOff": "Reiter wieder als Leiste."
     },
     "login": {
         "tagline": "Willkommen zurück. Dein Zuhause an einem Ort.",

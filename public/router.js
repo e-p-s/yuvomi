@@ -308,6 +308,7 @@ let activePageStyle = null;
 // in test:frontend-audit gleich mit den @import-Zeilen in public/styles/.
 const PAGE_STYLE_IMPORTS = Object.freeze({
   '/styles/budget.css': ['/styles/split-expenses.css', '/styles/subscriptions.css'],
+  '/styles/rewards.css': ['/styles/rewards-tabs-side.css'],
   '/styles/calendar.css': ['/styles/time-grid.css'],
   '/styles/dashboard.css': ['/styles/fasting-controls.css'],
   '/styles/health.css': ['/styles/fasting-controls.css'],

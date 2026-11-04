@@ -35,6 +35,8 @@ import { amountProblemText } from '/utils/amount-field.js';
 import { reloadAfterSave } from '/utils/reload-after-save.js';
 import { personChipsHtml } from '/utils/filter-sheet.js';
 import { errorSentence, isAlreadyDeleted, isGone } from '/utils/friendly-error.js';
+import { wirePeriodSwipe } from '/utils/period-swipe.js';
+import { isRewardsTabsSideEnabled } from '/utils/rewards-tabs-side.js';
 
 /* ZWEI REITER, DER VERLAUF IST EIN DRILL-DOWN (Critique R24, E8). "Punkte"
  * zeigte rechts den Verlauf und "Verlauf" rechts die Punktestaende - dieselben
@@ -428,12 +430,20 @@ function updateRewardsFab() {
 
 function renderShell(container) {
   container.replaceChildren();
+  // Ansichtspaetzung (Praeferenz, geratelokal): 'rewards-page--rail' macht die
+  // Reiter auf Desktop zur Seitenspalte und mobil zur gestapelten Liste (CSS:
+  // styles/rewards-tabs-side.css). Als Klasse am Kopf des Baums wuerde sie den
+  // Guard 'die Seitenwurzel fuehrt das breite Mass' (test-dashboard-rewards.js)
+  // blind machen - der String-Check sucht die Wurzel exakt. Also tragt das
+  // <nav> der Leiste selbst die Klasse (eine Zeile weiter unten, railOn);
+  // die CSS-Regeln wirken von dort in Kopf und Inhalt.
+  const railOn = isRewardsTabsSideEnabled();
   container.insertAdjacentHTML('beforeend', `
     <div class="rewards-page app-page app-page--dashboard app-page--columns" data-composition="dashboard">
       <header class="page-toolbar page-toolbar--narrow page-toolbar--tabs-title rewards-toolbar">
         <h1 class="page-toolbar__title" id="rewards-title">${esc(t('rewards.title'))}</h1>
         <div class="page-toolbar__actions"></div>
-        <nav class="rewards-tabs page-toolbar__bar" role="tablist" aria-label="${esc(t('rewards.title'))}">
+        <nav class="rewards-tabs page-toolbar__bar${railOn ? ' rewards-tabs--side' : ''}" role="tablist"${railOn ? ' aria-orientation="vertical"' : ''} aria-label="${esc(t('rewards.title'))}">
           ${tabButton('overview', t('rewards.tabPoints'))}
           ${tabButton('catalog', t('rewards.tabCatalog'))}
           ${tabButton('consequences', t('rewards.tabConsequences'))}
@@ -468,6 +478,26 @@ function renderShell(container) {
   attachSegmentIndicator(container.querySelector('.rewards-tabs'), { key: 'rewards-tabs' });
   // Scroll-Affordanz der Bar-Zeile (geteilter Peek-Fade, .page-toolbar__bar).
   wireScrollFade(container.querySelector('.rewards-tabs'));
+  // Tab-Wisch (mobil wie desktop): Linkswischen naechster Reiter, Rechtswischen
+  // vorheriger - dieselbe Geste wie im Kalender/Budget (utils/period-swipe.js),
+  // inklusive Randgesten-Schutz (System-Zurueck), Scroll-Vorrang und Modal-Sperre.
+  // surface ist #rewards-content: es ueberlebt jeden Reiter-Tausch (renderCurrentTab
+  // tauscht nur sein Kind). Die Bar selbst ist ignore - sie scrollt selbst.
+  // Im Verlauf (Ebene unter 'Punkte') waere ein Nachbar-Wechsel ein toter Zustand -
+  // der Wisch loest auf overview auf, der Rueckweg bleibt der Knopf '‹ Punkte'.
+  wirePeriodSwipe(content(), {
+    enabled: () => !readOnly() && !state.loadError,
+    ignore: '.u-scroll-fade, [role="tablist"], input, textarea, select, [contenteditable], .rw-standing__bar',
+    onStep: (step) => {
+      if (_pushedFromPoints || state.tab === LEDGER) { state.tab = 'overview'; _tabs?.sync('overview'); return renderCurrentTab(container, { direction: step }); }
+      const order = TABS;
+      const at = order.indexOf(state.tab);
+      const next = order[Math.min(order.length - 1, Math.max(0, at + step))];
+      if (!next || next === state.tab) return undefined;
+      _tabs?.setActive(next, { focus: false, direction: step });
+      return undefined;
+    },
+  });
   fab = createPageFab({ id: 'rewards-fab', dockLabel: t('newLabel.rewards') });
   container.querySelector('.rewards-page').appendChild(fab);
   updateRewardsFab();

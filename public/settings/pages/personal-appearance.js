@@ -15,6 +15,7 @@ import { settingRowHtml, settingSwitchRowHtml } from '/settings/components.js';
 import { wireTablist } from '/utils/tablist.js';
 import { attachSegmentIndicator } from '/utils/segment-indicator.js';
 import { isWallModeEnabled, setWallModeEnabled } from '/utils/wall-mode.js';
+import { isRewardsTabsSideEnabled, setRewardsTabsSideEnabled } from '/utils/rewards-tabs-side.js';
 import { getNightHours, setNightHours } from '/utils/night-hours.js';
 import {
   SCREENSAVER_IDLE_STEPS,
@@ -809,6 +810,14 @@ function deviceDisplayRowsHtml({ screensaverOn = true, isAdmin = false } = {}) {
           descriptionId: 'wall-mode-hint',
           attrs: { id: 'wall-mode-toggle', 'aria-describedby': 'wall-mode-hint' },
         })}
+        ${settingSwitchRowHtml({
+          label: t('settings.rewardsTabsSideLabel'),
+          checked: isRewardsTabsSideEnabled(),
+          icon: 'columns-2',
+          description: t('settings.rewardsTabsSideHint'),
+          descriptionId: 'rewards-tabs-side-hint',
+          attrs: { id: 'rewards-tabs-side-toggle', 'aria-describedby': 'rewards-tabs-side-hint' },
+        })}
         ${nightHoursRowHtml()}
         <!-- Next to wall mode and for the same reason: device-local (#885). A
              photo frame and a kitchen tablet in one household want different
@@ -907,6 +916,19 @@ function bindDeviceDisplay(container) {
       wallToggle.checked
         ? t('settings.wallModeOn', { page: t('nav.dashboard') })
         : t('settings.wallModeOff'),
+      'success',
+    );
+  });
+
+  // Reiter als Seitenleiste - geratelokal wie das Theme: kein Server-Request.
+  // Wirksam auf der Belohnungen-Route; der Toast sagt das (Muster Wand-Modus).
+  const railToggle = container.querySelector('#rewards-tabs-side-toggle');
+  railToggle?.addEventListener('change', () => {
+    setRewardsTabsSideEnabled(railToggle.checked);
+    window.yuvomi?.showToast(
+      railToggle.checked
+        ? t('settings.rewardsTabsSideOn', { page: t('nav.rewards') })
+        : t('settings.rewardsTabsSideOff'),
       'success',
     );
   });

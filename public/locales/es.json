@@ -3548,7 +3548,11 @@
         "rewardsConsequenceDeleted": "Template deleted",
         "rewardsConsequenceEmpty": "No templates yet. Add the first one.",
         "rewardsConsequenceInvalid": "Please fill in title and points (1-100).",
-        "rewardsConsequenceSaved": "Template saved"
+        "rewardsConsequenceSaved": "Template saved",
+        "rewardsTabsSideLabel": "Reward tabs as side rail",
+        "rewardsTabsSideHint": "On desktop the tabs stand as a left column, on phones as a list under the title. Swiping over the content switches tabs.",
+        "rewardsTabsSideOn": "Side rail on - effective on the rewards page.",
+        "rewardsTabsSideOff": "Tabs back to the bar."
     },
     "login": {
         "tagline": "Bienvenido de nuevo. Tu hogar en un solo lugar.",
