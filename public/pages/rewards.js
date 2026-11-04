@@ -42,8 +42,9 @@ import { errorSentence, isAlreadyDeleted, isGone } from '/utils/friendly-error.j
  * "Verlauf ›" auf "Punkte" fuehrt hinein (`state.tab = 'ledger'`), "‹ Punkte"
  * und der Reiter fuehren zurueck. Ein Neuaufbau der Seite beginnt wieder auf
  * dem Reiter. */
-const TABS = ['overview', 'catalog'];
+const TABS = ['overview', 'catalog', 'consequences'];
 const LEDGER = 'ledger';
+const CONSEQUENCES_PATH = '/rewards/consequences';
 
 /* DER VERLAUF IST EIN ORT (Critique R24 S8-F1, Ulas 28.10.). Bis dahin war er
  * nur ein Zustand der Seite: Browser- und Android-Zurueck verliessen das
@@ -60,6 +61,10 @@ let _pushedFromPoints = false;
 
 function isHistoryPath(path) {
   return path === REWARDS_HISTORY_PATH;
+}
+
+function isConsequencesPath(path) {
+  return path === CONSEQUENCES_PATH;
 }
 
 /** In den Verlauf ueber seine Adresse - der Router ruft update(). */
@@ -431,6 +436,7 @@ function renderShell(container) {
         <nav class="rewards-tabs page-toolbar__bar" role="tablist" aria-label="${esc(t('rewards.title'))}">
           ${tabButton('overview', t('rewards.tabPoints'))}
           ${tabButton('catalog', t('rewards.tabCatalog'))}
+          ${tabButton('consequences', t('rewards.tabConsequences'))}
         </nav>
       </header>
       <div class="rewards-content" id="rewards-content"></div>
@@ -443,6 +449,11 @@ function renderShell(container) {
       // einen Schritt zu schreiben (Zurueck fuehrt nicht in den Verlauf).
       if (state.tab === LEDGER && isHistoryPath(location.pathname)) {
         _pushedFromPoints = false;
+        history.replaceState({ ...(history.state ?? {}), path: REWARDS_PATH }, '', REWARDS_PATH);
+      }
+      // Der Konsequenzen-Reiter ist ein eigener Ort (eigene Adresse, wie der
+      // Verlauf): Adresse folgt dem Reiter, ohne separaten History-Schritt.
+      if (state.tab === 'consequences' && isConsequencesPath(location.pathname)) {
         history.replaceState({ ...(history.state ?? {}), path: REWARDS_PATH }, '', REWARDS_PATH);
       }
       state.tab = id;
@@ -525,11 +536,13 @@ async function renderCurrentTab(container, { direction = null, drill = false } =
   try {
     if (tab === 'overview') await Promise.all([loadOverview(), loadRecentLedger(), loadMoney(), loadConsequences()]);
     else if (tab === 'catalog') await Promise.all([loadCatalog(), loadOverview(), loadConsequences()]);
+    else if (tab === 'consequences') await Promise.all([loadConsequences(), loadOverview()]);
     else await Promise.all([loadLedger(), loadOverview(), loadConsequences()]);
     if (seq !== renderSeq) return;
     const draw = () => {
       if (tab === 'overview') renderOverview(el);
       else if (tab === 'catalog') renderCatalog(el);
+      else if (tab === 'consequences') renderConsequences(el);
       else renderLedger(el);
     };
     // Der Drill-down in den Verlauf und zurueck ist ein Ebenenwechsel
@@ -958,6 +971,52 @@ function renderRewardCard(item) {
       </div>
     </article>`;
 }
+
+// Der Konsequenzen-Reiter ist ein eigener Ort: eigene Adresse (/rewards/consequences),
+// eigener Einstieg in der Reiter-Leiste (Chris, 2026-11-04) - gebaut wie der
+// Praemien-Reiter (renderCatalog): Raster, Karten, Bearbeiten am Ort, FAB nur fuer
+// Eltern/Admin. Sichtbarkeit: Modul-Schalter rewards_penalties_enabled steuert, ob
+// ueberhaupt buchen darf; der Katalog selbst bleibt fuer alle einsehbar, Pflege
+// (Anlegen/Bearbeiten/Loeschen) ist Eltern-/Admin-Sache (Route erzwingt das).
+function renderConsequences(el) {
+  el.replaceChildren();
+  const items = state.consequences || [];
+  const header = `<h2 class="sr-only">${esc(t('rewards.tabConsequences'))}</h2>`;
+  if (!items.length) {
+    const action = isAdmin() && !readOnly()
+      ? { label: t('rewards.penaltyCatalogAdd'), icon: 'plus', tone: 'secondary', className: 'rw-add-consequence' }
+      : null;
+    el.insertAdjacentHTML('beforeend',
+      `<div class="rewards-content__inner">${emptyState('scale', t('rewards.consequencesEmptyTitle'),
+        t('rewards.consequencesEmptyBody'), action)}</div>`);
+  } else {
+    const cards = items.map((c) => `
+      <article class="rw-reward-card rw-consequence-card${c.active ? '' : ' rw-consequence-card--off'}">
+        <div class="rw-reward-card__icon" aria-hidden="true"><i data-lucide="scale" class="icon icon--sm"></i></div>
+        <div class="rw-reward-card__body">
+          <h3 class="rw-reward-card__title">${esc(c.title)}</h3>
+          <p class="rw-reward-card__meta">${t('rewards.consequenceCostLabel', { points: Number(c.points) })}</p>
+          ${c.active ? '' : `<p class="rw-reward-card__meta rw-consequence-card__off">${esc(t('rewards.consequenceInactiveLabel'))}</p>`}
+        </div>
+        ${isAdmin() && !readOnly() ? `<button type="button" class="btn btn--ghost btn--sm rw-consequence-card-edit"
+             data-id="${c.id}" aria-label="${esc(t('rewards.penaltyCatalogEdit'))}" title="${esc(t('rewards.penaltyCatalogEdit'))}">
+             <i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
+      </article>`).join('');
+    el.insertAdjacentHTML('beforeend', `
+      <div class="rewards-content__inner">
+        <section class="rw-section rw-section--wide">
+          ${header}
+          <div class="rw-reward-grid">${cards}</div>
+        </section>
+      </div>`);
+  }
+  el.querySelector('.rw-add-consequence')?.addEventListener('click', () => openConsequenceEditModal(null));
+  el.querySelectorAll('.rw-consequence-card-edit').forEach((b) => b.addEventListener('click', () => {
+    openConsequenceEditModal(Number(b.dataset.id), () => renderCurrentTab(_container, { direction: 0 }));
+  }));
+  icons(el);
+}
+
 
 function renderCatalog(el) {
   el.replaceChildren();
@@ -1678,11 +1737,18 @@ async function retractPenalty(ledgerId, btn) {
  */
 function openConsequenceEditModal(id, afterSave) {
   if (readOnly()) return;
-  const item = (state.consequences || []).find((c) => c.id === id);
+  // id = null: neue Vorlage anlegen (Einstieg vom Konsequenzen-Reiter aus);
+  // sonst Vorlage bearbeiten. Beides nutzt dasselbe Formular.
+  const isNew = id === null || id === undefined;
+  const item = isNew
+    ? { id: null, title: '', points: 5, active: 1 }
+    : (state.consequences || []).find((c) => c.id === Number(id));
   if (!item) return;
   openModal({
     staged: false,
-    title: t('rewards.penaltyCatalogEditTitle'),
+    title: isNew ? t('rewards.penaltyCatalogAddTitle') : t('rewards.penaltyCatalogEditTitle'),
+    // R17 E6: derselbe Dialog bedient Anlegen und Bearbeiten - der Knopf
+    // nennt den Fall, ein starres 'Speichern' bei zwei Faellen ist verboten.
     content: `
       <form id="rw-consequence-edit-form" novalidate>
         <div class="modal-grid modal-grid--2">
@@ -1698,9 +1764,9 @@ function openConsequenceEditModal(id, afterSave) {
         ${formSwitchRowHtml({ label: t('rewards.activeLabel'), checked: item.active === 1, id: 'rw-consequence-edit-active' })}
         <div id="rw-consequence-edit-error" class="form-error" role="alert" hidden></div>
         <div class="modal-panel__footer modal-panel__footer--plain">
-          <button type="button" class="btn btn--danger-outline" id="rw-consequence-edit-delete">${esc(t('common.delete'))}</button>
+          ${isNew ? '' : `<button type="button" class="btn btn--danger-outline" id="rw-consequence-edit-delete">${esc(t('common.delete'))}</button>`}
           <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
-          <button type="submit" class="btn btn--primary" id="rw-consequence-edit-submit">${esc(t('common.save'))}</button>
+          <button type="submit" class="btn btn--primary" id="rw-consequence-edit-submit">${esc(isNew ? t('common.add') : t('common.save'))}</button>
         </div>
       </form>`,
     onSave: async (panel) => {
@@ -1715,9 +1781,15 @@ function openConsequenceEditModal(id, afterSave) {
       }
       submit.disabled = true;
       try {
-        const res = await api.put(`/rewards/consequences/${id}`, { title, points, active });
+        const res = isNew
+          ? await api.post('/rewards/consequences', { title, points, active })
+          : await api.put(`/rewards/consequences/${id}`, { title, points, active });
         if (res?.data) {
-          state.consequences = (state.consequences || []).map((c) => (c.id === id ? res.data : c));
+          if (isNew) {
+            state.consequences = [...(state.consequences || []), res.data];
+          } else {
+            state.consequences = (state.consequences || []).map((c) => (c.id === id ? res.data : c));
+          }
           toast(t('rewards.penaltyCatalogSavedToast'));
           if (afterSave) afterSave();
         }
@@ -2647,7 +2719,7 @@ export const __test = {
   // R24 (E8, G2-Belohnungen-P3-1/P3-3): Bonus als Gutschrift/Abzug, Taschengeld fuer Kinder, zwei Reiter.
   openBonusModal, moneyCandidates, TABS, tabButton,
   // R24 S8-F1: der Verlauf als Adresse.
-  openLedgerRoute, closeLedgerRoute, isHistoryPath,
+  openLedgerRoute, closeLedgerRoute, isHistoryPath, isConsequencesPath, CONSEQUENCES_PATH,
 };
 
 export async function render(container, { user } = {}) {
@@ -2656,6 +2728,7 @@ export async function render(container, { user } = {}) {
   // einen Verlaufseintrag) oeffnet den Verlauf, `/rewards` einen Reiter.
   _pushedFromPoints = false;
   if (isHistoryPath(location.pathname)) state.tab = LEDGER;
+  else if (isConsequencesPath(location.pathname)) state.tab = 'consequences';
   else if (!TABS.includes(state.tab)) state.tab = 'overview';
   _container = container;
   renderShell(container);
@@ -2676,6 +2749,11 @@ export async function update({ path, user } = {}) {
   } else {
     _pushedFromPoints = false;
     await leaveLedger(_container);
+    // Adresse /rewards/consequences: der Konsequenzen-Reiter ist ein eigener Ort.
+    if (isConsequencesPath(path)) {
+      state.tab = 'consequences';
+      await renderCurrentTab(_container, { direction: 0 });
+    }
   }
   return true;
 }

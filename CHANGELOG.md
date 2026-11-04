@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seed adds per title and never duplicates). Each template is editable right in
   the dialog: the pencil on a chip opens title, points, active and delete, so
   the catalog is managed where consequences are booked, migration 283.
+  The catalog now has its own place in the app: a third tab in the rewards page
+  (own address `/rewards/consequences`, like the history) shows every template
+  as a card - children read it exactly like the prize shelf, parents manage it.
+  Consequences are negative prizes in the ledger, so the shelf reads the same:
+  title, cost, and a quiet "deaktiviert" note when a template is off.
 
 ## [2.85.0] - 2026-11-04
 

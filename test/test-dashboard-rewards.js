@@ -1028,7 +1028,10 @@ test('R22: die eigene Punktekarte gibt dem Ziel die Breite, die Knoepfe ruecken 
 // --------------------------------------------------------
 
 test('R24 E8: zwei Reiter Punkte | Praemien, der Verlauf ist eine Ebene unter "Punkte"', () => {
-  assert.deepEqual(rewardsPage.TABS, ['overview', 'catalog'], 'kein dritter Reiter "Verlauf"');
+  // Der Verlauf bleibt eine Ebene (kein Reiter 'ledger'); 'consequences' ist
+  // seit 2026-11-04 ein ausdruecklich gewollter dritter Reiter (eigener
+  // Einstiegspunkt wie die Praemien, Chris).
+  assert.deepEqual(rewardsPage.TABS, ['overview', 'catalog', 'consequences'], 'kein Reiter "Verlauf"');
   const s = rewardsPage.state;
   const vorher = s.tab;
   try {
@@ -1040,7 +1043,7 @@ test('R24 E8: zwei Reiter Punkte | Praemien, der Verlauf ist eine Ebene unter "P
   }
   const src = readFileSync(new URL('../public/pages/rewards.js', import.meta.url), 'utf8');
   const shell = src.slice(src.indexOf('function renderShell('), src.indexOf('function content('));
-  assert.equal((shell.match(/\$\{tabButton\(/g) ?? []).length, 2, 'die Leiste baut genau zwei Reiter');
+  assert.equal((shell.match(/\$\{tabButton\(/g) ?? []).length, 3, 'die Leiste baut Punkte, Praemien, Konsequenzen');
   assert.doesNotMatch(shell, /tabButton\('ledger'/);
 });
 

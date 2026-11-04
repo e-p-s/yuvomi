@@ -177,7 +177,8 @@
         "rewards": "Belohnungen",
         "pantry": "Vorrat",
         "inventory": "Inventar",
-        "schedule": "Schichtplan"
+        "schedule": "Schichtplan",
+        "rewardsConsequences": "Konsequenzen"
     },
     "search": {
         "emptyHint": "Tippe, um zu einem Bereich zu springen oder etwas anzulegen. Ab 2 Zeichen findest du auch deine Einträge, sogar über Wortteile.",
@@ -6332,7 +6333,13 @@
         "penaltyCatalogAddPointsLabel": "Punkte",
         "penaltyCatalogAdd": "Vorlage anlegen",
         "penaltyCatalogAddInvalid": "Titel und Punkte (1-100) bitte ausfuellen.",
-        "penaltyCatalogConfirmDeleteTitle": "Konsequenz-Vorlage aus dem Katalog entfernen?"
+        "penaltyCatalogConfirmDeleteTitle": "Konsequenz-Vorlage aus dem Katalog entfernen?",
+        "tabConsequences": "Konsequenzen",
+        "penaltyCatalogAddTitle": "Konsequenz-Vorlage anlegen",
+        "consequencesEmptyTitle": "Noch keine Konsequenzen-Vorlagen",
+        "consequencesEmptyBody": "Lege die erste Vorlage an - beim Buchen ist sie mit einem Tipp gesetzt.",
+        "consequenceCostLabel": "{{points}} Punkte Abzug",
+        "consequenceInactiveLabel": "Deaktiviert - nicht buchbar"
     },
     "datepicker": {
         "openCalendar": "Kalender öffnen",

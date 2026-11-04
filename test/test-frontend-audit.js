@@ -21088,7 +21088,13 @@ test('Familie: Mitglied und Einladung oeffnen einen Dialog, der Knopf bleibt Fok
  * erreicht, und schrumpft nicht. */
 test('Praemienkarte: jede Glyphe ist bemessen und schrumpft nicht', () => {
   const src = read('../public/pages/rewards.js');
-  const card = src.slice(src.indexOf('function renderRewardCard('), src.indexOf('function renderCatalog('));
+  // Slice-Ende: die erste Render-Funktion nach renderRewardCard (Reiter-Katalog
+  // oder Konsequenzen-Karte) - beide Karten muessen gemessen werden.
+  const afterIdx = ['renderConsequences', 'renderCatalog']
+    .map((fn) => src.indexOf(`function ${fn}(`))
+    .filter((i) => i > -1)
+    .reduce((a, b) => Math.min(a, b), Infinity);
+  const card = src.slice(src.indexOf('function renderRewardCard('), afterIdx);
   assert.ok(card.length > 100, 'renderRewardCard nicht gefunden');
   const rules = [...eachRule(read('../public/styles/rewards.css'))];
   const svgRule = (container) => rules.find((rule) => rule.selector.split(',').map((s) => s.trim()).includes(`${container} svg`));

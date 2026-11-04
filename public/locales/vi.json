@@ -177,7 +177,8 @@
         "rewards": "Phần thưởng",
         "pantry": "Kho dự trữ",
         "inventory": "Tài sản",
-        "schedule": "Lịch làm việc"
+        "schedule": "Lịch làm việc",
+        "rewardsConsequences": "Consequences"
     },
     "dashboard": {
         "title": "Tổng quan",
@@ -6332,7 +6333,13 @@
         "penaltyCatalogAddPointsLabel": "Points",
         "penaltyCatalogAdd": "Add template",
         "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
-        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?",
+        "tabConsequences": "Consequences",
+        "penaltyCatalogAddTitle": "Add consequence template",
+        "consequencesEmptyTitle": "No consequence templates yet",
+        "consequencesEmptyBody": "Add the first template - when booking, one tap fills it in.",
+        "consequenceCostLabel": "{{points}} points off",
+        "consequenceInactiveLabel": "Inactive - not bookable"
     },
     "datepicker": {
         "openCalendar": "Mở lịch",

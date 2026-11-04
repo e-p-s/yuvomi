@@ -204,7 +204,8 @@
         "rewards": "المكافآت",
         "pantry": "المؤن",
         "inventory": "المقتنيات",
-        "schedule": "جدول المناوبات"
+        "schedule": "جدول المناوبات",
+        "rewardsConsequences": "Consequences"
     },
     "dashboard": {
         "title": "لوحة التحكم",
@@ -6781,7 +6782,13 @@
         "penaltyCatalogAddPointsLabel": "Points",
         "penaltyCatalogAdd": "Add template",
         "penaltyCatalogAddInvalid": "Please fill in title and points (1-100).",
-        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?"
+        "penaltyCatalogConfirmDeleteTitle": "Remove consequence template from the catalog?",
+        "tabConsequences": "Consequences",
+        "penaltyCatalogAddTitle": "Add consequence template",
+        "consequencesEmptyTitle": "No consequence templates yet",
+        "consequencesEmptyBody": "Add the first template - when booking, one tap fills it in.",
+        "consequenceCostLabel": "{{points}} points off",
+        "consequenceInactiveLabel": "Inactive - not bookable"
     },
     "datepicker": {
         "openCalendar": "فتح التقويم",
