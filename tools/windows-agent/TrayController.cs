@@ -72,9 +72,10 @@ public sealed class TrayController : IDisposable
     private void RefreshStatus()
     {
         var quota = _api.LastQuota;
+        var checkin = _api.LastCheckedIn ? ", eingebucht" : "";
         var online = _api.LastKnownOnline ? "online" : "offline (Puffern)";
         var quotaText = quota?.RemainingMin is int min ? ", Rest " + min + " min" : "";
-        _statusItem.Text = "Status: " + online + quotaText;
+        _statusItem.Text = "Status: " + online + quotaText + checkin;
         _icon.Text = "Yuvomi-Agent - " + online;
     }
 

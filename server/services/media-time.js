@@ -361,6 +361,62 @@ export function quotaNoteReasons(d, userId, dayKey) {
   `).all(userId, dayKey).map((r) => r.reason);
 }
 
+/**
+ * Check-ins (Einbuchen/Ausbuchen, Nutzer 05.11.): offene Sitzungen zaehlen ab
+ * started_at bis jetzt als charged Minuten, auf den Rest des Tages begrenzt.
+ * Der Tag schliesst mit Mitternacht (kein Uebertrag); eine offene Sitzung, die
+ * gestern startete, wird beim naechsten /today-Stand automatisch geschlossen
+ * (auto), damit nie ein alter Tag weiterlaeuft.
+ */
+export function openCheckinMinutes(d, userId, dayKey, now = new Date()) {
+  const rows = d.prepare(`
+    SELECT c.id, c.started_at, dt.tz || '' AS tz
+      FROM media_time_checkins c
+      LEFT JOIN (SELECT value AS tz FROM sync_config WHERE key = 'timezone') dt ON 1 = 1
+     WHERE c.user_id = ? AND c.ended_at IS NULL
+  `).all(userId);
+  if (!rows.length) return 0;
+  let minutes = 0;
+  for (const row of rows) {
+    const started = Date.parse(row.started_at);
+    if (!Number.isFinite(started)) continue;
+    const dayStart = Date.parse(dayKey + 'T00:00:00Z');
+    const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+    const from = Math.max(started, Number.isFinite(dayStart) ? dayStart : started);
+    const to = Math.min(now.getTime(), Number.isFinite(dayEnd) ? dayEnd : now.getTime());
+    if (to > from) minutes += Math.floor((to - from) / 60000);
+  }
+  return minutes;
+}
+
+/** Zahl offener Check-ins des Kindes (deviceId optional: nur dieses Geraet). */
+export function openCheckinCount(d, userId, deviceId = null) {
+  const row = deviceId
+    ? d.prepare('SELECT COUNT(*) AS n FROM media_time_checkins WHERE user_id = ? AND device_id = ? AND ended_at IS NULL').get(userId, deviceId)
+    : d.prepare('SELECT COUNT(*) AS n FROM media_time_checkins WHERE user_id = ? AND ended_at IS NULL').get(userId);
+  return row?.n || 0;
+}
+
+/** Offene Check-ins schliessen, die nicht mehr in den heutigen Tag hoeren. */
+export function closeStaleCheckins(d, userId, dayKey, now = new Date()) {
+  const rows = d.prepare(
+    'SELECT id, started_at FROM media_time_checkins WHERE user_id = ? AND ended_at IS NULL'
+  ).all(userId);
+  const dayStart = Date.parse(dayKey + 'T00:00:00Z');
+  if (!Number.isFinite(dayStart)) return;
+  for (const row of rows) {
+    if (Date.parse(row.started_at) < dayStart) {
+      d.prepare("UPDATE media_time_checkins SET ended_at = ?, end_reason = 'auto' WHERE id = ?")
+        .run(isoNowSafe(now), row.id);
+    }
+  }
+}
+
+function isoNowSafe(now) {
+  const d = now instanceof Date ? now : new Date();
+  return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 /** Die neueste Begruendung des Tages (GET /today braucht genau diese eine). */
 export function latestQuotaNoteReason(d, userId, dayKey) {
   const row = d.prepare(`
@@ -395,7 +451,10 @@ export function quotaRow(d, userId, deviceId = null) {
  */
 export function quotaState(d, userId, now = new Date(), deviceId = null) {
   const dayKey = mediaTimeDayKey(d, now);
+  closeStaleCheckins(d, userId, dayKey, now);
   const usage = dayUsage(d, userId, dayKey);
+  // Eingebuchte Minuten (Check-in offen) zahlen wie gemeldete Nutzung: charged.
+  usage.charged_min += openCheckinMinutes(d, userId, dayKey, now);
   const quota = quotaRow(d, userId, deviceId);
   // Kontingent des Tages (Entscheidung 2 + 4): Basis daily_minutes plus
   // gekaufte Minuten (adjust-Session mit classification 'credit'). Bei hartem
@@ -408,6 +467,7 @@ export function quotaState(d, userId, now = new Date(), deviceId = null) {
   // Kontingent unter die Basis; die Basis-Zeile selbst bleibt unangetastet
   // (adjust-Philosophie: korrigieren, nicht radieren).
   const base = quota && quota.enabled === 1 ? quota.daily_minutes : 0;
+  const checkedIn = openCheckinCount(d, userId, deviceId) > 0;
   const credit = dayCredit(d, userId, dayKey);
   const adjusted = quotaAdjustmentFor(d, userId, dayKey);
   // Die Obergrenze des Tages (Entscheidung 4): bei hartem Cap (Default) ist
@@ -449,6 +509,7 @@ export function quotaState(d, userId, now = new Date(), deviceId = null) {
     max_daily_minutes: quota?.max_daily_minutes ?? null,
     hard_cap: hardCap,
     quiet_active: quietActive,
+    checked_in: checkedIn,
     enforcement: mediaTimeEnforcement(d),
     // 'lock' heisst: ein Geraet darf sperren, wenn state 'exceeded' oder
     // 'quiet' ist (Nachricht "Zeit ist um", PC: Logout). 'count' = reine Meldespur.

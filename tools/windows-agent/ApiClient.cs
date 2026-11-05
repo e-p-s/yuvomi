@@ -22,9 +22,44 @@ public sealed class QuotaInfo
     [JsonPropertyName("enforcement")]
     public string? Enforcement { get; set; }
 
+    /// <summary>true, wenn der Server fuer dieses Geraet eine offene Check-in-Sitzung
+    /// meldet (GET /media-time/checkins, Check-in-Modus ohne Agent-Sync).</summary>
+    public bool? CheckedIn { get; set; }
+
     /// <summary>Sperre gewollt? Nur 'lock' + exceeded/quiet, sonst nie.</summary>
     public bool ShouldLock =>
         Enforcement == "lock" && (State == "exceeded" || State == "quiet");
+}
+
+/// <summary>Ein Check-in-Eintrag (Einbuchen/Ausbuchen) des Kindes.</summary>
+public sealed class CheckinInfo
+{
+    [JsonPropertyName("id")]
+    public long Id { get; set; }
+
+    [JsonPropertyName("device_id")]
+    public long DeviceId { get; set; }
+
+    [JsonPropertyName("device_name")]
+    public string? DeviceName { get; set; }
+
+    [JsonPropertyName("started_at")]
+    public string? StartedAt { get; set; }
+
+    [JsonPropertyName("ended_at")]
+    public string? EndedAt { get; set; }
+}
+
+public sealed class CheckinsResponse
+{
+    [JsonPropertyName("data")]
+    public CheckinsData? Data { get; set; }
+}
+
+public sealed class CheckinsData
+{
+    [JsonPropertyName("items")]
+    public List<CheckinInfo>? Items { get; set; }
 }
 
 public sealed class TrackerResponse
@@ -64,6 +99,10 @@ public sealed class ApiClient : IDisposable
 
     /// <summary>Letzte vom Server gemeldete Quota (fuer Tray-Tooltip, rein informativ).</summary>
     public QuotaInfo? LastQuota { get; private set; }
+
+    /// <summary>Letzte vom Server gemeldete Check-in-Situation (05.11.: Einbuchen/
+    /// Ausbuchen). True = das Kind ist auf diesem Geraet eingebucht.</summary>
+    public bool LastCheckedIn { get; private set; }
 
     public ApiClient(AgentConfig cfg, DeviceIdentity device)
     {
@@ -105,6 +144,33 @@ public sealed class ApiClient : IDisposable
         };
         return await PostWithBufferAsync("api/v1/media-time/tracker/heartbeat", payload,
             bufferFallback: () => BufferRaw("heartbeat", payload), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>GET /api/v1/media-time/checkins?user_id=X - offene Check-ins des Kindes.
+    /// Null bei Fehler (Offline-Puffer greift hier nicht; Check-ins sind Eltern-App-Pfad).</summary>
+    public async Task<List<CheckinInfo>?> GetCheckinsAsync(long userId, CancellationToken ct)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get,
+                $"api/v1/media-time/checkins?user_id={userId}");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _device.DeviceToken);
+            req.Headers.UserAgent.ParseAdd("YuvomiAgent/0.1 (win)");
+            using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+            {
+                AgentLog.Warn("checkins -> HTTP " + (int)resp.StatusCode);
+                return null;
+            }
+            var body = await SafeReadAsync(resp, ct).ConfigureAwait(false);
+            var parsed = JsonSerializer.Deserialize<CheckinsResponse>(body, JsonOpts);
+            return parsed?.Data?.Items ?? new List<CheckinInfo>();
+        }
+        catch (Exception ex)
+        {
+            AgentLog.Warn("checkins: " + ex.Message);
+            return null;
+        }
     }
 
     private async Task<bool> PostWithBufferAsync(string path, object payload, Action bufferFallback, CancellationToken ct)
@@ -169,7 +235,11 @@ public sealed class ApiClient : IDisposable
         try
         {
             var parsed = JsonSerializer.Deserialize<TrackerResponse>(body, JsonOpts);
-            if (parsed?.Quota is not null) LastQuota = parsed.Quota;
+            if (parsed?.Quota is not null)
+            {
+                LastQuota = parsed.Quota;
+                LastCheckedIn = parsed.Quota.CheckedIn ?? false;
+            }
         }
         catch
         {

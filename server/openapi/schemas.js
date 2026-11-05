@@ -378,6 +378,10 @@ export const mediaTimeProperties = {
   exempt_min: { type: 'integer', minimum: 0, description: 'Usage minutes of app exceptions (never charged, still visible in history).' },
   duty_min: { type: 'integer', minimum: 0, description: 'Minutes of duty rules (Pflichtzeit) today: never charged against the quota, shown as its own line.' },
   enforcement: { type: 'string', enum: ['count', 'lock'], description: "Household policy at time-up: 'count' only reports (devices stay usable), 'lock' lets agent devices lock (PC sign-out, notice screen)." },
+  checked_in: { type: 'boolean', description: 'True while the child has an open check-in (Einbuchen) on a device; its minutes count against the quota until check-out or midnight.' },
+  checkin_id: { type: 'integer', description: 'Id of the open check-in row (media_time_checkins).' },
+  device_name: { type: 'string', description: 'Display name of the device a check-in belongs to.' },
+  end_reason: { type: ['string', 'null'], enum: ['manual', 'auto', null], description: "How a closed check-in ended: 'manual' (child/parent checked out) or 'auto' (midnight sweep)." },
   device_id: { type: ['integer', 'null'], description: 'When set, the quota row applies to this device only; null means the quota counts across every device of the child.' },
   unknown_min: { type: 'integer', minimum: 0, description: 'Usage minutes of packages no rule covers. Fail-open: never charged; the parents decide from here.' },
   purchased_min: { type: 'integer', minimum: 0, description: 'Minutes bought with points today (they raise quota_min instead of counting as usage).' },
@@ -3809,6 +3813,7 @@ export const schemas = {
             adjusted_min: mediaTimeProperties.adjusted_min,
             reason: mediaTimeProperties.reason,
             duty_min: mediaTimeProperties.duty_min,
+            checked_in: mediaTimeProperties.checked_in,
             enforcement: mediaTimeProperties.enforcement,
             max_daily_minutes: mediaTimeProperties.max_daily_minutes,
             hard_cap: mediaTimeProperties.hard_cap,
@@ -4079,6 +4084,70 @@ export const schemas = {
           properties: {
             data: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { $ref: '#/components/schemas/MediaTimePurchaseItem' } } } },
           },
+        },
+        MediaTimeManualSessionInput: {
+          type: 'object',
+          required: ['user_id', 'minutes'],
+          properties: {
+            user_id: { type: 'integer', minimum: 1 },
+            minutes: { type: 'integer', minimum: 1, maximum: 720, description: 'Booked usage minutes for a device without an agent (console, TV).' },
+            note: { type: ['string', 'null'], maxLength: 120, description: 'Optional reason shown to the child.' },
+            device_id: { type: ['integer', 'null'], minimum: 1, description: 'Optional device the booking belongs to.' },
+          },
+        },
+        MediaTimeManualSessionData: {
+          type: 'object',
+          required: ['charged_min'],
+          properties: {
+            charged_min: { type: 'integer', description: "Today's charged minutes after the booking." },
+            remaining_min: mediaTimeProperties.remaining_min,
+            state: mediaTimeProperties.state,
+          },
+        },
+        MediaTimeManualSessionResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeManualSessionData' } },
+        },
+        MediaTimeCheckinInput: {
+          type: 'object',
+          required: ['user_id', 'device_id'],
+          properties: {
+            user_id: { type: 'integer', minimum: 1 },
+            device_id: { type: 'integer', minimum: 1 },
+          },
+        },
+        MediaTimeCheckinItem: {
+          type: 'object',
+          required: ['id', 'device_id', 'started_at'],
+          properties: {
+            id: mediaTimeProperties.id,
+            device_id: { type: 'integer', description: 'Device the check-in runs on.' },
+            device_name: mediaTimeProperties.device_name,
+            started_at: { type: 'string', description: 'When the child checked in (ISO 8601).' },
+            ended_at: { type: ['string', 'null'], description: 'When it ended; null while open.' },
+            end_reason: mediaTimeProperties.end_reason,
+          },
+        },
+        MediaTimeCheckinsResponse: {
+          type: 'object', required: ['data'],
+          properties: {
+            data: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeCheckinItem' } } } },
+          },
+        },
+        MediaTimeCheckinData: {
+          type: 'object',
+          required: ['checked_in'],
+          properties: {
+            id: mediaTimeProperties.id,
+            device_id: { type: 'integer', description: 'Device the check-in runs on.' },
+            checked_in: mediaTimeProperties.checked_in,
+            state: mediaTimeProperties.state,
+            remaining_min: mediaTimeProperties.remaining_min,
+          },
+        },
+        MediaTimeCheckinResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeCheckinData' } },
         },
         MediaTimeDevice: {
           type: 'object',

@@ -45,7 +45,8 @@ class Http(private val baseUrl: String, private val deviceToken: String) {
         val quotaMin: Int?,
         val quietActive: Boolean,
         val enforcement: String = "count",  // count | lock (Serverentscheidung 04.11.)
-        val reason: String? = null          // Begruendung der letzten Elternanpassung
+        val reason: String? = null,         // Begruendung der letzten Elternanpassung
+        val checkedIn: Boolean = false      // offene Check-in-Sitzung auf diesem Geraet (05.11.)
     )
 
     /**
@@ -99,7 +100,8 @@ class Http(private val baseUrl: String, private val deviceToken: String) {
                 quotaMin = if (it.has("quota_min") && !it.isNull("quota_min")) it.getInt("quota_min") else null,
                 quietActive = it.optBoolean("quiet_active", false),
                 enforcement = it.optString("enforcement", "count"),
-                reason = if (it.has("reason") && !it.isNull("reason")) it.optString("reason") else null
+                reason = if (it.has("reason") && !it.isNull("reason")) it.optString("reason") else null,
+                checkedIn = it.optBoolean("checked_in", false)
             )
         }
         return SyncResponse(
@@ -130,7 +132,8 @@ class Http(private val baseUrl: String, private val deviceToken: String) {
                 quotaMin = if (it.has("quota_min") && !it.isNull("quota_min")) it.getInt("quota_min") else null,
                 quietActive = it.optBoolean("quiet_active", false),
                 enforcement = it.optString("enforcement", "count"),
-                reason = if (it.has("reason") && !it.isNull("reason")) it.optString("reason") else null
+                reason = if (it.has("reason") && !it.isNull("reason")) it.optString("reason") else null,
+                checkedIn = it.optBoolean("checked_in", false)
             )
         }
     }

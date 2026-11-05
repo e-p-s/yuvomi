@@ -536,6 +536,7 @@ router.get('/today', (req, res) => {
         // Pflichtzeit des Tages (Busticket, Schulmanager, Hausaufgaben):
         // eigener Satz, zaehlt nie gegen das Kontingent (Migration 285).
         duty_min: state.duty_min,
+        checked_in: state.checked_in,
         enforcement: state.enforcement,
         max_daily_minutes: state.max_daily_minutes,
         hard_cap: state.hard_cap,
@@ -801,6 +802,115 @@ router.get('/settings', (req, res) => {
   } catch (err) {
     log.error('GET /settings error:', err);
     return res.status(500).json({ error: 'Failed to read media time settings.', code: 500 });
+  }
+});
+
+/* ------------------------------------------------------------ Check-in
+ * Einbuchen/Ausbuchen (Nutzer 05.11.): ein Kind (oder ein Elternteil fuer sein
+ * Kind) bucht sich auf ein Geraet ein bzw. aus. Die offene Sitzung zaehlt live
+ * gegen das Tageskontingent (openCheckinMinutes in quotaState) und endet
+ * spaetestens an Mitternacht (closeStaleCheckins). Ein Geraet hat pro Kind
+ * genau eine offene Sitzung (partial unique index). */
+router.get('/checkins', (req, res) => {
+  try {
+    const d = db.get();
+    const requested = toInt(req.query.user_id ?? actingUser(req));
+    if (!Number.isInteger(requested) || requested <= 0) {
+      return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (requested !== actingUser(req) && !isParentOrAdmin(req)) {
+      return res.status(403).json({ error: 'Not allowed for this child.', code: 403, reason: 'media_time_forbidden' });
+    }
+    const rows = d.prepare(`
+      SELECT c.id, c.device_id, c.started_at, c.ended_at, c.end_reason, dev.name AS device_name
+        FROM media_time_checkins c
+        JOIN media_time_devices dev ON dev.id = c.device_id
+       WHERE c.user_id = ?
+       ORDER BY c.started_at DESC
+       LIMIT 50
+    `).all(requested);
+    return res.json({ data: { items: rows.map((row) => ({
+      ...row,
+      ended_at: row.ended_at ?? null,
+      end_reason: row.end_reason ?? null,
+    })) } });
+  } catch (err) {
+    log.error('GET /checkins error:', err);
+    return res.status(500).json({ error: 'Failed to load check-ins.', code: 500 });
+  }
+});
+
+router.post('/checkins', (req, res) => {
+  try {
+    const d = db.get();
+    if (!mediaTimeEnabled(d)) {
+      return res.status(403).json({
+        error: 'Media time is not enabled for this household.', code: 403, reason: 'media_time_disabled',
+      });
+    }
+    const userId = toInt(req.body?.user_id ?? actingUser(req));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (userId !== actingUser(req)) {
+      const refusal = childRefusal(d, userId);
+      if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.status, reason: refusal.reason });
+    }
+    const deviceId = toInt(req.body?.device_id);
+    if (!Number.isInteger(deviceId) || deviceId <= 0) {
+      return res.status(400).json({ error: 'device_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    const dev = d.prepare(
+      'SELECT id FROM media_time_devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL'
+    ).get(deviceId, userId);
+    if (!dev) {
+      return res.status(404).json({ error: 'Device not found.', code: 404, reason: 'media_time_not_found' });
+    }
+    const open = d.prepare(
+      'SELECT id FROM media_time_checkins WHERE user_id = ? AND device_id = ? AND ended_at IS NULL'
+    ).get(userId, deviceId);
+    if (open) {
+      return res.status(409).json({ error: 'Already checked in on this device.', code: 409, reason: 'media_time_already_checked_in' });
+    }
+    const info = d.prepare(
+      'INSERT INTO media_time_checkins (user_id, device_id, started_at, created_by) VALUES (?, ?, ?, ?)'
+    ).run(userId, deviceId, isoNow(), actingUser(req));
+    const state = quotaState(d, userId, new Date(), deviceId);
+    return res.status(201).json({
+      data: {
+        id: info.lastInsertRowid, device_id: deviceId,
+        checked_in: true, state: state.state, remaining_min: state.remaining_min,
+      },
+    });
+  } catch (err) {
+    log.error('POST /checkins error:', err);
+    return res.status(500).json({ error: 'Failed to check in.', code: 500 });
+  }
+});
+
+router.post('/checkins/:id/end', (req, res) => {
+  try {
+    const d = db.get();
+    const id = toInt(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    const row = d.prepare('SELECT id, user_id FROM media_time_checkins WHERE id = ? AND ended_at IS NULL').get(id);
+    if (!row) {
+      return res.status(404).json({ error: 'Open check-in not found.', code: 404, reason: 'media_time_not_found' });
+    }
+    if (row.user_id !== actingUser(req) && !isParentOrAdmin(req)) {
+      return res.status(403).json({ error: 'Not allowed for this child.', code: 403, reason: 'media_time_forbidden' });
+    }
+    d.prepare("UPDATE media_time_checkins SET ended_at = ?, end_reason = 'manual' WHERE id = ?")
+      .run(isoNow(), id);
+    const state = quotaState(d, row.user_id);
+    return res.json({
+      data: { id, checked_in: false, state: state.state, remaining_min: state.remaining_min },
+    });
+  } catch (err) {
+    log.error('POST /checkins/:id/end error:', err);
+    return res.status(500).json({ error: 'Failed to check out.', code: 500 });
   }
 });
 
@@ -1111,10 +1221,16 @@ router.post('/devices', requireManager, (req, res) => {
   }
 });
 
-router.get('/devices', requireManager, (req, res) => {
+router.get('/devices', (req, res) => {
   try {
     const d = db.get();
-    const userId = req.query.user_id !== undefined ? toInt(req.query.user_id) : null;
+    let userId = req.query.user_id !== undefined ? toInt(req.query.user_id) : null;
+    // Ein Kind darf seine eigenen Geraete sehen (Check-in-Kachel 05.11.): ohne
+    // Manager gilt der eigene Nutzer, mit Manager fremde nur mit Recht.
+    if (userId == null && !isParentOrAdmin(req)) userId = actingUser(req);
+    else if (userId != null && userId !== actingUser(req) && !isParentOrAdmin(req)) {
+      return res.status(403).json({ error: 'Not allowed for this child.', code: 403, reason: 'media_time_forbidden' });
+    }
     const rows = userId != null
       ? d.prepare('SELECT id, user_id, name, platform, last_seen_at, revoked_at, created_at FROM media_time_devices WHERE user_id = ? ORDER BY id').all(userId)
       : d.prepare('SELECT id, user_id, name, platform, last_seen_at, revoked_at, created_at FROM media_time_devices ORDER BY id').all();

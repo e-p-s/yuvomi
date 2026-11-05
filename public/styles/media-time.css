@@ -312,6 +312,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Einbuchen/Ausbuchen (Nutzer 05.11.): die Knopfreihe unter der offenen Liste -
+ * gleiche Zeilen-Optik wie die Anpassungs-Knopfreihen (wrap auf schmalen Screens). */
+.mt-checkin__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-block: var(--space-2) 0;
+}
+
 .mt-quota-reason {
   margin-block: 0 var(--space-2);
   font-size: var(--text-xs);

@@ -82,6 +82,9 @@ class SyncEngine(private val context: Context) {
         if (quotaSeen != null) {
             prefs.quotaState = quotaSeen.state
             prefs.quotaEnforcement = quotaSeen.enforcement
+            // Check-in-Anzeige (05.11.): offene Einbuchung des Kindes auf diesem
+            // Geraet - die Tracker-UI zeigt sie als "eingebucht".
+            prefs.checkedIn = quotaSeen.checkedIn
             TimeUpActivity.showIfLocked(
                 context, quotaSeen.enforcement, quotaSeen.state, quotaSeen.reason
             )

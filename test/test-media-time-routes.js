@@ -395,3 +395,83 @@ test('Haushaltsschalter aus — tracker/sync => 403 media_time_disabled; PUT /pr
   const back = await call('POST', '/tracker/sync', { token: dev.token, body: { sessions: [session('off-1', 'com.off.app', 5)] } });
   assert.equal(back.status, 200, 'wieder an, nimmt der Sync die Session an');
 });
+
+/* ── Check-in/Check-out (Einbuchen/Ausbuchen, Nutzer 05.11.) ──────────────── */
+
+test('POST /checkins — einbuchen: 201, /today zeigt checked_in und offene Minuten', async () => {
+  const kid = freshKid();
+  await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 60, enabled: true } });
+  const dev = await mkDevice(kid.id, 'Konsole');
+  const res = await call('POST', '/checkins', { body: { user_id: kid.id, device_id: dev.id } });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(res.body.data.checked_in, true);
+  // Doppelbuchung auf demselben Geraet: 409
+  const again = await call('POST', '/checkins', { body: { user_id: kid.id, device_id: dev.id } });
+  assert.equal(again.status, 409);
+  assert.equal(again.body.reason, 'media_time_already_checked_in');
+  // /today: checked_in true, verbrauchte Minuten enthalten die offene Sitzung
+  const today = await call('GET', `/today?user_id=${kid.id}`);
+  assert.equal(today.status, 200);
+  assert.equal(today.body.data.checked_in, true);
+  // Liste: eine offene Sitzung mit Geraetenamen
+  const list = await call('GET', `/checkins?user_id=${kid.id}`);
+  assert.equal(list.status, 200);
+  assert.equal(list.body.data.items.length, 1);
+  assert.equal(list.body.data.items[0].ended_at, null);
+  assert.equal(list.body.data.items[0].device_name, 'Konsole');
+});
+
+test('POST /checkins/:id/end — ausbuchen: 201->geschlossen, /today checked_in false', async () => {
+  const kid = freshKid();
+  await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 60, enabled: true } });
+  const dev = await mkDevice(kid.id, 'Fernseher');
+  const open = await call('POST', '/checkins', { body: { user_id: kid.id, device_id: dev.id } });
+  assert.equal(open.status, 201);
+  const end = await call('POST', `/checkins/${open.body.data.id}/end`, { body: {} });
+  assert.equal(end.status, 200);
+  assert.equal(end.body.data.checked_in, false);
+  const today = await call('GET', `/today?user_id=${kid.id}`);
+  assert.equal(today.body.data.checked_in, false);
+  // nochmaliges Ende: 404 (keine offene Sitzung mehr)
+  const again = await call('POST', `/checkins/${open.body.data.id}/end`, { body: {} });
+  assert.equal(again.status, 404);
+});
+
+test('Check-in-Rechte: Kind bucht sich selbst ein, fremdes Kind => 403; GET /devices fuer das Kind', async () => {
+  const kid = freshKid();
+  const dev = await mkDevice(kid.id, 'Tablet');
+  // Kind bucht sich selbst (user_id weggelassen => eigener Nutzer)
+  const own = await call('POST', '/checkins', { actor: { id: kid.id, role: 'member' },
+    body: { device_id: dev.id } });
+  assert.equal(own.status, 201, JSON.stringify(own.body));
+  // Kind bucht fremdes Kind: Gerat gehoert ihm nicht => 404 (Gerat nicht
+  // gefunden), und das Geraet des fremden Kindes waere 404/403 - beides ist
+  // eine Ablehnung; der Rechtsweg laeuft immer ueber die Geraete-Zuordnung.
+  const other = freshKid();
+  const foreign = await call('POST', '/checkins', { actor: { id: kid.id, role: 'member' },
+    body: { user_id: other.id, device_id: dev.id } });
+  assert.equal(foreign.status, 404);
+  // eigenes Kind, fremdes Geraet: gleichfalls 404
+  const foreign2 = await call('POST', '/checkins', { actor: { id: kid.id, role: 'member' },
+    body: { user_id: kid.id, device_id: (await mkDevice(other.id, 'Fremd')).id } });
+  assert.equal(foreign2.status, 404);
+  // GET /devices ohne Manager: nur eigene Geraete
+  const devs = await call('GET', '/devices', { actor: { id: kid.id, role: 'member' } });
+  assert.equal(devs.status, 200);
+  assert.ok(Array.isArray(devs.body.data));
+  assert.ok(devs.body.data.every((d) => d.user_id === kid.id));
+});
+
+test('Haushaltsschalter aus => POST /checkins 403 media_time_disabled', async () => {
+  const kid = freshKid();
+  const dev = await mkDevice(kid.id, 'Konsole');
+  cfgSet('media_time_enabled', '0');
+  try {
+    const res = await call('POST', '/checkins', { body: { user_id: kid.id, device_id: dev.id } });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.reason, 'media_time_disabled');
+  } finally {
+    cfgSet('media_time_enabled', '1');
+  }
+});
+

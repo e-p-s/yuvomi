@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit: Einbuchen/Ausbuchen (Check-in) pro Kind und Geraet.** Fuer Geraete ohne Agent
+  (Konsole, Fernseher, Tablet) bucht das Kind sich selbst ein und aus: die offene Sitzung zaehlt
+  live gegen das Tageskontingent und endet spaetestens an Mitternacht (Migration 286). Neue
+  Endpunkte GET/POST /media-time/checkins und POST /media-time/checkins/:id/end; GET /devices
+  zeigt einem Kind jetzt seine eigenen Geraete. Der Fortschrittsbalken auf der Uebersicht ist ab
+  Werk sichtbar (media-time aus den Opt-in-Kacheln genommen).
+
 - **Medienzeit: Sperre, Pflichtzeit, Kontingent pro Geraet, manuelle Buchung.** Der Haushalt
   stellt bei "Bei Zeitende" auf "Geraete duerfen sperren": meldet der Server "Zeit ist um",
   zeigt der Windows-Agent den Hinweisschirm mit der Elternbegruendung und meldet den PC nach

@@ -48,6 +48,11 @@ class Prefs private constructor(context: Context) {
         get() = prefs.getString(KEY_QUOTA_ENFORCEMENT, null)
         set(value) = prefs.edit().putString(KEY_QUOTA_ENFORCEMENT, value).apply()
 
+    /** Offene Check-in-Sitzung (Einbuchen) vom Server, zuletzt gesehen (05.11.). */
+    var checkedIn: Boolean
+        get() = prefs.getBoolean(KEY_CHECKED_IN, false)
+        set(value) = prefs.edit().putBoolean(KEY_CHECKED_IN, value).apply()
+
     /** Zustand, fuer den der Hinweis zuletzt gezeigt wurde (doppelt-show vermeiden). */
     var quotaLockedShownBy: String?
         get() = prefs.getString(KEY_QUOTA_LOCKED_SHOWN, null)
@@ -71,6 +76,7 @@ class Prefs private constructor(context: Context) {
         private const val KEY_EXCEPTIONS_CACHE = "exceptions_cache_json"
         private const val KEY_QUOTA_STATE = "quota_state"
         private const val KEY_QUOTA_ENFORCEMENT = "quota_enforcement"
+        private const val KEY_CHECKED_IN = "checked_in"
         private const val KEY_QUOTA_LOCKED_SHOWN = "quota_locked_shown"
         private const val KEY_BATTERY_ASKED = "battery_asked"
         private const val KEY_LAST_SYNC_OK = "last_sync_ok_ms"

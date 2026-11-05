@@ -180,13 +180,13 @@ export const COCKPIT_COVERED_WIDGETS = new Set(['tasks', 'calendar', 'shopping',
 // gespeichert haben (keine Migration); nur wer der Vorgabe folgt oder ein
 // Layout ohne `budget` mitbringt, startet ohne. Die Kennzahlreihe fuehrt den
 // Saldo aus demselben Grund nicht mehr (METRIC_TILE_ORDER, pages/dashboard.js).
-// `media-time` steht bei den Opt-ins wie `rewards`: der Balken je Kind ist eine
-// Eltern-Ansicht, und ein Dashboard, das ab Werk Zahlen ueber die Kinder zeigt,
-// die nicht jeder im Haushalt sehen soll, waere die Ueberladung, die diese Menge
-// verhindern soll. Dazu traegt die Kachel ihre Requests selbst (pro Kind
-// GET /media-time/today) - ab Werk sichtbar hielte sie jeden Haushalt ohne
-// Medienzeit-Modul nicht, aber jeden mit Modul in einer Anfrage mehr.
-export const DEFAULT_HIDDEN_WIDGETS = new Set([...COCKPIT_COVERED_WIDGETS, 'budget', 'rewards', 'media-time', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule', 'waste', 'pantry', 'clock', 'weather', 'quicklinks']);
+// `media-time` steht NICHT mehr bei den Opt-ins (Nutzer 05.11.: "Der
+// Fortschrittsbalken auf der uebersichtsseite fehlt"): der Balken ist der
+// Kern der Medienzeit und muss ab Werk sichtbar sein. Die Kachel bleibt
+// haushaltsschonend: ohne Medienzeit-Modul antwortet GET /media-time/quotas
+// mit 403/leer und die Kachel verschwindet ueber den Modulfilter
+// (MODULE_FOR_WIDGET 'media_time'), Requests stellt sie nur mit Modul.
+export const DEFAULT_HIDDEN_WIDGETS = new Set([...COCKPIT_COVERED_WIDGETS, 'budget', 'rewards', 'health', 'cycle', 'fasting', 'nutrition', 'housekeeping', 'schedule', 'waste', 'pantry', 'clock', 'weather', 'quicklinks']);
 
 export function defaultWidgetVisible(id) {
   return !DEFAULT_HIDDEN_WIDGETS.has(id);

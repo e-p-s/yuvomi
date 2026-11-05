@@ -3137,12 +3137,16 @@ test('Widget-Merge: ein umsortiertes Layout laesst den Neuzugang seinem Vorgaeng
   const demo = ['weather', 'family', 'budget', 'birthdays', 'rewards', 'notes',
     'tasks', 'calendar', 'shopping', 'meals', 'housekeeping', 'health', 'cycle']
     .map((id, i) => ({ id, order: i, visible: i < 6, size: '1x1' }));
+  // media-time ist seit 05.11. Default-sichtbar; die Demo-Liste fuehrt es nicht,
+  // also waere es der Neuzugang und wuerde vor birthday einsortiert - genau das
+  // will dieser Fall NICHT pruefen, deshalb aus der Merge-Betrachtung heraus:
+  // (Der Test prueft countdown als Neuzugang; media-time wird unten ausgeklammert.)
   const merged = widgets.normalizeDashboardConfig(demo);
   const sichtbar = merged.filter((w) => w.visible).map((w) => w.id);
   // `countdown` ist der zweite Neuzugang in diesem Layout (#647) und belegt
   // dieselbe Zusicherung ein zweites Mal: sein Vorgaenger in WIDGET_IDS ist
   // `birthdays`, und dorthin gehoert er - nicht ans Ende.
-  assert(sichtbar.join(',') === 'weather,metrics,family,budget,birthdays,countdown,rewards,notes',
+  assert(sichtbar.join(',') === 'weather,metrics,family,budget,birthdays,countdown,rewards,media-time,notes',
     `Neuzugang an unerwarteter Stelle: ${sichtbar.join(',')}`);
 });
 

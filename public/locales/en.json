@@ -7110,6 +7110,16 @@
         "exceptionKind": {
             "quota": "Leisure (exempt from quota)",
             "duty": "Required time (never charges the quota)"
-        }
+        },
+        "checkinTitle": "Check in",
+        "checkinHint": "For devices without tracking (console, TV): check in when you start - and out when you are done. The time counts until check-out, at the latest until midnight.",
+        "checkinOpen": "Checked in on {{device}}",
+        "checkinSince": "since {{time}}",
+        "checkinRecent": "Recently: {{list}}",
+        "checkInOn": "Check in: {{device}}",
+        "checkOut": "Check out",
+        "checkinDone": "Checked in - the time now counts against your quota.",
+        "checkoutDone": "Checked out - the time is stopped.",
+        "deviceLabel": "Device"
     }
 }

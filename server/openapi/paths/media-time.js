@@ -269,6 +269,82 @@ export function mediaTimePaths() {
         },
       }),
     },
+    '/api/v1/media-time/sessions': {
+      post: op({
+        summary: 'Book usage minutes manually for a child (parents/admin; devices without an agent)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        description: 'Body: { user_id, minutes (1..720), note?, device_id? }. The minutes count as charged usage for today - for consoles, TVs and corrections.',
+        requestBody: jsonBody('#/components/schemas/MediaTimeManualSessionInput'),
+        responses: {
+          200: {
+            description: 'Booked',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeManualSessionResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'The target child or the device does not exist in this household.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+  
+  '/api/v1/media-time/checkins': {
+      get: op({
+        summary: 'Check-ins of a child (open first; own for the child, any for parents/admin)',
+        tag: 'MediaTime',
+        params: [{ name: 'user_id', in: 'query', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Check-ins',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeCheckinsResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+      post: op({
+        summary: 'Check a child in on a device (open session counts against the quota until check-out or midnight)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        description: 'Body: { user_id, device_id }. One open check-in per child and device; a second attempt answers 409. The open minutes fold into the day quota (server-side).',
+        requestBody: jsonBody('#/components/schemas/MediaTimeCheckinInput'),
+        responses: {
+          201: {
+            description: 'Checked in',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeCheckinResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'The device does not exist for this child (or is revoked).' },
+          409: { description: 'Already checked in on this device.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/checkins/{id}/end': {
+      post: op({
+        summary: 'End an open check-in (check out)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        params: [idParam()],
+        responses: {
+          200: {
+            description: 'Checked out',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeCheckinResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'No open check-in with this id.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
     '/api/v1/media-time/devices': {
       get: op({
         summary: 'List tracker devices (parents/admin)',
@@ -389,7 +465,22 @@ const CASE_REASONS = {
   '/api/v1/media-time/purchases': {
     get: REASON_BAD + ', `media_time_unauthenticated` (401, no session), `media_time_forbidden` (403)',
   },
+  '/api/v1/media-time/sessions': {
+    post: REASON_BAD + ' (400, minutes is not an integer 1..720), `media_time_disabled` (403, the household has media time switched off), '
+      + '`media_time_not_a_child` (403, the target is not a child), `media_time_not_found` (404, the device is unknown)',
+  },
+  '/api/v1/media-time/checkins': {
+    get: REASON_BAD + ', `media_time_forbidden` (403, reading another child without being a parent)',
+    post: REASON_BAD + ', `media_time_disabled` (403, the household has media time switched off), '
+      + '`media_time_not_a_child` (403, the target is not a child of the caller), '
+      + '`media_time_not_found` (404, the device is unknown or revoked), '
+      + '`media_time_already_checked_in` (409, an open check-in exists on this device)',
+  },
+  '/api/v1/media-time/checkins/{id}/end': {
+    post: REASON_BAD + ', `media_time_forbidden` (403), `media_time_not_found` (404, no open check-in)',
+  },
   '/api/v1/media-time/devices': {
+    get: REASON_BAD + ', `media_time_forbidden` (403, reading another child without being a parent)',
     post: '`media_time_bad_request`, `media_time_forbidden` (403), `media_time_not_a_child` (403)',
   },
   '/api/v1/media-time/devices/{id}/revoke': {

@@ -12390,6 +12390,36 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 286,
+    description: 'media time: check-in (check-in/check-out) per device, for agents without an OS integration',
+    // Nutzer 05.11.: "Jedes kind soll sich aber einbuchen und ausbuchen koennen."
+    // Fuer Geraete ohne Agent (Konsole, Fernseher, Tablet ohne Rechten) fuehrt
+    // die App selbst Buch: ein Check-in eroeffnet eine offene Session auf dem
+    // Geraet, der Check-out schliesst sie. Die Minuten zahlen als charged
+    // (classification 'charged', source 'pwa'). Wahrend eine offene Sitzung
+    // laeuft, zaehlt die Zeit weiter - der Server rechnet sie bei jedem /today
+    // und sync-Stand dazu (siehe openCheckinMinutes in services/media-time.js).
+    // Mehrere Geraete parallel: eine offene Sitzung pro (Kind, Geraet) durch
+    // den partial unique index; verschiedene Geraete duerfen offen haben.
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS media_time_checkins (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          device_id   INTEGER NOT NULL REFERENCES media_time_devices(id) ON DELETE CASCADE,
+          started_at  TEXT    NOT NULL,
+          ended_at    TEXT,
+          created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          end_reason  TEXT CHECK (end_reason IN ('manual', 'auto'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_media_time_checkins_open
+          ON media_time_checkins(user_id, device_id) WHERE ended_at IS NULL;
+        CREATE INDEX IF NOT EXISTS idx_media_time_checkins_user
+          ON media_time_checkins(user_id, started_at);
+      `);
+    },
+  },
 ];
 
 /**

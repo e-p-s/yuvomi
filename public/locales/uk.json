@@ -7460,6 +7460,16 @@
         "exceptionKind": {
             "quota": "Freizeit (Ausnahme vom Kontingent)",
             "duty": "Pflichtzeit (zaehlt nicht gegen das Kontingent)"
-        }
+        },
+        "checkinTitle": "Einbuchen",
+        "checkinHint": "Für Geräte ohne Erfassung (Konsole, Fernseher): buch dich ein, wenn du loslegst - und aus, wenn du fertig bist. Die Zeit zählt bis zum Ausbuchen, spätestens bis Mitternacht.",
+        "checkinOpen": "Auf {{device}} eingebucht",
+        "checkinSince": "seit {{time}}",
+        "checkinRecent": "Zuletzt: {{list}}",
+        "checkInOn": "Einbuchen: {{device}}",
+        "checkOut": "Ausbuchen",
+        "checkinDone": "Eingebucht - die Zeit läuft jetzt gegen dein Kontingent.",
+        "checkoutDone": "Ausgebucht - die Zeit ist gestoppt.",
+        "deviceLabel": "Gerät"
     }
 }

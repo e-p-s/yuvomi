@@ -66,6 +66,7 @@ let state = {
   today: null,
   /** Anpassungen des Tages (day-notes) fuer das gewaehlte Kind; null = nie geladen. */
   dayNotes: null,
+  checkins: null,
   devices: null,
   quiet: null,
   settings: null,
@@ -174,8 +175,29 @@ async function loadToday() {
     api.get(`/media-time/today${childQuery()}`),
     loadSettingsLite(),
     loadDayNotes(),
+    ensureDevicesLite(),
+    loadCheckins(),
   ]);
   state.today = today.data ?? null;
+}
+
+/* Check-ins (Einbuchen/Ausbuchen, Nutzer 05.11.): die offenen und die letzten
+ * Sitzungen des gewaehlten Kindes. Scheitert der Zugriff (Kind ohne Geraet),
+ * bleibt null: die Flaeche zeigt dann nichts, statt "nichts gebucht" zu
+ * behaupten. Geraete fuer die Auswahl sind Manager-Pfad - ein Kind bucht auf
+ * seinem einzige(n) Geraet, wenn es genau eins kennt, sonst die Liste. */
+async function loadCheckins() {
+  const target = state.canManage
+    ? state.selectedChildId
+    : (Number.isInteger(state.user?.id) ? state.user.id : null);
+  if (target == null) { state.checkins = null; return; }
+  try {
+    const res = await api.get(`/media-time/checkins?user_id=${encodeURIComponent(target)}`);
+    state.checkins = res.data?.items ?? [];
+  } catch (err) {
+    const status = err?.status ?? err?.response?.status;
+    state.checkins = status === 403 ? [] : null;
+  }
 }
 
 /* Die Anpassungen des Tages (Eltern-Notizen): Eltern sehen sie pro gewaehltem
@@ -501,6 +523,97 @@ function metaCell(label, value) {
       </p>`;
 }
 
+/* ------------------------------------------------------------------ */
+/* Check-in / Check-out (Einbuchen/Ausbuchen, Nutzer 05.11.)            */
+/* ------------------------------------------------------------------ */
+
+/* Geraete fuer die Kachel: GET /devices ist Manager-Pfad. Fuer die Check-in-
+ * Kachel gilt dasselbe Muster wie bei loadDayNotes: Eltern fragen das gewaehlte
+ * Kind ab (?user_id=), ein Kind sich selbst - der Server laesst ein Kind nur
+ * eigene Geraete sehen. Scheitert der Zugriff (403), bleibt null: die Kachel
+ * sagt dann nichts, statt "kein Geraet" zu behaupten. */
+async function ensureDevicesLite() {
+  if (state.devices != null) return;
+  const target = state.canManage
+    ? state.selectedChildId
+    : (Number.isInteger(state.user?.id) ? state.user.id : null);
+  if (target == null) { state.devices = null; return; }
+  try {
+    const res = await api.get(`/media-time/devices?user_id=${encodeURIComponent(target)}`);
+    state.devices = res.data ?? [];
+  } catch (err) {
+    const status = err?.status ?? err?.response?.status;
+    state.devices = status === 403 ? null : (state.devices ?? null);
+  }
+}
+
+function checkinDeviceName(deviceId) {
+  const dev = (state.devices || []).find((d) => d.id === deviceId);
+  return dev?.name || t('mediaTime.deviceLabel');
+}
+
+function renderCheckinSection() {
+  const items = state.checkins;
+  if (!Array.isArray(items)) return '';
+  const open = items.filter((c) => !c.ended_at);
+  const closed = items.filter((c) => c.ended_at);
+  const devices = (state.devices || []).filter((d) => !d.revoked_at);
+  if (!devices.length && !open.length) return '';
+  const rows = open.map((c) => `
+    <li class="list-row">
+      <div class="list-row__main">
+        <p class="list-row__name">${esc(t('mediaTime.checkinOpen', { device: checkinDeviceName(c.device_id) }))}</p>
+        <p class="list-row__meta">${esc(t('mediaTime.checkinSince', { time: dateTimeText(c.started_at) }))}</p>
+      </div>
+      <button class="btn btn--secondary btn--sm" type="button" data-action="mt-checkout" data-checkin-id="${Number(c.id)}">
+        <i data-lucide="log-out" aria-hidden="true"></i>${esc(t('mediaTime.checkOut'))}
+      </button>
+    </li>`).join('');
+  const bookButtons = devices
+    .filter((d) => !open.some((c) => c.device_id === d.id))
+    .map((d) => `
+      <button class="btn btn--secondary btn--sm" type="button" data-action="mt-checkin" data-device-id="${Number(d.id)}">
+        <i data-lucide="log-in" aria-hidden="true"></i>${esc(t('mediaTime.checkInOn', { device: esc(d.name) }))}
+      </button>`).join(' ');
+  const last = closed.slice(0, 3).map((c) =>
+    `${esc(checkinDeviceName(c.device_id))} ${esc(dateTimeText(c.started_at))}`
+  ).join(', ');
+  return `
+    <section class="mt-section" aria-labelledby="mt-checkin-title">
+      <h2 class="mt-section__title u-section-title" id="mt-checkin-title">${esc(t('mediaTime.checkinTitle'))}</h2>
+      <p class="mt-section__note">${esc(t('mediaTime.checkinHint'))}</p>
+      ${rows ? `<ul class="row-carrier">${rows}</ul>` : ''}
+      ${bookButtons ? `<div class="mt-checkin__actions">${bookButtons}</div>` : ''}
+      ${last ? `<p class="mt-section__note">${esc(t('mediaTime.checkinRecent', { list: last }))}</p>` : ''}
+    </section>`;
+}
+
+async function doCheckin(deviceId) {
+  const target = state.canManage ? state.selectedChildId : state.user?.id;
+  if (target == null) return;
+  try {
+    await api.post('/media-time/checkins', { user_id: target, device_id: deviceId });
+    toast(t('mediaTime.checkinDone'));
+    await reloadAfterSave(async () => {
+      await renderCurrentTab(_container, { direction: 0 });
+    });
+  } catch (e) {
+    toast(mediaTimeErrorSentence(e), { type: 'error' });
+  }
+}
+
+async function doCheckout(checkinId) {
+  try {
+    await api.post(`/media-time/checkins/${encodeURIComponent(checkinId)}/end`, {});
+    toast(t('mediaTime.checkoutDone'));
+    await reloadAfterSave(async () => {
+      await renderCurrentTab(_container, { direction: 0 });
+    });
+  } catch (e) {
+    toast(mediaTimeErrorSentence(e), { type: 'error' });
+  }
+}
+
 function renderToday(el) {
   const data = state.today;
   if (!data) {
@@ -610,6 +723,14 @@ function renderToday(el) {
       }).join('')}</ul>
     </section>` : '';
 
+  /* Einbuchen/Ausbuchen (Nutzer 05.11.): "Jedes Kind soll sich einbuchen und
+   * ausbuchen koennen." Fuer Geraete ohne Agent (Konsole, Fernseher, Tablet)
+   * fuehrt das Kind den Buch selbst: ein Knopf pro Geraet. Die offene Sitzung
+   * laeuft live in den Balken (Server: openCheckinMinutes) und endet spaetestens
+   * an Mitternacht. Kinder durfen nur ihr eigenes Geraet buchen (Serverrecht);
+   * die Kachel ist fuer alle am gewaehlten Kind sichtbar. */
+  const checkinSection = renderCheckinSection();
+
   el.insertAdjacentHTML('beforeend', `
     <div class="media-time-content__inner">
       ${header}
@@ -633,6 +754,7 @@ function renderToday(el) {
           ${tracker}
         </div>
       </section>
+      ${checkinSection}
       ${notesSection}
       ${exchange}
       ${setupStepsHtml()}
@@ -644,6 +766,10 @@ function renderToday(el) {
     ?.addEventListener('click', () => openAdjustModal());
   el.querySelector('[data-action="mt-open-manual"]')
     ?.addEventListener('click', () => openManualModal());
+  el.querySelectorAll('[data-action="mt-checkin"]').forEach((btn) =>
+    btn.addEventListener('click', () => doCheckin(Number(btn.dataset.deviceId))));
+  el.querySelectorAll('[data-action="mt-checkout"]').forEach((btn) =>
+    btn.addEventListener('click', () => doCheckout(Number(btn.dataset.checkinId))));
 }
 
 /* Manuelle Buchung (A1: Konsole/Fernseher ohne Agent, und Korrekturen).
