@@ -136,3 +136,4 @@ docs/github-pages/
 
 # macOS sync duplicates (" 2" suffix)
 * 2.*
+__pycache__/
