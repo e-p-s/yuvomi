@@ -4031,6 +4031,39 @@ export const schemas = {
             familylink_status: { type: ['string', 'null'], enum: ['ok', 'login_noetig', null], description: 'Last collector outcome; null before the first run.' },
           },
         },
+        MediaTimeFamilylinkReportInput: {
+          type: 'object',
+          required: ['date', 'children'],
+          description: 'Genau der Report, den scripts/familylink/familyhub_screen.py --json liefert (Push vom Collector-Host).',
+          properties: {
+            date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+            children: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['userId', 'devices'],
+                properties: {
+                  userId: { type: 'string', description: 'Pseudonyme Google-Kennung (Ziffernfolge).' },
+                  name: { type: 'string', description: 'Wird verworfen - Kind-Namen landen nicht in der Datenbank.' },
+                  downtime: { type: ['string', 'null'] },
+                  devices: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, consumed_min: { type: ['number', 'null'] }, allowed_min: { type: ['number', 'null'] }, remaining_min: { type: ['number', 'null'] } } } },
+                },
+              },
+            },
+          },
+        },
+        MediaTimeFamilylinkReportResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { type: 'object', required: ['written', 'errors'], properties: { written: { type: 'integer', minimum: 0 }, errors: { type: 'integer', minimum: 0 } } } },
+        },
+        MediaTimeFamilylinkTokenData: {
+          type: 'object',
+          required: ['token'],
+          properties: {
+            token: { type: 'string', description: 'Klartext nur einmal in dieser Antwort; gespeichert ist ausschliesslich der Hash.' },
+            note: { type: 'string' },
+          },
+        },
         MediaTimeFamilylinkDay: {
           type: 'object',
           required: ['mapped', 'devices'],

@@ -474,6 +474,41 @@ export function mediaTimePaths() {
         },
       }),
     },
+    '/api/v1/media-time/familylink/report': {
+      post: op({
+        summary: 'Push a family link report from the collector host (x-familylink-token, same ingest as the local run)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        requestBody: jsonBody('#/components/schemas/MediaTimeFamilylinkReportInput'),
+        description: 'Der Collector-Host (einziger Rechner mit Google-Sitzung) schickt seinen --json-Report hierher.\n'
+          + 'Falscher Token 401, kaputter Koerper 400 - geschrieben wird nie etwas Halbes und nie eine Null.',
+        responses: {
+          200: {
+            description: 'Accepted (written = rows stored, errors = skipped rows)',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkReportResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/familylink/token': {
+      post: op({
+        summary: 'Create (rotate) the family link report token - plaintext shown exactly once (parents/admin)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        responses: {
+          200: {
+            description: 'New token (store in the collector cron file with 0600, never in the repo)',
+            content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkTokenData' } } } } },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
     '/api/v1/media-time/familylink/ingest': {
       post: op({
         summary: 'Run one family link collector cycle now (parents/admin, same as the five-minute job)',
@@ -532,6 +567,9 @@ const CASE_REASONS = {
   '/api/v1/media-time/familylink/usage': {
     get: REASON_BAD + ' (400, `user_id` or `day` is malformed), `media_time_unauthenticated` (401, no session), '
       + '`media_time_forbidden` (403, reading another child without being a parent)',
+  },
+  '/api/v1/media-time/familylink/report': {
+    post: REASON_BAD + ' (400, Report-Koerper wird von der Ingest-Funktion abgelehnt), `media_time_unauthenticated` (401, x-familylink-token fehlt oder passt nicht)',
   },
   '/api/v1/media-time/familylink/mapping': {
     get: REASON_BAD + ', `media_time_unauthenticated` (401, no session), `media_time_forbidden` (403, reading another child without being a parent)',

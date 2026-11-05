@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit: Family-Link-Push-Kanal.** Der Collector-Host (einziger Rechner
+  mit Google-Sitzung) kann seinen Report stattdessen einsenden: POST
+  `/media-time/familylink/report` mit einem einmal sichtbaren Token
+  (`POST /familylink/token`, gespeichert ist nur der sha256-Hash - gleiches
+  Muster wie die Geraet-Tokens); `scripts/familylink/familylink_push.sh` ist das
+  fertige Cron-Stueck. Falscher Token 401, kaputter Report 400 - geschrieben
+  wird nichts Halbes, nie eine Null.
+
 - **Medienzeit: Google-Family-Link-Istzeit (Spec HANDOVER.md, Migration 287).** Ein
   Collector-Lauf (nur abfragen, nie zurueckspielen) schreibt die echten
   Bildschirmzeiten pro Tag und Geraet in `familylink_daily`; ein Fehlerlauf (401,

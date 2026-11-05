@@ -21,7 +21,7 @@ import express from 'express';
 
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
-import { familylinkStatus, familylinkUsage, runFamilylinkIngest } from '../services/familylink.js';
+import { familylinkStatus, familylinkUsage, runFamilylinkIngest, ingestFamilylinkReport } from '../services/familylink.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
@@ -1428,6 +1428,45 @@ router.put('/familylink/mapping', requireManager, (req, res) => {
   } catch (err) {
     log.error('PUT /familylink/mapping error:', err);
     return res.status(500).json({ error: 'Failed to save family link mapping.', code: 500 });
+  }
+});
+
+/* Ingest-Token (Eltern): einmal erzeugt, nur einmal sichtbar - der
+ * Collector-Host (CT122, einziger Rechner mit Google-Sitzung) schickt damit
+ * seine Reports an POST /familylink/report. Gespeichert wird nur der Hash
+ * (gleiches Muster wie die Geraet-Tokens); der Klartext geht nie ins Repo. */
+router.post('/familylink/token', requireManager, (req, res) => {
+  try {
+    const d = db.get();
+    const token = 'flk_' + crypto.randomBytes(32).toString('base64url');
+    d.prepare(`
+      INSERT INTO sync_config (key, value) VALUES ('familylink_report_token_hash', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(hashDeviceToken(token));
+    return res.json({ data: { token, note: 'Nur einmal sichtbar - im Collector-Cron ablegen (Datei mit 0600), nie ins Repo.' } });
+  } catch (err) {
+    log.error('POST /familylink/token error:', err);
+    return res.status(500).json({ error: 'Failed to create family link token.', code: 500 });
+  }
+});
+
+/* Report-Push vom Collector-Host: dieselbe Ingest-Funktion wie der lokale
+ * Lauf. Ungleicher/fehlender Token => 401, kaputter Koerper => 400 -
+ * geschrieben wird nie etwas Halbes, nie eine Null (Spec-Regel). */
+router.post('/familylink/report', (req, res) => {
+  try {
+    const d = db.get();
+    const stored = d.prepare(
+      "SELECT value FROM sync_config WHERE key = 'familylink_report_token_hash'"
+    ).get()?.value;
+    const given = req.get('x-familylink-token') || '';
+    if (!stored || !given || hashDeviceToken(given) !== stored) {
+      return res.status(401).json({ error: 'Valid x-familylink-token required.', code: 401, reason: 'media_time_unauthenticated' });
+    }
+    const r = ingestFamilylinkReport(d, req.body);
+    return res.json({ data: { written: r.written, errors: r.errors } });
+  } catch (err) {
+    return res.status(400).json({ error: 'Report not accepted.', code: 400, reason: 'media_time_bad_request' });
   }
 });
 

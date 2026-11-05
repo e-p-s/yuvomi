@@ -166,3 +166,42 @@ test('GET /today - familylink-Block ohne Zuordnung: mapped false, keine Null-Zei
   assert.equal(res.body.data.familylink.devices.length, 0);
   assert.ok(dayKey.length === 10);
 });
+
+test('POST /familylink/token + /familylink/report — Fluss: Token 401/401/200/400', async () => {
+  const t = await call('POST', '/familylink/token', { body: {} });
+  assert.equal(t.status, 200);
+  const token = t.body.data.token;
+  assert.ok(String(token).startsWith('flk_'), 'Token-Format');
+  const post = (tok, body) => fetch(`${baseUrl}/familylink/report`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(tok ? { 'x-familylink-token': tok } : {}) },
+    body: JSON.stringify(body),
+  });
+  const noTok = await post(null, { date: '2026-11-05', children: [] });
+  assert.equal(noTok.status, 401);
+  const badTok = await post('flk_falsch', { date: '2026-11-05', children: [] });
+  assert.equal(badTok.status, 401);
+  await call('PUT', '/familylink/mapping', { body: { user_id: kidB.id, google_uid: '5001234567', devices: [] } });
+  const ok = await post(token, {
+    date: '2026-11-05',
+    children: [{ userId: '5001234567', name: 'Verworfen', devices: [
+      { id: 'gd-1', consumed_min: 20, allowed_min: 60, remaining_min: 40 },
+    ] }],
+  });
+  assert.equal(ok.status, 200);
+  const j = await ok.json();
+  assert.equal(j.data.written, 1);
+  const childRow = db.prepare(
+    'SELECT display_name FROM familylink_children WHERE google_uid = ?'
+  ).get('5001234567');
+  assert.notEqual(childRow.display_name, 'Verworfen', 'der Google-Name aus dem Push wird nicht gespeichert');
+  const broken = await post(token, { date: 'morgen', children: [] });
+  assert.equal(broken.status, 400);
+  assert.equal((await broken.json()).reason, 'media_time_bad_request');
+});
+
+test('POST /familylink/token — Mitglied ohne Elternrolle 403', async () => {
+  const member = { id: db.prepare("INSERT INTO users (username, display_name, password_hash, role, family_role) VALUES ('fltok','T','x','member','other')").run().lastInsertRowid, role: 'member' };
+  const res = await call('POST', '/familylink/token', { actor: member, body: {} });
+  assert.equal(res.status, 403);
+});
