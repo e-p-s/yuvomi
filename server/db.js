@@ -12304,6 +12304,92 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 285,
+    description: 'media time: enforcement flag, app duty/exempt rule kinds, per-device quota',
+    // Entscheidung des Nutzers (04.11.): "das kind hat 30min zeit. sind die
+    // 30min soll es nicht mehr mehr machen duerfen bzw eine nachricht
+    // bekommen das die zeit um ist. bei dem pc programm koennte man ja ein
+    // logout initieren". Die Antwort des Servers war bisher nur informativ
+    // (Treuhaender-Modell). media_time_enforcement hebt das auf: 'count'
+    // (Default, altes Verhalten) oder 'lock' (Geraete sperren, wenn der
+    // Server state=exceeded oder quiet liefert).
+    //
+    // media_time_app_exceptions.kind: 'quota' = Zeit zaehlt nicht (Ausnahme,
+    // Entscheidung Android: Schulmanager ausschliessen), 'duty' = Pflichtzeit
+    // (Busticket, Schulmanager, Hausaufgaben). Pflichtzeit zaehlt NICHT gegen
+    // das Kontingent, wird aber als eigener Satz gesammelt und sichtbar
+    // gemacht (Anforderung 31.10.: frei konfigurierbare Pflichtzeit).
+    //
+    // media_time_quotas.device_id: Kontingent pro Geraet (Anforderung 31.10.:
+    // "taegliches kontigent ggf pro geraet"). NULL = Kontingent fuer das Kind
+    // ueber alle Geraete; ein Wert gilt fuer genau dieses Geraet.
+    //
+    // Die classification CHECK-Liste enthaelt neu 'duty' (Pflichtzeit). SQLite
+    // kann ein CHECK nicht aendern, deshalb wird die Tabelle umgebaut: neue
+    // Tabelle, Daten umziehen, alte tauschen. Idempotent ueber IF NOT EXISTS
+    // plus bedingten Umbau nur wenn 'duty' noch fehlt (PRAGMA table_info).
+    up(database) {
+      const cols = database.prepare("PRAGMA table_info(media_time_sessions)").all();
+      const checkRow = database.prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'media_time_sessions'"
+      ).get();
+      const needsDuty = !checkRow || !/'duty'/.test(checkRow.sql);
+      if (needsDuty) {
+        database.exec('PRAGMA foreign_keys=OFF');
+        database.exec(`
+          CREATE TABLE media_time_sessions__new (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_key       TEXT    NOT NULL,
+            user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            device_id         INTEGER REFERENCES media_time_devices(id) ON DELETE SET NULL,
+            package_name      TEXT,
+            app_label         TEXT,
+            started_at        TEXT    NOT NULL,
+            ended_at          TEXT,
+            used_minutes      INTEGER NOT NULL DEFAULT 0 CHECK (used_minutes >= 0),
+            minute_key        TEXT    NOT NULL,
+            kind              TEXT    NOT NULL DEFAULT 'foreground'
+                                    CHECK (kind IN ('foreground', 'screen_on', 'service')),
+            system_component  INTEGER NOT NULL DEFAULT 0 CHECK (system_component IN (0, 1)),
+            classification    TEXT    NOT NULL DEFAULT 'unknown'
+                                    CHECK (classification IN ('charged', 'exempt', 'system', 'unknown', 'credit', 'duty')),
+            exception_rule_id INTEGER REFERENCES media_time_app_exceptions(id) ON DELETE SET NULL,
+            source            TEXT    NOT NULL DEFAULT 'apk'
+                                    CHECK (source IN ('apk', 'pwa', 'manual', 'adjust', 'backfill', 'win')),
+            reported_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            updated_at        TEXT,
+            UNIQUE (device_id, session_key)
+          );
+          INSERT INTO media_time_sessions__new
+            SELECT id, session_key, user_id, device_id, package_name, app_label, started_at,
+                   ended_at, used_minutes, minute_key, kind, system_component, classification,
+                   exception_rule_id, source, reported_by, created_at, updated_at
+            FROM media_time_sessions;
+          DROP TABLE media_time_sessions;
+          ALTER TABLE media_time_sessions__new RENAME TO media_time_sessions;
+          CREATE INDEX IF NOT EXISTS idx_media_time_sessions_user_day
+            ON media_time_sessions(user_id, minute_key);
+          CREATE INDEX IF NOT EXISTS idx_media_time_sessions_pkg
+            ON media_time_sessions(package_name);
+        `);
+        database.exec('PRAGMA foreign_keys=ON');
+      }
+      database.exec(`
+        ALTER TABLE media_time_app_exceptions
+          ADD COLUMN kind TEXT NOT NULL DEFAULT 'quota'
+            CHECK (kind IN ('quota', 'duty'));
+        ALTER TABLE media_time_quotas
+          ADD COLUMN device_id INTEGER REFERENCES media_time_devices(id) ON DELETE CASCADE;
+        CREATE INDEX IF NOT EXISTS idx_media_time_quotas_device
+          ON media_time_quotas(device_id) WHERE device_id IS NOT NULL;
+        INSERT INTO sync_config (key, value)
+        SELECT 'media_time_enforcement', 'count'
+        WHERE NOT EXISTS (SELECT 1 FROM sync_config WHERE key = 'media_time_enforcement');
+      `);
+    },
+  },
 ];
 
 /**

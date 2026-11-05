@@ -14,6 +14,9 @@ public sealed class AgentConfig
     public int IdleThresholdSec { get; set; } = 60;
     public int HeartbeatSec { get; set; } = 60;
     public int SyncIntervalSec { get; set; } = 120;
+    /// <summary>Sekunden zwischen "Zeit ist um"-Hinweis und automatischem Logoff.
+    /// Nur wirksam, wenn der Server enforcement='lock' sagt (media_time_enforcement).</summary>
+    public int SperrFristSec { get; set; } = 30;
     /// <summary>Luecken <= N Sekunden zwischen Foreground-Intervallen werden mergiert.</summary>
     public int MergeGapSec { get; set; } = 3;
 

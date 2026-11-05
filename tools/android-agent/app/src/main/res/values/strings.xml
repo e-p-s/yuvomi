@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">Yuvomi Medienzeit</string>
 
+    <!-- Zeit ist um (Server enforcement='lock') -->
+    <string name="time_up_title">Zeit ist um</string>
+    <string name="time_up_body">Dein Tageskontingent ist aufgebraucht. Frag Deine Eltern, wenn Du denkst, das stimmt nicht - sie koennen das Kontingent fuer heute anpassen oder Du tauschst Punkte fuer Minuten.</string>
+
     <!-- Schritt 1: Erklaerseite -->
     <string name="step1_title">Was Yuvomi erfasst - und was nicht</string>
     <string name="step1_body">Yuvomi zaehlt Bildschirmzeit pro App dafuer, dass dein Kind sein Tageskontingent sehen kann.\n\nErfasst wird NUR:\n• Paketname der App (z. B. com.example.schulmanager)\n• Start- und Endzeit der Nutzung\n\nErfasst wird NICHT:\n• kein Bildschirminhalt, keine URLs, keine Nachrichten\n• kein Zugriff auf Dateien, Kameras oder Kontakte\n\nDeshalb braucht Yuvomi auch KEIN „Bildschirminhalt lesen" (Accessibility) - es reicht die System-Statistik „welche App war wann vorne". Die Zeiten gehen nur an EUREN selbst gehosteten Yuvomi-Server, nie an Dritte.</string>

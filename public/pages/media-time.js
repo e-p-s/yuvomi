@@ -178,18 +178,21 @@ async function loadToday() {
   state.today = today.data ?? null;
 }
 
-/* Die Anpassungen des Tages (Eltern-Notizen) sind ein Manager-Pfad. Ohne
- * Manager-Recht bleibt der Stand leer - das Kind sieht die Begruendung der
- * laufenden Anpassung am Balken (today.reason), die Liste der Historie nicht.
- * Scheitert die Abfrage anders als am Recht, bleibt null: die Liste sagt dann
- * nichts, statt "heute nichts" zu behaupten, ohne es zu wissen. */
+/* Die Anpassungen des Tages (Eltern-Notizen): Eltern sehen sie pro gewaehltem
+ * Kind, Kinder sehen IHRE EIGENE Historie (Transparenz, Nutzer 04.11.: "Kinder
+ * sehen die Begruendung"). Der Server-Pfad laesst beides zu (GET /day-notes:
+ * eigenes Kind oder Elter). Scheitert die Abfrage anders als am Recht, bleibt
+ * null: die Liste sagt dann nichts, statt "heute nichts" zu behaupten. */
 async function loadDayNotes() {
-  if (!state.canManage || state.selectedChildId == null) {
+  const target = state.canManage
+    ? state.selectedChildId
+    : (Number.isInteger(state.user?.id) ? state.user.id : null);
+  if (target == null) {
     state.dayNotes = [];
     return;
   }
   try {
-    const res = await api.get(`/media-time/quotas/${encodeURIComponent(state.selectedChildId)}/day-notes`);
+    const res = await api.get(`/media-time/quotas/${encodeURIComponent(target)}/day-notes`);
     state.dayNotes = res.data?.items ?? [];
   } catch (err) {
     if ((err?.status ?? err?.response?.status) === 403) {
@@ -573,8 +576,11 @@ function renderToday(el) {
     adjusted: adjusted >= 0 ? `+${fmtNum(adjusted)}` : `-${fmtNum(Math.abs(adjusted))}`,
     quota: fmtNum(quota),
   }))}</span>
-        ${state.canManage ? `<button class="btn btn--secondary btn--sm" type="button" data-action="mt-open-adjust">
+        ${state.canManage ? `<button class="btn btn--secondary btn--sm" type="button" data-action="mt-ope
           <i data-lucide="pencil" aria-hidden="true"></i>${esc(t('mediaTime.adjustAction'))}
+        </button>
+        <button class="btn btn--secondary btn--sm" type="button" data-action="mt-open-manual">
+          <i data-lucide="plus" aria-hidden="true"></i>${esc(t('mediaTime.manualTitle'))}
         </button>` : ''}
       </p>
       ${reasonText ? `<p class="mt-quota-reason">${esc(t('mediaTime.quotaReason', { reason: reasonText }))}</p>` : ''}`;
@@ -584,7 +590,7 @@ function renderToday(el) {
    * sich selbst (der Server erlaubt beides). `null` = die Antwort ist nie
    * gekommen: dann steht hier nichts, was "heute nichts" behauptet. */
   const notes = state.dayNotes;
-  const notesSection = (state.canManage || state.user?.id === state.selectedChildId) && Array.isArray(notes) && notes.length
+  const notesSection = (state.canManage || (state.user?.id != null)) && Array.isArray(notes) && notes.length
     ? `
     <section class="mt-section" aria-labelledby="mt-day-notes-title">
       <h2 class="mt-section__title u-section-title" id="mt-day-notes-title">${esc(t('mediaTime.dayNotesTitle'))}</h2>
@@ -623,6 +629,7 @@ function renderToday(el) {
           ${metaCell(t('mediaTime.metaExempt'), minutesLabel(data.exempt_min))}
           ${metaCell(t('mediaTime.metaUnknown'), minutesLabel(data.unknown_min))}
           ${metaCell(t('mediaTime.metaPurchased'), minutesLabel(data.purchased_min))}
+          ${(Number(data.duty_min) || 0) > 0 ? metaCell(t('mediaTime.metaDuty'), minutesLabel(data.duty_min)) : ''}
           ${tracker}
         </div>
       </section>
@@ -635,6 +642,62 @@ function renderToday(el) {
     ?.addEventListener('click', () => openPurchaseModal());
   el.querySelector('[data-action="mt-open-adjust"]')
     ?.addEventListener('click', () => openAdjustModal());
+  el.querySelector('[data-action="mt-open-manual"]')
+    ?.addEventListener('click', () => openManualModal());
+}
+
+/* Manuelle Buchung (A1: Konsole/Fernseher ohne Agent, und Korrekturen).
+ * minutes 1..720, Grund optional; der Server fuehrt die Session als charged. */
+function openManualModal() {
+  if (!state.canManage || state.selectedChildId == null) return;
+  const modalContext = captureModalContext();
+  openModal({
+    title: t('mediaTime.manualTitle'),
+    content: `
+      <form id="mt-manual-form" novalidate>
+        <div class="form-group">
+          <label class="label" for="mt-manual-minutes">${esc(t('mediaTime.manualMinutesLabel'))}${REQUIRED_MARK}</label>
+          <input class="input" id="mt-manual-minutes" type="number" min="1" max="720" step="1" required inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="label" for="mt-manual-note">${esc(t('mediaTime.manualNoteLabel'))}</label>
+          <input class="input" id="mt-manual-note" maxlength="120">
+        </div>
+        <div id="mt-manual-error" class="form-error" role="alert" hidden></div>
+        <div class="modal-panel__footer modal-panel__footer--plain">
+          <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
+          <button type="submit" class="btn btn--primary" id="mt-manual-submit">${esc(t('common.add'))}</button>
+        </div>
+      </form>`,
+    onSave: async (panel) => {
+      const errEl = panel.querySelector('#mt-manual-error');
+      const submit = panel.querySelector('#mt-manual-submit');
+      const fail = (msg) => { errEl.textContent = msg; errEl.hidden = false; };
+      const minutes = Number.parseInt(panel.querySelector('#mt-manual-minutes').value, 10);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
+        fail(t('mediaTime.adjustDeltaProblem'));
+        return;
+      }
+      submit.disabled = true;
+      try {
+        await api.post('/media-time/sessions', {
+          user_id: state.selectedChildId,
+          minutes,
+          note: String(panel.querySelector('#mt-manual-note').value || '').trim() || null,
+        });
+        if (!isModalContextCurrent(modalContext)) return;
+        closeModal({ force: true, context: modalContext });
+        toast(t('mediaTime.manualSaved'));
+        await reloadAfterSave(async () => {
+          await renderCurrentTab(_container, { direction: 0 });
+          refocusAfterRender();
+        });
+      } catch (e) {
+        submit.disabled = false;
+        fail(mediaTimeErrorSentence(e));
+      }
+    },
+  });
 }
 
 /* Anzeigenamen fuer die Anpassungs-Notizen: derPicker-Kinder, sonst der
@@ -809,6 +872,8 @@ function openPurchaseModal() {
 function platformLabel(platform) {
   if (platform === 'android') return t('mediaTime.platformAndroid');
   if (platform === 'windows') return t('mediaTime.platformWindows');
+  if (platform === 'console') return t('mediaTime.platformConsole');
+  if (platform === 'tv') return t('mediaTime.platformTv');
   return platform || t('mediaTime.platformUnknown');
 }
 
@@ -922,6 +987,8 @@ function openDeviceModal() {
           <select class="input" id="mt-device-platform">
             <option value="windows">${esc(t('mediaTime.platformWindows'))}</option>
             <option value="android" selected>${esc(t('mediaTime.platformAndroid'))}</option>
+            <option value="console">${esc(t('mediaTime.platformConsole'))}</option>
+            <option value="tv">${esc(t('mediaTime.platformTv'))}</option>
           </select>
         </div>
         <div class="form-group">
@@ -1078,6 +1145,14 @@ function renderRules(el) {
           </select>
           <p class="form-hint">${esc(t('mediaTime.hardCapHint'))}</p>
         </div>
+        <div class="form-group mt-hardcap-row">
+          <label class="label" for="mt-enforcement">${esc(t('mediaTime.enforcementLabel'))}</label>
+          <select class="input" id="mt-enforcement">
+            <option value="count">${esc(t('mediaTime.enforcementCount'))}</option>
+            <option value="lock">${esc(t('mediaTime.enforcementLock'))}</option>
+          </select>
+          <p class="form-hint">${esc(t('mediaTime.enforcementHelp'))}</p>
+        </div>
       </section>
 
       <section class="mt-section" aria-labelledby="mt-exceptions-title">
@@ -1131,6 +1206,7 @@ function wireRules(el) {
     el.querySelector('#mt-rate-minutes').value = s.exchange.minutes;
   }
   if (s) el.querySelector('#mt-hardcap').value = s.hard_cap ? '1' : '0';
+  el.querySelector('#mt-enforcement') && (el.querySelector('#mt-enforcement').value = s?.enforcement === 'lock' ? 'lock' : 'count');
   el.querySelector('[data-action="mt-save-rate"]')?.addEventListener('click', () => saveRate(el));
   el.querySelector('[data-action="mt-off-rate"]')?.addEventListener('click', async () => {
     await api.put('/media-time/settings', { exchange: null });
@@ -1138,6 +1214,14 @@ function wireRules(el) {
     await reloadAfterSave(() => renderCurrentTab(_container, { direction: 0 }));
   });
   el.querySelector('#mt-hardcap')?.addEventListener('change', (ev) => saveHardCap(ev.target.value === '1'));
+  el.querySelector('#mt-enforcement')?.addEventListener('change', async (ev) => {
+    try {
+      await api.put('/media-time/settings', { enforcement: ev.target.value });
+      toast(ev.target.value === 'lock' ? t('mediaTime.enforcementLockToast') : t('mediaTime.enforcementCountToast'));
+    } catch (err) {
+      toast(mediaTimeErrorSentence(err), 'danger');
+    }
+  });
 
   /* (c) Ausnahmen */
   renderExceptionRows(el);
@@ -1242,7 +1326,7 @@ function renderExceptionRows(el) {
     <li class="list-row" data-exception="${item.id}">
       <div class="list-row__main">
         <p class="list-row__name">${esc(item.pattern)}</p>
-        <p class="list-row__meta">${esc(t(`mediaTime.exceptionMatch.${item.match_type}`))} · ${esc(t(`mediaTime.exceptionExempt.${item.exempt_from}`))} · ${esc(exceptionUserLabel(item.user_id))}${item.note ? ` · ${esc(item.note)}` : ''}</p>
+        <p class="list-row__meta">${item.kind === 'duty' ? `<span class="badge badge--soft">${esc(t('mediaTime.exceptionKind.duty'))}</span> · ` : ''}${esc(t(`mediaTime.exceptionMatch.${item.match_type}`))} · ${esc(t(`mediaTime.exceptionExempt.${item.exempt_from}`))} · ${esc(exceptionUserLabel(item.user_id))}${item.note ? ` · ${esc(item.note)}` : ''}</p>
       </div>
       <div class="list-row__actions">
         ${rowMenuHtml({
@@ -1322,6 +1406,14 @@ function openExceptionModal(existing) {
           <p class="form-hint">${esc(t('mediaTime.exceptionPatternHelp'))}</p>
         </div>
         <div class="form-group">
+          <label class="label" for="mt-exc-kind">${esc(t('mediaTime.exceptionKindLabel'))}</label>
+          <select class="input" id="mt-exc-kind">
+            <option value="quota">${esc(t('mediaTime.exceptionKind.quota'))}</option>
+            <option value="duty">${esc(t('mediaTime.exceptionKind.duty'))}</option>
+          </select>
+          <p class="form-hint">${esc(t('mediaTime.exceptionKindHelp'))}</p>
+        </div>
+        <div class="form-group">
           <label class="label" for="mt-exc-note">${esc(t('mediaTime.exceptionNoteLabel'))}</label>
           <input class="input" id="mt-exc-note" maxlength="500">
         </div>
@@ -1339,6 +1431,8 @@ function openExceptionModal(existing) {
         match_type: panel.querySelector('#mt-exc-match').value,
         pattern: String(panel.querySelector('#mt-exc-pattern').value || '').trim(),
         exempt_from: panel.querySelector('#mt-exc-exempt').value,
+        // 'duty' = Pflichtzeit (zaehlt nie gegen das Kontingent, eigener Satz in /today)
+        kind: panel.querySelector('#mt-exc-kind')?.value === 'duty' ? 'duty' : 'quota',
         note: String(panel.querySelector('#mt-exc-note').value || '').trim() || null,
       };
       if (!item.pattern) {
@@ -1381,6 +1475,7 @@ function openExceptionModal(existing) {
     set('#mt-exc-match', existing.match_type);
     set('#mt-exc-pattern', existing.pattern);
     set('#mt-exc-exempt', existing.exempt_from);
+    set('#mt-exc-kind', existing.kind === 'duty' ? 'duty' : 'quota');
     set('#mt-exc-note', existing.note ?? '');
   }
 }
@@ -1443,9 +1538,23 @@ function renderExchange(el) {
 export async function render(container, { user } = {}) {
   state.user = user || null;
   state.tab = tabFromPath(location.pathname);
+  // Die Kachel auf der Uebersicht springt mit ?user_id=<kind> voraus
+  // (dashboard.js, data-route). Ohne diese Zeile wuerde ensureChildren immer
+  // auf dem ersten Kind landen und der Sprung waere einer zu viel.
+  applyUserIdFromSearch();
   _container = container;
   renderShell(container);
   await renderCurrentTab(container);
+}
+
+/** ?user_id= (Kachel-Sprung, tiefer Link) als Vorauswahl, falls gueltig. */
+function applyUserIdFromSearch() {
+  try {
+    const raw = new URLSearchParams(location.search).get('user_id');
+    if (raw == null) return;
+    const id = Number.parseInt(raw, 10);
+    if (Number.isInteger(id) && id > 0) state.selectedChildId = id;
+  } catch { /* abweichende Adresse: Vorauswahl bleibt aus */ }
 }
 
 /**

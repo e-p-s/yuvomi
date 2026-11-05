@@ -33,6 +33,15 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool UnhookWinEvent(IntPtr hWinEventHook);
 
+    // ------------------------------------------------------------- Logoff
+    // Nur der eigene Session-Logoff (kein Force, kein Shutdown) - das Kind
+    // sieht erst den Hinweis, dann meldet Windows seinen Account ab.
+    public const uint EWX_LOGOFF = 0x00000000;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ExitWindowsEx(uint uFlags, uint dwReason);
+
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
     public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;

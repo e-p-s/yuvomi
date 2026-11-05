@@ -7091,6 +7091,25 @@
         "adjustConfirmTitle": "Đặt hạn mức từ {{from}} sang {{to}} phút?",
         "adjustConfirmDetail": "Lý do: {{reason}}",
         "dayNotesTitle": "Điều chỉnh hôm nay",
-        "dayNotesBy": "bởi {{name}}"
+        "dayNotesBy": "bởi {{name}}",
+        "metaDuty": "Pflichtzeit",
+        "exceptionKindLabel": "Art der Regel",
+        "exceptionKindHelp": "Pflichtzeit sind feste Medienblöcke (z.B. Lern-App, Schulprojekt). Sie erscheinen getrennt auf der Tagesseite und kosten kein Guthaben.",
+        "enforcementLabel": "Bei Zeitende",
+        "enforcementCount": "Nur melden (Geräte bleiben nutzbar)",
+        "enforcementLock": "Geräte dürfen sperren (PC-Abmeldung, Hinweisschirm)",
+        "enforcementHelp": "Die Sperre wirkt auf Geräten mit installiertem Medium-Agenten. Der Hinweis zeigt die Begründung der Eltern.",
+        "enforcementLockToast": "Sperre aktiv: Geräte melden Zeitende mit Abmeldung",
+        "enforcementCountToast": "Nur Meldung: Geräte zeigen die Zeit, sperren nicht",
+        "platformConsole": "Konsole",
+        "platformTv": "Fernseher",
+        "manualTitle": "Zeit manuell buchen",
+        "manualMinutesLabel": "Minuten",
+        "manualNoteLabel": "Grund (optional)",
+        "manualSaved": "Zeit gebucht",
+        "exceptionKind": {
+            "quota": "Freizeit (Ausnahme vom Kontingent)",
+            "duty": "Pflichtzeit (zaehlt nicht gegen das Kontingent)"
+        }
     }
 }

@@ -11720,7 +11720,10 @@ async function loadMediaTimeSlice(user) {
   const targets = manager
     ? (children ?? [])
     : (selfId != null ? [{ id: selfId, display_name: user?.display_name ?? '' }] : []);
-  if (!targets.length) return { children: [], failed: 0, manager: false };
+  // Das echte manager-Flag bleibt erhalten: ein Elternteil ohne Kinder sieht
+  // den Leerzustand (Antwort ist da, sie sagt "niemand"), ein Kind ohne eigene
+  // Antwort faellt in die Fehlerkachel.
+  if (!targets.length) return { children: [], failed: 0, manager };
   const settled = await Promise.allSettled(
     targets.map((c) => api.get(`/media-time/today?user_id=${encodeURIComponent(c.id)}`)),
   );
@@ -11749,6 +11752,12 @@ function mediaTimeTone(row) {
   const today = row?.today ?? {};
   if (today.enabled === false) return 'off';
   if (today.state === 'exceeded') return 'exceeded';
+  // Der Server definiert nearing (NEARING_THRESHOLD_MIN, services/media-time.js) -
+  // die Kachel uebernimmt seinen State, eine eigene Schwelle waere eine zweite
+  // Wahrheit fuer dieselbe Situation. Ohne Server-Staat (aeltere Antwort) gilt
+  // der Viertel-Fallback.
+  if (today.state === 'nearing') return 'nearing';
+  if (today.state) return 'ok';
   const quota = Number(today.quota_min) || 0;
   const remaining = Math.max(0, Number(today.remaining_min) || 0);
   if (quota > 0 && remaining / quota < 0.25) return 'nearing';

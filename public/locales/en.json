@@ -7091,6 +7091,25 @@
         "adjustConfirmTitle": "Set the quota from {{from}} to {{to}} min?",
         "adjustConfirmDetail": "Reason: {{reason}}",
         "dayNotesTitle": "Today's adjustments",
-        "dayNotesBy": "by {{name}}"
+        "dayNotesBy": "by {{name}}",
+        "metaDuty": "Required time",
+        "exceptionKindLabel": "Rule type",
+        "exceptionKindHelp": "Required time are fixed media blocks (e.g. learning app, school project). They appear separately on the day page and do not cost credit.",
+        "enforcementLabel": "When time is up",
+        "enforcementCount": "Notify only (devices stay usable)",
+        "enforcementLock": "Devices may lock (PC sign-out, notice screen)",
+        "enforcementHelp": "The lock applies on devices with the media agent installed. The notice shows the parents’ reason.",
+        "enforcementLockToast": "Lock active: devices report time-up with sign-out",
+        "enforcementCountToast": "Notify only: devices show the time without locking",
+        "platformConsole": "Console",
+        "platformTv": "TV",
+        "manualTitle": "Book time manually",
+        "manualMinutesLabel": "Minutes",
+        "manualNoteLabel": "Reason (optional)",
+        "manualSaved": "Time booked",
+        "exceptionKind": {
+            "quota": "Leisure (exempt from quota)",
+            "duty": "Required time (never charges the quota)"
+        }
     }
 }

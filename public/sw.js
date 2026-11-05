@@ -483,6 +483,7 @@ const APP_SHELL = [
   '/utils/toast-surface.js',
   '/utils/reload-after-save.js',
   '/utils/rewards-tabs-side.js',
+  '/utils/local-toggle.js',
   '/utils/media-time-dashboard.js',
   '/utils/background-inert.js',
   '/utils/today-sheet.js',

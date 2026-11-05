@@ -99,5 +99,15 @@
         <activity
             android:name=".StatusActivity"
             android:exported="false" />
+
+        <!-- "Zeit ist um" (Server enforcement='lock'): Vollbild-Hinweis,
+             nicht Launcher-Start, kein exported. -->
+        <activity
+            android:name=".TimeUpActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showOnLockScreen="true"
+            android:theme="@style/Theme.YuvomiTracker" />
     </application>
 </manifest>

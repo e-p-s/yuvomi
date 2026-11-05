@@ -14,6 +14,7 @@ public sealed class AgentCoordinator : IDisposable
     private readonly PowerWatcher _power;
     private readonly SessionAggregator _aggregator;
     private readonly ApiClient _api;
+    private readonly EnforcementController? _enforcement;
 
     private readonly CancellationTokenSource _cts = new();
     private Task? _tickTask;
@@ -31,6 +32,10 @@ public sealed class AgentCoordinator : IDisposable
         _foreground = new ForegroundTracker();
         _idle = new IdleTracker(cfg.IdleThresholdSec);
         _aggregator = new SessionAggregator(device, cfg);
+        // Enforcement (Nutzer 04.11.): bei enforcement='lock' vom Server meldet
+        // der Agent "Zeit ist um" und meldet den PC nach Ablauf der Frist ab.
+        // 'count' (Default) = reine Meldespur, der Agent sperrt nie.
+        _enforcement = new EnforcementController(api, cfg);
     }
 
     public void Start()
@@ -85,6 +90,7 @@ public sealed class AgentCoordinator : IDisposable
                     new DateTime(DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute * TimeSpan.TicksPerMinute,
                         DateTimeKind.Utc));
                 var ok = await _api.HeartbeatAsync(key, _cts.Token);
+                _enforcement?.Evaluate();
                 StatusChanged?.Invoke(ok ? "online" : "offline");
             }
             catch (OperationCanceledException) { break; }
@@ -107,6 +113,7 @@ public sealed class AgentCoordinator : IDisposable
                 if (payload.Count > 0)
                 {
                     var ok = await _api.SyncAsync(payload, _cts.Token);
+                    _enforcement?.Evaluate();
                     if (ok) AgentLog.Info("Sync: " + payload.Count + " Sessions uebertragen");
                     // ok==false heisst: zurueck im Puffer, beim naechsten Durchlauf erneut.
                 }
@@ -141,6 +148,7 @@ public sealed class AgentCoordinator : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
+        _enforcement?.Dispose();
         _foreground.Dispose();
         _aggregator.Dispose();
     }

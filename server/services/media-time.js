@@ -59,6 +59,17 @@ export const MEDIA_TIME_ENABLED_KEY = 'media_time_enabled';
 export const MEDIA_TIME_QUIET_HOURS_KEY = 'media_time_quiet_hours_global';
 export const MEDIA_TIME_EXCHANGE_RATE_KEY = 'media_time_exchange_rate';
 export const MEDIA_TIME_HARD_CAP_KEY = 'media_time_hard_cap';
+// 'count' (Default): Server sagt nur zu, Geraete melden und sperren nichts.
+// 'lock': Geraete duerfen sperren, wenn der Server exceeded oder quiet meldet
+// (Nutzer 04.11.: "sind die 30min weg soll es nicht weiter gehen duerfen,
+// beim PC koennte man ein logout initieren").
+export const MEDIA_TIME_ENFORCEMENT_KEY = 'media_time_enforcement';
+
+/** Der Haushalts-Enforcement-Modus: 'count' oder 'lock'. */
+export function mediaTimeEnforcement(d) {
+  const row = d.prepare('SELECT value FROM sync_config WHERE key = ?').get(MEDIA_TIME_ENFORCEMENT_KEY);
+  return row && row.value === 'lock' ? 'lock' : 'count';
+}
 
 export function hashDeviceToken(token) {
   return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
@@ -252,6 +263,11 @@ export function classifySession(d, userId, { packageName, systemComponent }) {
   const rules = activeExceptionRules(d, userId);
   const rule = matchExceptionRule(rules, packageName);
   if (rule) {
+    // Pflichtzeit (Busticket, Schulmanager, Hausaufgaben): zahlt NICHT gegen
+    // das Kontingent und erscheint als eigener Satz 'duty' in GET /today.
+    if (rule.kind === 'duty') {
+      return { classification: 'duty', ruleId: rule.id, exemptFrom: 'duty' };
+    }
     if (rule.exempt_from === 'charged') {
       return { classification: 'charged', ruleId: rule.id, exemptFrom: 'charged' };
     }
@@ -279,15 +295,25 @@ export function dayUsage(d, userId, dayKey) {
       COALESCE(SUM(CASE WHEN classification = 'charged' THEN used_minutes ELSE 0 END), 0) AS charged_min,
       COALESCE(SUM(CASE WHEN classification = 'exempt' THEN used_minutes ELSE 0 END), 0) AS exempt_min,
       COALESCE(SUM(CASE WHEN classification = 'system' THEN used_minutes ELSE 0 END), 0) AS system_min,
-      COALESCE(SUM(CASE WHEN classification = 'unknown' THEN used_minutes ELSE 0 END), 0) AS unknown_min
+      COALESCE(SUM(CASE WHEN classification = 'unknown' THEN used_minutes ELSE 0 END), 0) AS unknown_min,
+      COALESCE(SUM(CASE WHEN classification = 'credit' THEN used_minutes ELSE 0 END), 0) AS credit_min
     FROM media_time_sessions
-    WHERE user_id = ? AND minute_key = ? AND classification <> 'credit'
+    WHERE user_id = ? AND minute_key = ? AND classification <> 'duty'
+  `).get(userId, dayKey);
+  // Pflichtzeit (Busticket, Schulmanager, Hausaufgaben): eigener Satz, zaehlt
+  // nie gegen das Kontingent (classification 'duty', kein credit-Filter hier).
+  const dutyRow = d.prepare(`
+    SELECT COALESCE(SUM(used_minutes), 0) AS duty_min
+      FROM media_time_sessions
+     WHERE user_id = ? AND minute_key = ? AND classification = 'duty'
   `).get(userId, dayKey);
   return {
     charged_min: row.charged_min,
     exempt_min: row.exempt_min,
     system_min: row.system_min,
     unknown_min: row.unknown_min,
+    credit_min: row.credit_min,
+    duty_min: dutyRow.duty_min,
   };
 }
 
@@ -335,8 +361,30 @@ export function quotaNoteReasons(d, userId, dayKey) {
   `).all(userId, dayKey).map((r) => r.reason);
 }
 
-export function quotaRow(d, userId) {
-  return d.prepare('SELECT * FROM media_time_quotas WHERE user_id = ?').get(userId) ?? null;
+/** Die neueste Begruendung des Tages (GET /today braucht genau diese eine). */
+export function latestQuotaNoteReason(d, userId, dayKey) {
+  const row = d.prepare(`
+    SELECT reason FROM media_time_quota_notes
+    WHERE user_id = ? AND day_key = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+  `).get(userId, dayKey);
+  return row ? row.reason : null;
+}
+
+export function quotaRow(d, userId, deviceId = null) {
+  // Migration 285 (A2, Nutzer 31.10.: "taegliches kontigent ggf pro geraet"):
+  // eine Zeile mit device_id gilt fuer genau dieses Geraet und ueberschreibt
+  // die kindweite Basis; ohne device_id (oder ohne Treffer) zaehlt die kindweite.
+  if (deviceId != null) {
+    const dev = d.prepare(
+      'SELECT * FROM media_time_quotas WHERE user_id = ? AND device_id = ?'
+    ).get(userId, deviceId);
+    if (dev) return dev;
+  }
+  return d.prepare(
+    'SELECT * FROM media_time_quotas WHERE user_id = ? AND device_id IS NULL'
+  ).get(userId) ?? null;
 }
 
 /**
@@ -345,10 +393,10 @@ export function quotaRow(d, userId) {
  * Quiet gewinnt - ein Fenster ist die haushaltweite Aussage "Bildschirmfreie
  * Zeit", unabhaengig vom Rest.
  */
-export function quotaState(d, userId, now = new Date()) {
+export function quotaState(d, userId, now = new Date(), deviceId = null) {
   const dayKey = mediaTimeDayKey(d, now);
   const usage = dayUsage(d, userId, dayKey);
-  const quota = quotaRow(d, userId);
+  const quota = quotaRow(d, userId, deviceId);
   // Kontingent des Tages (Entscheidung 2 + 4): Basis daily_minutes plus
   // gekaufte Minuten (adjust-Session mit classification 'credit'). Bei hartem
   // Cap (media_time_hard_cap, Default) bleibt max_daily_minutes trotzdem die
@@ -369,10 +417,13 @@ export function quotaState(d, userId, now = new Date()) {
   // nicht versehentlich nur noch die Cap-Reste lassen. Ein negatives Ergebnis
   // der Summe waere kein Kontingent - der Boden ist 0.
   const hardCap = mediaTimeHardCap(d);
-  let quotaMin = base + credit + adjusted;
-  // Vor der Cap-Klammer auf 0: eine Senkung darf das Kontingent bis auf 0
-  // fuehren, ein negatives Kontingent gibt es nicht (remaining/derived state
-  // bleiben dadurch gueltige Zahlen).
+  // Das Minus der Eltern setzt VOR der Cap-Klammer an der Basis an: wer den
+  // Tag von 180 (bei Cap 240) auf 0 dreht, dem darf die Cap-Klammer nicht
+  // wieder 180 zurueckgeben. Positives (credit + Plus-Notizen) klaammert wie
+  // bisher unter dem Cap.
+  const negative = Math.min(0, adjusted);
+  let quotaMin = Math.max(0, base + negative) + credit + Math.max(0, adjusted);
+  // Ein negatives Kontingent gibt es nicht - der Boden bleibt 0.
   quotaMin = Math.max(0, quotaMin);
   if (hardCap && quota && quota.max_daily_minutes != null) {
     quotaMin = Math.min(quotaMin, quota.max_daily_minutes);
@@ -394,9 +445,13 @@ export function quotaState(d, userId, now = new Date()) {
     unknown_min: usage.unknown_min,
     purchased_min: credit,
     adjusted_min: adjusted,
+    duty_min: usage.duty_min,
     max_daily_minutes: quota?.max_daily_minutes ?? null,
     hard_cap: hardCap,
     quiet_active: quietActive,
+    enforcement: mediaTimeEnforcement(d),
+    // 'lock' heisst: ein Geraet darf sperren, wenn state 'exceeded' oder
+    // 'quiet' ist (Nachricht "Zeit ist um", PC: Logout). 'count' = reine Meldespur.
     state,
   };
 }

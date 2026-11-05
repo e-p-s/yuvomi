@@ -43,7 +43,9 @@ class Http(private val baseUrl: String, private val deviceToken: String) {
         val remainingMin: Int?,
         val usedMin: Int?,
         val quotaMin: Int?,
-        val quietActive: Boolean
+        val quietActive: Boolean,
+        val enforcement: String = "count",  // count | lock (Serverentscheidung 04.11.)
+        val reason: String? = null          // Begruendung der letzten Elternanpassung
     )
 
     /**
@@ -95,7 +97,9 @@ class Http(private val baseUrl: String, private val deviceToken: String) {
                 remainingMin = if (it.has("remaining_min") && !it.isNull("remaining_min")) it.getInt("remaining_min") else null,
                 usedMin = if (it.has("used_min") && !it.isNull("used_min")) it.getInt("used_min") else null,
                 quotaMin = if (it.has("quota_min") && !it.isNull("quota_min")) it.getInt("quota_min") else null,
-                quietActive = it.optBoolean("quiet_active", false)
+                quietActive = it.optBoolean("quiet_active", false),
+                enforcement = it.optString("enforcement", "count"),
+                reason = if (it.has("reason") && !it.isNull("reason")) it.optString("reason") else null
             )
         }
         return SyncResponse(
@@ -124,7 +128,9 @@ class Http(private val baseUrl: String, private val deviceToken: String) {
                 remainingMin = if (it.has("remaining_min") && !it.isNull("remaining_min")) it.getInt("remaining_min") else null,
                 usedMin = if (it.has("used_min") && !it.isNull("used_min")) it.getInt("used_min") else null,
                 quotaMin = if (it.has("quota_min") && !it.isNull("quota_min")) it.getInt("quota_min") else null,
-                quietActive = it.optBoolean("quiet_active", false)
+                quietActive = it.optBoolean("quiet_active", false),
+                enforcement = it.optString("enforcement", "count"),
+                reason = if (it.has("reason") && !it.isNull("reason")) it.optString("reason") else null
             )
         }
     }

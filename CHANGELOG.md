@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit: Sperre, Pflichtzeit, Kontingent pro Geraet, manuelle Buchung.** Der Haushalt
+  stellt bei "Bei Zeitende" auf "Geraete duerfen sperren": meldet der Server "Zeit ist um",
+  zeigt der Windows-Agent den Hinweisschirm mit der Elternbegruendung und meldet den PC nach
+  der Frist ab (Standard 30s); der Android-Agent zeigt denselben Hinweis im Vollbild.
+  App-Ausnahmen bekommen eine Art: "Pflichtzeit" (Busticket, Schulmanager, Hausaufgaben)
+  zaehlt in einem eigenen Satz und nie gegen das Kontingent. Das Tageskontingent gibt es
+  jetzt optional pro Geraet (Konsole und Fernseher sind als Geraetetypen buchbar, auch ohne
+  Agent ueber "Zeit manuell buchen"). Die Uebersichts-Kachel springt per Klick aufs richtige
+  Kind, ihr nearing-Ton folgt dem Server, und Kinder sehen ihre eigene Begruendungs-Historie
+  (Migration 285).
+
 - **Medienzeit with a bar on the overview, quota adjustable with a reason.** Every child gets a
   progress bar on the dashboard showing today's screen time against the daily quota - base minutes
   plus parental adjustment plus exchanged bonus minutes, counted from zero each day, never carried

@@ -43,6 +43,16 @@ class Prefs private constructor(context: Context) {
         get() = prefs.getString(KEY_QUOTA_STATE, null)
         set(value) = prefs.edit().putString(KEY_QUOTA_STATE, value).apply()
 
+    /** Letzter quota.enforcement vom Server: count | lock (Serverentscheidung). */
+    var quotaEnforcement: String?
+        get() = prefs.getString(KEY_QUOTA_ENFORCEMENT, null)
+        set(value) = prefs.edit().putString(KEY_QUOTA_ENFORCEMENT, value).apply()
+
+    /** Zustand, fuer den der Hinweis zuletzt gezeigt wurde (doppelt-show vermeiden). */
+    var quotaLockedShownBy: String?
+        get() = prefs.getString(KEY_QUOTA_LOCKED_SHOWN, null)
+        set(value) = prefs.edit().putString(KEY_QUOTA_LOCKED_SHOWN, value).apply()
+
     /** true wenn Batterie-Ausnahme im Onboarding bereits erbeten wurde. */
     var batteryOptimizationAsked: Boolean
         get() = prefs.getBoolean(KEY_BATTERY_ASKED, false)
@@ -60,6 +70,8 @@ class Prefs private constructor(context: Context) {
         private const val KEY_EXCEPTIONS_VERSION = "exceptions_version"
         private const val KEY_EXCEPTIONS_CACHE = "exceptions_cache_json"
         private const val KEY_QUOTA_STATE = "quota_state"
+        private const val KEY_QUOTA_ENFORCEMENT = "quota_enforcement"
+        private const val KEY_QUOTA_LOCKED_SHOWN = "quota_locked_shown"
         private const val KEY_BATTERY_ASKED = "battery_asked"
         private const val KEY_LAST_SYNC_OK = "last_sync_ok_ms"
 

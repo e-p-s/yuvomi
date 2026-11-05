@@ -56,11 +56,11 @@ test('Kachel: Zeile je Kind mit Rest, Balken und Route auf die Medienzeit-Seite'
 test('Kachel: Anpassung und Begruendung stehen in der Zeile, der Ton spricht an der Zahl', () => {
   const html = renderMediaTimeWidget({
     manager: true, failed: 0,
-    children: [row({ adjusted_min: 15, reason: 'Geburtstag', remaining_min: 5 })],
+    children: [row({ adjusted_min: 15, reason: 'Geburtstag', remaining_min: 5, state: 'nearing' })],
   }, '1x2');
   assert.ok(html.includes(escT('+15 Min heute')), 'die Anpassung nennt, dass der Tag nicht beim Basiswert liegt');
   assert.match(html, /Geburtstag/, 'die Begruendung sehen Kinder ohne Klick');
-  assert.match(html, /media-time-widget-row--nearing/, 'unter einem Viertel uebrig: der Ton der Zahl');
+  assert.match(html, /media-time-widget-row--nearing/, 'der Server-Ton faerbt die Zeile');
 });
 
 test('Kachel: fehlendes adjusted_min ist keine Zeile (ein Server vor der Anpassung)', () => {
@@ -83,7 +83,11 @@ test('Kachel: ein Kind ohne eigene Antwort wirft - die Fehlerkachel sagt es, nic
 
 test('Kachel: mediaTimeTone - exceeded, nearing, off, ok', () => {
   assert.equal(mediaTimeTone(row({ state: 'exceeded', remaining_min: 0 })), 'exceeded');
-  assert.equal(mediaTimeTone(row({ remaining_min: 10 })), 'nearing');
+  // Der Server sagt nearing (NEARING_THRESHOLD_MIN) - die Kachel folgt seinem
+  // State; der Viertel-Fallback gilt nur fuer Antworten ohne state.
+  assert.equal(mediaTimeTone(row({ state: 'nearing', remaining_min: 10 })), 'nearing');
+  assert.equal(mediaTimeTone({ today: { enabled: true, quota_min: 60, remaining_min: 10 } }), 'nearing',
+    'ohne Server-State bleibt der Viertel-Fallback');
   assert.equal(mediaTimeTone(row({ enabled: false })), 'off');
   assert.equal(mediaTimeTone(row()), 'ok');
 });

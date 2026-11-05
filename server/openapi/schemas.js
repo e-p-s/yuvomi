@@ -376,6 +376,9 @@ export const mediaTimeProperties = {
   remaining_min: { type: 'integer', minimum: 0, description: 'quota_min minus used_min, floored at 0.' },
   charged_min: { type: 'integer', minimum: 0, description: 'Sum of usage minutes classified as charged.' },
   exempt_min: { type: 'integer', minimum: 0, description: 'Usage minutes of app exceptions (never charged, still visible in history).' },
+  duty_min: { type: 'integer', minimum: 0, description: 'Minutes of duty rules (Pflichtzeit) today: never charged against the quota, shown as its own line.' },
+  enforcement: { type: 'string', enum: ['count', 'lock'], description: "Household policy at time-up: 'count' only reports (devices stay usable), 'lock' lets agent devices lock (PC sign-out, notice screen)." },
+  device_id: { type: ['integer', 'null'], description: 'When set, the quota row applies to this device only; null means the quota counts across every device of the child.' },
   unknown_min: { type: 'integer', minimum: 0, description: 'Usage minutes of packages no rule covers. Fail-open: never charged; the parents decide from here.' },
   purchased_min: { type: 'integer', minimum: 0, description: 'Minutes bought with points today (they raise quota_min instead of counting as usage).' },
   adjusted_min: { type: 'integer', description: 'Minutes the parents moved today\'s quota with notes (positive raises, negative lowers; the sum of media_time_quota_notes of the day, 0 when none).' },
@@ -3805,6 +3808,8 @@ export const schemas = {
             purchased_min: mediaTimeProperties.purchased_min,
             adjusted_min: mediaTimeProperties.adjusted_min,
             reason: mediaTimeProperties.reason,
+            duty_min: mediaTimeProperties.duty_min,
+            enforcement: mediaTimeProperties.enforcement,
             max_daily_minutes: mediaTimeProperties.max_daily_minutes,
             hard_cap: mediaTimeProperties.hard_cap,
             quiet: mediaTimeProperties.quiet,
@@ -3872,6 +3877,9 @@ export const schemas = {
             quota_min: mediaTimeProperties.quota_min,
             quiet_active: mediaTimeProperties.quiet_active,
             state: mediaTimeProperties.state,
+            enforcement: mediaTimeProperties.enforcement,
+            reason: mediaTimeProperties.reason,
+            device_id: mediaTimeProperties.device_id,
           },
         },
         MediaTimeTrackerSyncInput: {
@@ -3963,7 +3971,7 @@ export const schemas = {
           type: 'object', required: ['data'],
           properties: { data: { $ref: '#/components/schemas/MediaTimeExceptionsListData' } },
         },
-        MediaTimeExceptionUpsert: {
+        MediaTimeExceptionInput: {
           type: 'object',
           required: ['match_type', 'pattern'],
           properties: {
@@ -3971,13 +3979,14 @@ export const schemas = {
             match_type: { type: 'string', enum: ['exact', 'prefix', 'glob'] },
             pattern: { type: 'string', minLength: 1, maxLength: 200 },
             exempt_from: { type: 'string', enum: ['quota', 'history', 'charged'], description: 'Default quota. The Yuvomi app package cannot be listed.' },
+            kind: { type: 'string', enum: ['quota', 'duty'], description: "'duty' marks a required-time block (Pflichtzeit): its minutes are never charged against the quota and show as duty_min on the day page." },
             note: { type: ['string', 'null'], maxLength: 500 },
           },
         },
         MediaTimeExceptionsPutInput: {
           type: 'object',
           properties: {
-            upsert: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeExceptionUpsert' } },
+            upsert: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeExceptionInput' } },
             revoke: { type: 'array', items: { type: 'integer' }, description: 'Ids to revoke; revoking sets revoked_at, nothing is deleted.' },
           },
         },
@@ -4011,6 +4020,7 @@ export const schemas = {
             exchange: mediaTimeProperties.exchange,
             hard_cap: mediaTimeProperties.hard_cap,
             retention_days: mediaTimeProperties.retention_days,
+            enforcement: mediaTimeProperties.enforcement,
           },
         },
         MediaTimeSettingsResponse: {
@@ -4028,6 +4038,7 @@ export const schemas = {
                 { type: 'object', required: ['points', 'minutes'], properties: { points: { type: 'integer', minimum: 1 }, minutes: { type: 'integer', minimum: 1, maximum: 1440 } } },
               ],
             },
+            enforcement: { type: 'string', enum: ['count', 'lock'], description: "Household policy at time-up (see MediaTimeTodayData.enforcement)." },
             hard_cap: { type: 'boolean', description: 'Default true: max_daily_minutes is final. False: it can be bought up to.' },
           },
         },

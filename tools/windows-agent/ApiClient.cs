@@ -14,6 +14,17 @@ public sealed class QuotaInfo
 
     [JsonPropertyName("state")]
     public string? State { get; set; }
+
+    /// <summary>'count' = reine Meldespur (alter Zustand). 'lock' = der Haushalt
+    /// will Sperre: bei state exceeded oder quiet darf der Agent melden und
+    /// (PC) abmelden. Entscheidung des Nutzers: "sind die 30min weg soll es
+    /// nicht weiter gehen duerfen, beim PC koennte man ein logout initieren".</summary>
+    [JsonPropertyName("enforcement")]
+    public string? Enforcement { get; set; }
+
+    /// <summary>Sperre gewollt? Nur 'lock' + exceeded/quiet, sonst nie.</summary>
+    public bool ShouldLock =>
+        Enforcement == "lock" && (State == "exceeded" || State == "quiet");
 }
 
 public sealed class TrackerResponse

@@ -34,6 +34,7 @@ import {
   mediaTimeExchangeRate,
   parseExchangeRate,
   mediaTimeHardCap,
+  mediaTimeEnforcement,
   hashDeviceToken,
   deviceByTokenHash,
   activeExceptionRules,
@@ -43,6 +44,7 @@ import {
   quotaState,
   quotaAdjustmentFor,
   quotaNoteReasons,
+  latestQuotaNoteReason,
   reclassifyForUser,
   exceptionsVersion,
   trackerStatus,
@@ -130,7 +132,7 @@ function trackerDevice(req, res) {
 }
 
 // --------------------------------------------------------
-// POST /tracker/sync — Sessions annehmen (idempotent ueber session_key),
+// POST /tracker/sync - Sessions annehmen (idempotent ueber session_key),
 // optional Paket-Inventar-Delta. Antwort mit Kontingent-Zustand und
 // exceptions_version fuer den Klienten-Cache.
 // --------------------------------------------------------
@@ -272,7 +274,7 @@ router.post('/tracker/sync', (req, res) => {
     });
     runAll();
 
-    const state = quotaState(d, device.user_id);
+    const state = quotaState(d, device.user_id, undefined, device.id);
     return res.json({
       data: {
         accepted,
@@ -296,7 +298,7 @@ router.post('/tracker/sync', (req, res) => {
 });
 
 // --------------------------------------------------------
-// POST /tracker/heartbeat — laufendes Segment verlaengern (idempotent ueber
+// POST /tracker/heartbeat - laufendes Segment verlaengern (idempotent ueber
 // session_key). Ein Heartbeat ohne bekannte Session legt sie an.
 // --------------------------------------------------------
 router.post('/tracker/heartbeat', (req, res) => {
@@ -337,7 +339,7 @@ router.post('/tracker/heartbeat', (req, res) => {
     }
     d.prepare('UPDATE media_time_devices SET last_seen_at = ? WHERE id = ?').run(now, device.id);
 
-    const state = quotaState(d, device.user_id, nowDate);
+    const state = quotaState(d, device.user_id, nowDate, device.id);
     return res.json({
       data: {
         ok: true,
@@ -347,6 +349,9 @@ router.post('/tracker/heartbeat', (req, res) => {
           quota_min: state.quota_min,
           quiet_active: state.quiet_active,
           state: state.state,
+          // 'lock' + state exceeded/quiet: das Geraet darf sperren und dem Kind
+          // "Zeit ist um" zeigen (PC: Logout). 'count' = reine Meldespur.
+          enforcement: state.enforcement,
         },
       },
     });
@@ -357,8 +362,8 @@ router.post('/tracker/heartbeat', (req, res) => {
 });
 
 // --------------------------------------------------------
-// GET /tracker/exceptions — aktive Ausnahmen (Verwaltung + Klienten-Cache).
-// PUT  /tracker/exceptions — { upsert: [...], revoke: [id, ...] }
+// GET /tracker/exceptions - aktive Ausnahmen (Verwaltung + Klienten-Cache).
+// PUT  /tracker/exceptions - { upsert: [...], revoke: [id, ...] }
 // Nur Eltern/Admin (media_manage).
 // --------------------------------------------------------
 router.get('/tracker/exceptions', requireManager, (req, res) => {
@@ -376,6 +381,7 @@ router.get('/tracker/exceptions', requireManager, (req, res) => {
           match_type: r.match_type,
           pattern: r.pattern,
           exempt_from: r.exempt_from,
+          kind: r.kind ?? 'quota',
           note: r.note,
           created_at: r.created_at,
         })),
@@ -394,6 +400,7 @@ function validExceptionInput(item) {
   if (typeof item.pattern !== 'string' || !item.pattern.trim() || item.pattern.length > MAX_PATTERN_LENGTH) return false;
   if (item.pattern.trim() === YUVOMI_PACKAGE) return false; // hart ausgenommen, nicht umkehrbar
   if (!['quota', 'history', 'charged'].includes(item.exempt_from ?? 'quota')) return false;
+  if (item.kind !== undefined && !['quota', 'duty'].includes(item.kind)) return false;
   if (item.note !== undefined && item.note !== null && (typeof item.note !== 'string' || item.note.length > MAX_NOTE_LENGTH)) return false;
   if (item.user_id !== undefined && item.user_id !== null && !(Number.isInteger(item.user_id) && item.user_id > 0)) return false;
   return true;
@@ -428,15 +435,17 @@ router.put('/tracker/exceptions', requireManager, (req, res) => {
           }
         }
         const exemptFrom = item.exempt_from ?? 'quota';
+        const kind = item.kind ?? 'quota';
         const info = d.prepare(`
-          INSERT INTO media_time_app_exceptions (user_id, match_type, pattern, exempt_from, note, created_by, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO media_time_app_exceptions (user_id, match_type, pattern, exempt_from, kind, note, created_by, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(user_id, match_type, pattern) DO UPDATE SET
             exempt_from = excluded.exempt_from,
+            kind = excluded.kind,
             note = excluded.note,
             revoked_at = NULL
         `).run(
-          item.user_id ?? null, item.match_type, item.pattern.trim(), exemptFrom,
+          item.user_id ?? null, item.match_type, item.pattern.trim(), exemptFrom, kind,
           item.note ?? null, actingUser(req), isoNow(),
         );
         if (item.user_id != null) touchedUsers.add(item.user_id);
@@ -482,7 +491,7 @@ router.put('/tracker/exceptions', requireManager, (req, res) => {
 });
 
 // --------------------------------------------------------
-// GET /today?user_id= — was das Kind (oder ein Elternteil) heute sieht.
+// GET /today?user_id= - was das Kind (oder ein Elternteil) heute sieht.
 // charged_min / exempt_min / unknown_min + tracker:{last_seen_at, online}.
 // --------------------------------------------------------
 router.get('/today', (req, res) => {
@@ -523,7 +532,11 @@ router.get('/today', (req, res) => {
         // Begruendung des neuesten Eintrags - das Kind sieht beides
         // (Transparenz: keine Kontingent-Aenderung ohne erklaerten Grund).
         adjusted_min: state.adjusted_min,
-        reason: quotaNoteReasons(d, requested, state.day).slice(-1)[0] ?? null,
+        reason: latestQuotaNoteReason(d, requested, state.day),
+        // Pflichtzeit des Tages (Busticket, Schulmanager, Hausaufgaben):
+        // eigener Satz, zaehlt nie gegen das Kontingent (Migration 285).
+        duty_min: state.duty_min,
+        enforcement: state.enforcement,
         max_daily_minutes: state.max_daily_minutes,
         hard_cap: state.hard_cap,
         // Die globale Ruhezeit ist fuer ALLE im Haushalt sichtbar (Entscheidung
@@ -676,7 +689,7 @@ router.put('/quotas/:userId/day', requireManager, (req, res) => {
 });
 
 // --------------------------------------------------------
-// GET /quotas/:userId/day-notes — die Anpassungs-Notizen eines Kindes
+// GET /quotas/:userId/day-notes - die Anpassungs-Notizen eines Kindes
 // (Eltern-Protokoll mit Begruendung). Transparenz-Gegenstueck zur PUT:
 // Kinder lesen ALL ihre Eintraege (letzte 30), Eltern die jedes Kindes.
 // --------------------------------------------------------
@@ -781,12 +794,69 @@ router.get('/settings', (req, res) => {
         enabled: mediaTimeEnabled(d),
         exchange: rate ? { points: rate.points, minutes: rate.minutes } : null,
         hard_cap: mediaTimeHardCap(d),
+        enforcement: mediaTimeEnforcement(d),
         retention_days: RAW_RETENTION_DAYS,
       },
     });
   } catch (err) {
     log.error('GET /settings error:', err);
     return res.status(500).json({ error: 'Failed to read media time settings.', code: 500 });
+  }
+});
+
+/* POST /sessions - eine manuelle Nutzungszeit buchen (Eltern). Quelle fuer
+ * Geraete ohne Agent (Konsole, Fernseher, Nutzer 31.10.) und fuer Korrekturen.
+ * Eine Session als classification 'charged', source 'manual', day_key = heute. */
+router.post('/sessions', requireManager, (req, res) => {
+  try {
+    const d = db.get();
+    const raw = req.body ?? {};
+    const userId = toInt(raw.user_id ?? req.user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (!mediaTimeEnabled(d)) {
+      return res.status(403).json({
+        error: 'Media time is not enabled for this household.', code: 403, reason: 'media_time_disabled',
+      });
+    }
+    const refusal = childRefusal(d, userId);
+    if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.status, reason: refusal.reason });
+    const minutes = Number(raw.minutes);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
+      return res.status(400).json({ error: 'minutes must be an integer 1..720.', code: 400, reason: 'media_time_bad_request' });
+    }
+    const deviceId = raw.device_id == null ? null : toInt(raw.device_id);
+    if (deviceId != null) {
+      const dev = d.prepare(
+        'SELECT id FROM media_time_devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL'
+      ).get(deviceId, userId);
+      if (!dev) {
+        return res.status(404).json({ error: 'Device not found.', code: 404, reason: 'media_time_not_found' });
+      }
+    }
+    const dayKey = mediaTimeDayKey(d);
+    const key = `manual:${userId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+    const now = isoNow();
+    const start = new Date(Date.now() - minutes * 60000).toISOString();
+    const label = String(raw.note ?? '').trim() || 'manual';
+    d.prepare(`
+      INSERT INTO media_time_sessions
+        (session_key, user_id, device_id, package_name, app_label, started_at, ended_at,
+         used_minutes, minute_key, kind, system_component, classification, source, reported_by, created_at)
+      VALUES (?, ?, ?, 'manual', ?, ?, ?, ?, ?, 'foreground', 0, 'charged', 'manual', ?, ?)
+    `).run(key, userId, deviceId, label.slice(0, 120), start, now, minutes, dayKey, actingUser(req), now);
+    const state = quotaState(d, userId);
+    return res.status(201).json({
+      data: {
+        session_key: key, day: dayKey,
+        quota_min: state.quota_min, used_min: state.used_min, remaining_min: state.remaining_min,
+        state: state.state,
+      },
+    });
+  } catch (err) {
+    log.error('POST /sessions error:', err);
+    return res.status(500).json({ error: 'Failed to book usage.', code: 500 });
   }
 });
 
@@ -798,7 +868,7 @@ router.put('/settings', requireManager, (req, res) => {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value,
         updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
     `).run(key, value);
-    const { exchange, hard_cap } = req.body ?? {};
+    const { exchange, hard_cap, enforcement } = req.body ?? {};
     if (exchange !== undefined) {
       if (exchange === null || exchange === '') {
         cfgSet('media_time_exchange_rate', '');
@@ -837,12 +907,21 @@ router.put('/settings', requireManager, (req, res) => {
       }
       cfgSet('media_time_hard_cap', hard_cap ? '1' : '0');
     }
+    if (enforcement !== undefined) {
+      if (enforcement !== 'count' && enforcement !== 'lock') {
+        return res.status(400).json({
+          error: 'enforcement must be count or lock', code: 400, reason: 'media_time_bad_request',
+        });
+      }
+      cfgSet('media_time_enforcement', enforcement);
+    }
     const rate = mediaTimeExchangeRate(d);
     return res.json({
       data: {
         enabled: mediaTimeEnabled(d),
         exchange: rate ? { points: rate.points, minutes: rate.minutes } : null,
         hard_cap: mediaTimeHardCap(d),
+        enforcement: mediaTimeEnforcement(d),
       },
     });
   } catch (err) {
@@ -967,7 +1046,7 @@ router.post('/purchase', (req, res) => {
 });
 
 // --------------------------------------------------------
-// GET /purchases?user_id= — die Tausch-Historie eines Kindes (adjust-Zeilen).
+// GET /purchases?user_id= - die Tausch-Historie eines Kindes (adjust-Zeilen).
 // Das Kind sieht die eigenen, Eltern/Admin jede.
 // --------------------------------------------------------
 router.get('/purchases', (req, res) => {

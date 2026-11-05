@@ -74,10 +74,17 @@ class SyncEngine(private val context: Context) {
             prefs.lastSyncOkMs = System.currentTimeMillis()
         }
 
-        // quota.state persistieren: exceeded/quiet -> Hinweis in der UI, KEIN Block
-        // (Treuhhaender-Modell = Anreiz, kein Zwang).
+        // quota.state persistieren: exceeded/quiet -> Hinweis in der UI.
+        // Seit der Entscheidung vom 04.11. gilt: der Server entscheidet per
+        // enforcement='lock', ob das Geraet melden und hinweisen darf. Der
+        // Tracker blockiert andere Apps nie hart (Android ohne Device-Owner
+        // erlaubt das nicht sauber), aber der Vollbild-Hinweis ist Pflicht.
         if (quotaSeen != null) {
             prefs.quotaState = quotaSeen.state
+            prefs.quotaEnforcement = quotaSeen.enforcement
+            TimeUpActivity.showIfLocked(
+                context, quotaSeen.enforcement, quotaSeen.state, quotaSeen.reason
+            )
         }
 
         // exceptions_version: bei Aenderung Ausnahmen neu laden und Cache ersetzen.

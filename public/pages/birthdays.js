@@ -831,7 +831,11 @@ function birthdayAdvancedTopics(withContact) {
 }
 
 function birthdayPreviewHtml(name, photoData) {
-  if (photoData) return `<img class="birthday-preview__image" src="${photoData}" alt="${esc(name || '')}">`;
+  // photoData ist Nutzer-Eingabe: nur Bilder-DatenURLs oder https durchlassen
+  // (Muster safeUrl, utils/html.js), alles andere zeigt den Initialen-Fallback.
+  const raw = String(photoData || '');
+  const safe = /^(data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]{1,400000}$|https:\/\/[^"'\s<>]+$)/.test(raw);
+  if (safe) return `<img class="birthday-preview__image" src="${esc(raw)}" alt="${esc(name || '')}">`;
   if (!String(name || '').trim()) return '<i data-lucide="camera" class="birthday-preview__glyph" aria-hidden="true"></i>';
   return `<span class="birthday-preview__fallback">${esc(initials(name, '?'))}</span>`;
 }

@@ -54,9 +54,13 @@ function windowAround(minutes = 5) {
   const pad = (n) => String(n).padStart(2, '0');
   // Taguebergreifend konstruieren (23:58 => 23:53-00:03), damit die Stunde
   // nicht am Minutenpuffer zerschellt ('Invalid time value' um 23:59).
-  const total = Math.max(0, h * 60 + m - minutes);
-  const totalEnd = Math.min(24 * 60 - 1, h * 60 + m + minutes);
-  return `${pad(Math.floor(total / 60)) % 24}:${pad(total % 60)}-${pad(Math.floor(totalEnd / 60) % 24)}:${pad(totalEnd % 60)}`;
+  // Der Tag fangt um Mitternacht wieder von vorn an: ein Fenster, das vor
+  // 00:00 losgeht, laeuft ueber Mitternacht (02:03 => 23:58-02:08 statt des
+  // ungueltigen 0:03-2:08). Sonst faellt der Test in den ersten Minuten
+  // eines jeden Tages.
+  const start = (h * 60 + m - minutes + 24 * 60) % (24 * 60);
+  const end = (h * 60 + m + minutes) % (24 * 60);
+  return `${pad(Math.floor(start / 60))}:${pad(start % 60)}-${pad(Math.floor(end / 60))}:${pad(end % 60)}`;
 }
 function windowOutside(minutes = 5) {
   const [h, m] = wallNow().split(':').map(Number);
