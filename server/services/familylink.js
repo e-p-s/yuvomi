@@ -32,7 +32,7 @@ export function familylinkStatus(d) {
   return row ? row.value : null;
 }
 
-function setStatus(d, value) {
+export function setStatus(d, value) {
   d.prepare(`
     INSERT INTO sync_config (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value

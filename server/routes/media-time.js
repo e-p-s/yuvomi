@@ -21,7 +21,7 @@ import express from 'express';
 
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
-import { familylinkStatus, familylinkUsage, runFamilylinkIngest, ingestFamilylinkReport } from '../services/familylink.js';
+import { familylinkStatus, familylinkUsage, runFamilylinkIngest, ingestFamilylinkReport, setStatus } from '../services/familylink.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
@@ -1464,6 +1464,9 @@ router.post('/familylink/report', (req, res) => {
       return res.status(401).json({ error: 'Valid x-familylink-token required.', code: 401, reason: 'media_time_unauthenticated' });
     }
     const r = ingestFamilylinkReport(d, req.body);
+    // Ein angenommener Push ist ein erfolgreicher Lauf - derselbe Status,
+    // den der lokale Takt setzt (UI zeigt "Letzter Abruf: okay").
+    setStatus(d, 'ok');
     return res.json({ data: { written: r.written, errors: r.errors } });
   } catch (err) {
     return res.status(400).json({ error: 'Report not accepted.', code: 400, reason: 'media_time_bad_request' });
