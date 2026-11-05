@@ -415,6 +415,82 @@ export function mediaTimePaths() {
         },
       }),
     },
+    '/api/v1/media-time/familylink/usage': {
+      get: op({
+        summary: 'Real screen time collected from Google Family Link (read only, never enforced back)',
+        tag: 'MediaTime',
+        params: [
+          { name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'A child; parents/admin only. Omitted: the caller themselves.' },
+          { name: 'day', in: 'query', required: false, schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, description: 'Day of the aggregate (YYYY-MM-DD). Omitted: today.' },
+        ],
+        description: 'Google-Family-Link-Istzeit fuer einen Tag. mapped=false ohne Zuordnung; status login_noetig, wenn der Collector\n'
+          + 'keine Sitzung hat - dann gibt es KEINE Null-Snapshots, sondern den Hinweis. Die verbrauchten Minuten\n'
+          + 'zaehlen gegen das Tageskontingent des Kindes (Ersatz, nicht Zusatz, pro Geraet).',
+        responses: {
+          200: {
+            description: 'Family link usage for the day',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkUsageResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/familylink/mapping': {
+      get: op({
+        summary: 'Family link mapping of a child (google_uid + device mapping, parents/admin or the child)',
+        tag: 'MediaTime',
+        params: [{ name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'A child; parents/admin only. Omitted: the caller themselves.' }],
+        responses: {
+          200: {
+            description: 'Mapping state',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkMappingResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+      put: op({
+        summary: 'Map a child to a Google account and its devices to media-time devices (parents/admin)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        requestBody: jsonBody('#/components/schemas/MediaTimeFamilylinkMappingInput'),
+        description: 'display_name is stored as the YUVOMI name of the child, never the Google name. google_uid null or empty\n'
+          + 'removes the mapping (collected history stays, it is not silently deleted).',
+        responses: {
+          200: {
+            description: 'Saved',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkMappingSaveData' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'The target (child, device) does not exist in this household.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/familylink/ingest': {
+      post: op({
+        summary: 'Run one family link collector cycle now (parents/admin, same as the five-minute job)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        description: 'Ohne Collector-Sitzung setzt der Lauf nur den Status login_noetig - nie 0er-Snapshots.',
+        responses: {
+          200: {
+            description: 'Run outcome (ok=false is a normal result: status login_noetig)',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkIngestResponse' } } },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
   });
 }
 
@@ -452,6 +528,16 @@ const CASE_REASONS = {
   },
   '/api/v1/media-time/settings': {
     put: REASON_BAD + ', `media_time_forbidden` (403)',
+  },
+  '/api/v1/media-time/familylink/usage': {
+    get: REASON_BAD + ' (400, `user_id` or `day` is malformed), `media_time_unauthenticated` (401, no session), '
+      + '`media_time_forbidden` (403, reading another child without being a parent)',
+  },
+  '/api/v1/media-time/familylink/mapping': {
+    get: REASON_BAD + ', `media_time_unauthenticated` (401, no session), `media_time_forbidden` (403, reading another child without being a parent)',
+    put: REASON_BAD + ' (400, `google_uid` is not a digit string 6-40 or a device id is malformed), '
+      + '`media_time_forbidden` (403, not a parent or admin), `media_time_not_a_child` (403, the target is not a child), '
+      + '`media_time_not_found` (404, the device is unknown or belongs to another child)',
   },
   '/api/v1/media-time/purchase': {
     post: REASON_BAD + ', `media_time_unauthenticated` (401, no session), '

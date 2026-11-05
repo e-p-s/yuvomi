@@ -1000,6 +1000,32 @@ const server = app.listen(PORT, BIND_ADDRESS, () => {
   const syncTick = () => {
     runExternalJob(runSync).catch((e) => logSync.error('Sync tick failed:', e.message));
   };
+
+  /* Family-Link-Istzeit (Einbau-Spec 287): der Ingest-Takt holt alle fuenf
+   * Minuten den Collector-Report (nur auf dem Collector-Host mit Session
+   * liefert er Zahlen; sonst setzt er den Status 'login_noetig', nie 0er-
+   * Snapshots). Laeuft nur, wenn der Haushalt den Schalter in den Regeln
+   * anwirft - der Takt selbst ist unref't wie die uebrigen Scheduler. */
+  const familylinkTick = () => {
+    runExternalJob(async () => {
+      const d = db.get();
+      const on = d.prepare(
+        "SELECT value FROM sync_config WHERE key = 'familylink_ingest_enabled'"
+      ).get()?.value === '1';
+      if (!on) return;
+      const svc = await import('./services/familylink.js');
+      const r = await svc.runFamilylinkIngest(d, {
+        command: d.prepare(
+          "SELECT value FROM sync_config WHERE key = 'familylink_ingest_command'"
+        ).get()?.value,
+      });
+      if (!r.ok) logSync.info(`Family-Link-Ingest: ${r.status} (kein Snapshot geschrieben).`);
+    }).catch((e) => logSync.error('Family-Link tick failed:', e.message));
+  };
+  setTimeout(() => {
+    familylinkTick();
+    setInterval(familylinkTick, 5 * 60_000).unref();
+  }, 20_000).unref();
   setTimeout(() => {
     syncTick();
     setInterval(syncTick, SYNC_INTERVAL_MS).unref();

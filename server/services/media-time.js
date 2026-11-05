@@ -307,8 +307,50 @@ export function dayUsage(d, userId, dayKey) {
       FROM media_time_sessions
      WHERE user_id = ? AND minute_key = ? AND classification = 'duty'
   `).get(userId, dayKey);
+  /* Family-Link-Istzeit (Einbau-Spec 287): fuer ein Geraet, das auf einen
+   * Google-Eintrag gemappt ist und heute einen Tageswert hat, gilt der
+   * Google-Verbrauch - die Agent-Sessions desselben Geraets werden ersetzt,
+   * nicht dazugerechnet (kein Doppelzaehlen). Kein Tageswert (z.B.
+   * login_noetig) => keine Ersetzung, die Session-Zeit bleibt die Auskunft. */
+  let flCharged = 0;
+  const fl = d.prepare(
+    'SELECT google_uid FROM familylink_children WHERE yuvomi_user_id = ? AND enabled = 1'
+  ).get(userId);
+  if (fl) {
+    const flRows = d.prepare(`
+      SELECT fdl.consumed_min, m.media_time_device_id
+        FROM familylink_daily fdl
+        JOIN familylink_device_map m
+          ON m.google_uid = fdl.google_uid AND m.google_device_id = fdl.google_device_id
+       WHERE fdl.google_uid = ? AND fdl.day = ? AND m.media_time_device_id IS NOT NULL
+    `).all(fl.google_uid, dayKey);
+    if (flRows.length) {
+      const ids = flRows.map((r) => r.media_time_device_id);
+      const placeholders = ids.map(() => '?').join(',');
+      const sess = d.prepare(`
+        SELECT COALESCE(SUM(used_minutes), 0) AS m
+          FROM media_time_sessions
+         WHERE user_id = ? AND minute_key = ? AND classification = 'charged'
+           AND device_id IN (${placeholders})
+      `).get(userId, dayKey, ...ids);
+      const replaced = sess ? sess.m : 0;
+      const googleSum = flRows.reduce((sum, r) => sum + (r.consumed_min || 0), 0);
+      const charged = Math.max(0, row.charged_min - replaced + googleSum);
+      flCharged = Math.round(googleSum);
+      return {
+        charged_min: charged,
+        exempt_min: row.exempt_min,
+        system_min: row.system_min,
+        unknown_min: row.unknown_min,
+        credit_min: row.credit_min,
+        duty_min: dutyRow.duty_min,
+        familylink_min: flCharged,
+      };
+    }
+  }
   return {
     charged_min: row.charged_min,
+    familylink_min: 0,
     exempt_min: row.exempt_min,
     system_min: row.system_min,
     unknown_min: row.unknown_min,

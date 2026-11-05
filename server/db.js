@@ -12420,6 +12420,46 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 287,
+    description: 'family link: istzeit-collector tables (mapping + daily usage) for media time',
+    // Einbau-Spec HANDOVER.md (dc62917df): der Collector (scripts/familylink/)
+    // liefert echte Google-Family-Link-Zeiten. Zuordnung Kind <-> Google-Konto
+    // und Geraet <-> Medienzeit-Geraet sind Eltern-Entscheidungen (keine
+    // automatische Kind-Erkennung - Namen bleiben draussen). familylink_daily
+    // ist nur das Tages-Aggregat (Tag/Minuten/Geraet, kein App-Level, kein
+    // Content). Die Istzeit zaehlt gegen das Kontingent (dayUsage-Ersatz).
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS familylink_children (
+          google_uid      TEXT    PRIMARY KEY,
+          yuvomi_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          display_name    TEXT,
+          enabled         INTEGER NOT NULL DEFAULT 1,
+          UNIQUE(yuvomi_user_id)
+        );
+        CREATE TABLE IF NOT EXISTS familylink_device_map (
+          google_uid            TEXT    NOT NULL,
+          google_device_id      TEXT    NOT NULL,
+          media_time_device_id  INTEGER REFERENCES media_time_devices(id) ON DELETE CASCADE,
+          PRIMARY KEY (google_uid, google_device_id)
+        );
+        CREATE TABLE IF NOT EXISTS familylink_daily (
+          google_uid        TEXT    NOT NULL,
+          google_device_id  TEXT    NOT NULL,
+          day               TEXT    NOT NULL,
+          limit_min         REAL,
+          consumed_min      REAL,
+          remaining_min     REAL,
+          downtime          TEXT,
+          fetched_at        TEXT    NOT NULL,
+          PRIMARY KEY (google_uid, google_device_id, day)
+        );
+        CREATE INDEX IF NOT EXISTS idx_familylink_daily_day
+          ON familylink_daily(day);
+      `);
+    },
+  },
 ];
 
 /**
@@ -12795,6 +12835,7 @@ const CRITICAL_COLUMNS = [
   // D#2330: v273 traegt den Feed-Stand nach; ohne die Spalte scheitert jeder
   // ICS-Sync (er schreibt sie) und jeder Reset (er liest sie).
   { table: 'calendar_events', column: 'feed_original', type: 'TEXT' },
+
 ];
 
 /**

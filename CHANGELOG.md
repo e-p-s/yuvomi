@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit: Google-Family-Link-Istzeit (Spec HANDOVER.md, Migration 287).** Ein
+  Collector-Lauf (nur abfragen, nie zurueckspielen) schreibt die echten
+  Bildschirmzeiten pro Tag und Geraet in `familylink_daily`; ein Fehlerlauf (401,
+  kein JSON) setzt den Status `login_noetig` und schreibt nie 0er-Snapshots. Die
+  Google-Minuten zaehlen gegen das Tageskontingent: fuer ein zugeordnetes Geraet
+  ersetzt der Google-Wert die Session-Minuten (kein Doppelzaehlen). Eltern
+  ordnen zu (Kind <-> Google-Kennung, Geraet <-> Geraet); die Google-Kennung ist
+  ein Pseudonym, Kind-Namen aus dem Report bleiben nicht stehen. Neue Endpunkte:
+  GET `/media-time/familylink/usage`, GET/PUT `/media-time/familylink/mapping`,
+  POST `/media-time/familylink/ingest`; der 5-Minuten-Takt ist ein Schalter in den
+  Regeln (Standard: aus).
+- **Medienzeit: Tageskarte mit Leben, Regeln in nummerierten Gruppen.** Ein Ticker
+  unter dem Laufbalken zeigt live "laeuft seit HH:MM - X Min dabei" (pulsierender
+  Punkt, 30-Sekunden-Takt, mit `prefers-reduced-motion`-Ruecksicht); die
+  Family-Link-Zeit steht als Quellensatz in den aufklappbaren Details ("Quelle:
+  Google Family Link", nie eine Null bei fehlender Sitzung). Die Regeln-Seite ist
+  in fuenf nummerierte Gruppen gegliedert (Grundregeln, Ruhezeit, Punkte gegen
+  Minuten, Ausnahmen, Google Family Link), jede mit einer Frage als Ueberschrift.
+
 - **Medienzeit: menuegerecht fuer Kinder (Redesign 05.11., "ein 12jaehriger muss es
   verstehen").** Die Tageskarte beantwortet die eine Frage zuoberst: die Restzeit als
   grosse Zahl mit klarem Satz ("Zeit ist um - Pause" statt "exceeded"); die

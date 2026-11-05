@@ -21,6 +21,7 @@ import express from 'express';
 
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
+import { familylinkStatus, familylinkUsage, runFamilylinkIngest } from '../services/familylink.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
@@ -548,6 +549,9 @@ router.get('/today', (req, res) => {
         state: state.state,
         wall_time: householdWallTime(d),
         tracker: { last_seen_at: tracker.last_seen_at, online: tracker.online },
+        // Family-Link-Istzeit (Spec 287): Status + Istzeit pro Geraet fuer die
+        // Tageskarte. Status 'login_noetig' zeigt den Hinweis, nie eine Null.
+        familylink: familylinkUsage(d, requested, state.day),
       },
     });
   } catch (err) {
@@ -796,6 +800,10 @@ router.get('/settings', (req, res) => {
         exchange: rate ? { points: rate.points, minutes: rate.minutes } : null,
         hard_cap: mediaTimeHardCap(d),
         enforcement: mediaTimeEnforcement(d),
+        familylink_ingest_enabled: d.prepare(
+          "SELECT value FROM sync_config WHERE key = 'familylink_ingest_enabled'"
+        ).get()?.value === '1',
+        familylink_status: familylinkStatus(d),
         retention_days: RAW_RETENTION_DAYS,
       },
     });
@@ -978,7 +986,16 @@ router.put('/settings', requireManager, (req, res) => {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value,
         updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
     `).run(key, value);
-    const { exchange, hard_cap, enforcement } = req.body ?? {};
+    const { exchange, hard_cap, enforcement, familylink_ingest_enabled } = req.body ?? {};
+    if (familylink_ingest_enabled !== undefined) {
+      if (familylink_ingest_enabled !== true && familylink_ingest_enabled !== false) {
+        return res.status(400).json({
+          error: 'familylink_ingest_enabled must be true or false.',
+          code: 400, reason: 'media_time_bad_request',
+        });
+      }
+      cfgSet('familylink_ingest_enabled', familylink_ingest_enabled ? '1' : '0');
+    }
     if (exchange !== undefined) {
       if (exchange === null || exchange === '') {
         cfgSet('media_time_exchange_rate', '');
@@ -1278,6 +1295,155 @@ router.get('/devices/:id/inventory', requireManager, (req, res) => {
   } catch (err) {
     log.error('GET /devices/:id/inventory error:', err);
     return res.status(500).json({ error: 'Failed to read inventory.', code: 500 });
+  }
+});
+
+/* ------------------------------------------------------------ Family-Link
+ * Istzeit aus Google Family Link (Einbau-Spec HANDOVER.md, Migration 287).
+ * Nur abfragen, nie zurueckspielen (A5). Der Ingest-Lauf (Job oder Knopf)
+ * schreibt bei 401/Fehler nur den Status 'login_noetig' - nie 0er-Snapshots. */
+router.get('/familylink/usage', (req, res) => {
+  try {
+    const d = db.get();
+    const actor = actingUser(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Authentication required.', code: 401, reason: 'media_time_unauthenticated' });
+    }
+    const requested = req.query.user_id !== undefined ? toInt(req.query.user_id) : actor;
+    if (!Number.isInteger(requested) || requested <= 0) {
+      return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (requested !== actor && !isParentOrAdmin(req)) {
+      return res.status(403).json({ error: 'Only parents can read another child.', code: 403, reason: 'media_time_forbidden' });
+    }
+    const dayRaw = req.query.day;
+    let day;
+    if (dayRaw === undefined) {
+      day = mediaTimeDayKey(d, new Date());
+    } else {
+      day = String(dayRaw);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+        return res.status(400).json({ error: 'day must be YYYY-MM-DD.', code: 400, reason: 'media_time_bad_request' });
+      }
+    }
+    return res.json({ data: { user_id: requested, day, ...familylinkUsage(d, requested, day) } });
+  } catch (err) {
+    log.error('GET /familylink/usage error:', err);
+    return res.status(500).json({ error: 'Failed to read family link usage.', code: 500 });
+  }
+});
+
+router.get('/familylink/mapping', (req, res) => {
+  try {
+    const d = db.get();
+    const actor = actingUser(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Authentication required.', code: 401, reason: 'media_time_unauthenticated' });
+    }
+    const requested = req.query.user_id !== undefined ? toInt(req.query.user_id) : actor;
+    if (!Number.isInteger(requested) || requested <= 0) {
+      return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (requested !== actor && !isParentOrAdmin(req)) {
+      return res.status(403).json({ error: 'Not allowed for this child.', code: 403, reason: 'media_time_forbidden' });
+    }
+    const child = d.prepare(
+      'SELECT google_uid, display_name, enabled FROM familylink_children WHERE yuvomi_user_id = ?'
+    ).get(requested);
+    const devices = child
+      ? d.prepare(`
+          SELECT m.google_device_id, m.media_time_device_id, dev.name AS device_name
+            FROM familylink_device_map m
+            LEFT JOIN media_time_devices dev ON dev.id = m.media_time_device_id
+           WHERE m.google_uid = ?
+           ORDER BY dev.name COLLATE NOCASE
+        `).all(child.google_uid)
+      : [];
+    return res.json({ data: { mapped: !!child, google_uid: child?.google_uid ?? null, enabled: child?.enabled === 1, devices } });
+  } catch (err) {
+    log.error('GET /familylink/mapping error:', err);
+    return res.status(500).json({ error: 'Failed to read family link mapping.', code: 500 });
+  }
+});
+
+/* Zuordnung (Eltern): child <-> google_uid und google-Geraet <-> Medienzeit-
+ * Geraet. display_name ist die YUVOMI-Bezeichnung (aus der Nutzerzeile), nie
+ * der Google-Name - der bleibt draussen. devices null = Zuordnung loeschen. */
+router.put('/familylink/mapping', requireManager, (req, res) => {
+  try {
+    const d = db.get();
+    const userId = toInt(req.body?.user_id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    const refusal = childRefusal(d, userId);
+    if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.status, reason: refusal.reason });
+    const googleUid = req.body?.google_uid;
+    if (googleUid === null || googleUid === '') {
+      d.prepare('DELETE FROM familylink_device_map WHERE google_uid IN (SELECT google_uid FROM familylink_children WHERE yuvomi_user_id = ?)').run(userId);
+      d.prepare('DELETE FROM familylink_children WHERE yuvomi_user_id = ?').run(userId);
+      return res.json({ data: { mapped: false } });
+    }
+    const uid = String(googleUid ?? '').trim();
+    if (!/^[0-9]{6,40}$/.test(uid)) {
+      return res.status(400).json({
+        error: 'google_uid must be a digit string (6-40) from the collector report.',
+        code: 400, reason: 'media_time_bad_request',
+      });
+    }
+    const user = d.prepare('SELECT display_name FROM users WHERE id = ?').get(userId);
+    // UNIQUE(yuvomi_user_id) + PK(google_uid): erst fremde Zeilen desselben
+    // Kindes/Google-Kontos raumen, dann hochladen (Idempotenz).
+    d.prepare('DELETE FROM familylink_children WHERE yuvomi_user_id = ? AND google_uid <> ?').run(userId, uid);
+    d.prepare('DELETE FROM familylink_children WHERE google_uid = ? AND yuvomi_user_id <> ?').run(uid, userId);
+    d.prepare(`
+      INSERT INTO familylink_children (google_uid, yuvomi_user_id, display_name, enabled)
+      VALUES (?, ?, ?, 1)
+      ON CONFLICT(google_uid) DO UPDATE SET yuvomi_user_id = excluded.yuvomi_user_id,
+        display_name = excluded.display_name, enabled = 1
+    `).run(uid, userId, user?.display_name ?? null);
+    const devices = Array.isArray(req.body?.devices) ? req.body.devices : null;
+    if (devices) {
+      const known = d.prepare('SELECT id FROM media_time_devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL');
+      for (const item of devices) {
+        const gDev = String(item?.google_device_id ?? '').trim();
+        if (!/^[A-Za-z0-9_-]{3,64}$/.test(gDev)) {
+          return res.status(400).json({ error: 'devices[].google_device_id is required (3-64 chars).', code: 400, reason: 'media_time_bad_request' });
+        }
+        const devId = item?.media_time_device_id;
+        if (devId != null) {
+          const ok = known.get(toInt(devId), userId);
+          if (!ok) {
+            return res.status(404).json({ error: 'Device not found for this child.', code: 404, reason: 'media_time_not_found' });
+          }
+        }
+        d.prepare(`
+          INSERT INTO familylink_device_map (google_uid, google_device_id, media_time_device_id)
+          VALUES (?, ?, ?)
+          ON CONFLICT(google_uid, google_device_id) DO UPDATE SET media_time_device_id = excluded.media_time_device_id
+        `).run(uid, gDev, devId != null ? toInt(devId) : null);
+      }
+    }
+    return res.json({ data: { mapped: true, google_uid: uid } });
+  } catch (err) {
+    log.error('PUT /familylink/mapping error:', err);
+    return res.status(500).json({ error: 'Failed to save family link mapping.', code: 500 });
+  }
+});
+
+/*Jetzt abrufen (Eltern): ein Ingest-Lauf auf Kommando - auf dem
+ * Collector-Host mit Session liefert er Daten, sonst setzt er den Status
+ * 'login_noetig' (nie 0er-Werte). Der Intervall-Job tut dasselbe von allein. */
+router.post('/familylink/ingest', requireManager, async (req, res) => {
+  try {
+    const d = db.get();
+    const r = await runFamilylinkIngest(d, {
+      command: d.prepare("SELECT value FROM sync_config WHERE key = 'familylink_ingest_command'").get()?.value,
+    });
+    return res.json({ data: { ok: r.ok, written: r.written, status: r.status } });
+  } catch (err) {
+    log.error('POST /familylink/ingest error:', err);
+    return res.status(500).json({ error: 'Failed to run family link ingest.', code: 500 });
   }
 });
 

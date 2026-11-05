@@ -3801,6 +3801,7 @@ export const schemas = {
             'quiet_active', 'state', 'tracker'],
           properties: {
             user_id: mediaTimeProperties.user_id,
+            familylink: { $ref: '#/components/schemas/MediaTimeFamilylinkDay', description: 'Real screen time from Google Family Link for today (never zeros when the collector cannot report).' },
             day: mediaTimeProperties.day,
             enabled: mediaTimeProperties.enabled,
             quota_min: mediaTimeProperties.quota_min,
@@ -4026,7 +4027,100 @@ export const schemas = {
             hard_cap: mediaTimeProperties.hard_cap,
             retention_days: mediaTimeProperties.retention_days,
             enforcement: mediaTimeProperties.enforcement,
+            familylink_ingest_enabled: { type: 'boolean', description: 'True when the five-minute family link ingest runs on this household.' },
+            familylink_status: { type: ['string', 'null'], enum: ['ok', 'login_noetig', null], description: 'Last collector outcome; null before the first run.' },
           },
+        },
+        MediaTimeFamilylinkDay: {
+          type: 'object',
+          required: ['mapped', 'devices'],
+          properties: {
+            mapped: { type: 'boolean', description: 'False without a parent mapping - the UI then says nothing instead of zero.' },
+            status: { type: ['string', 'null'], enum: ['ok', 'login_noetig', null], description: "Collector status: 'ok' or 'login_noetig' (a failed run never writes zero snapshots)." },
+            devices: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeFamilylinkDevice' } },
+          },
+        },
+        MediaTimeFamilylinkDevice: {
+          type: 'object',
+          required: ['day', 'fetched_at'],
+          properties: {
+            media_time_device_id: { type: ['integer', 'null'], description: 'The Yuvomi device this Google device is mapped to.' },
+            device_name: { type: ['string', 'null'] },
+            day: { type: 'string', description: 'Day of the aggregate (YYYY-MM-DD).' },
+            limit_min: { type: ['number', 'null'] },
+            consumed_min: { type: ['number', 'null'] },
+            remaining_min: { type: ['number', 'null'] },
+            downtime: { type: ['string', 'null'], description: "Google's downtime window, display only - Yuvomi enforces its own quiet hours." },
+            fetched_at: { type: 'string' },
+          },
+        },
+        MediaTimeFamilylinkUsageData: {
+          type: 'object',
+          required: ['user_id', 'day', 'mapped', 'devices'],
+          properties: {
+            user_id: { type: 'integer' },
+            day: { type: 'string' },
+            mapped: { type: 'boolean' },
+            status: { type: ['string', 'null'], enum: ['ok', 'login_noetig', null] },
+            devices: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeFamilylinkDevice' } },
+          },
+        },
+        MediaTimeFamilylinkUsageResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkUsageData' } },
+        },
+        MediaTimeFamilylinkMappingDevice: {
+          type: 'object',
+          required: ['google_device_id'],
+          properties: {
+            google_device_id: { type: 'string', minLength: 3, maxLength: 64 },
+            media_time_device_id: { type: ['integer', 'null'] },
+            device_name: { type: ['string', 'null'] },
+          },
+        },
+        MediaTimeFamilylinkMappingData: {
+          type: 'object',
+          required: ['mapped', 'devices'],
+          properties: {
+            mapped: { type: 'boolean' },
+            google_uid: { type: ['string', 'null'], description: 'Pseudonymous Google account id (digit string from the collector).' },
+            enabled: { type: 'boolean' },
+            devices: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeFamilylinkMappingDevice' } },
+          },
+        },
+        MediaTimeFamilylinkMappingResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkMappingData' } },
+        },
+        MediaTimeFamilylinkMappingInput: {
+          type: 'object',
+          required: ['user_id'],
+          properties: {
+            user_id: { type: 'integer', minimum: 1 },
+            google_uid: { type: ['string', 'null'], pattern: '^[0-9]{6,40}$', description: 'Digit string from the collector report; null or empty removes the mapping.' },
+            devices: { type: ['array', 'null'], items: { type: 'object', required: ['google_device_id'], properties: { google_device_id: { type: 'string', minLength: 3, maxLength: 64 }, media_time_device_id: { type: ['integer', 'null'] } } } },
+          },
+        },
+        MediaTimeFamilylinkMappingSaveData: {
+          type: 'object',
+          required: ['mapped'],
+          properties: {
+            mapped: { type: 'boolean' },
+            google_uid: { type: ['string', 'null'] },
+          },
+        },
+        MediaTimeFamilylinkIngestData: {
+          type: 'object',
+          required: ['ok', 'status'],
+          properties: {
+            ok: { type: 'boolean' },
+            written: { type: 'integer', minimum: 0 },
+            status: { type: 'string', enum: ['ok', 'login_noetig'] },
+          },
+        },
+        MediaTimeFamilylinkIngestResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkIngestData' } },
         },
         MediaTimeSettingsResponse: {
           type: 'object', required: ['data'],
@@ -4045,6 +4139,7 @@ export const schemas = {
             },
             enforcement: { type: 'string', enum: ['count', 'lock'], description: "Household policy at time-up (see MediaTimeTodayData.enforcement)." },
             hard_cap: { type: 'boolean', description: 'Default true: max_daily_minutes is final. False: it can be bought up to.' },
+            familylink_ingest_enabled: { type: 'boolean', description: 'Turn the five-minute family link ingest on or off (default off).' },
           },
         },
         MediaTimePurchaseInput: {

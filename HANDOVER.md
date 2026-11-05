@@ -1,6 +1,6 @@
 # Übergabe: Family-Link-Collector → Yuvomi (Medienzeit-Istzeit)
 
-**Stand:** 2026-11-05 | **Geber:** Hermes CT122 (dieser Host) | **Status:** wartet auf Einbau
+**Stand:** 2026-11-05 | **Geber:** Hermes CT122 (dieser Host) | **Status:** eingebaut (Migration 287, Routen + OpenAPI + Tests; Schalter in den Medienzeit-Regeln, Standard: aus)
 **Ziel:** Echte Nutzungszeiten aus Google Family Link in das Kern-Feature
 **Medienzeit** einspeisen (Anforderung A5 in `yuvomi-medienzeit`: „Anbindung
 Google Family Link API, nur abfragen, nie fernsperren").

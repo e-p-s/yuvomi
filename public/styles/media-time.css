@@ -391,3 +391,67 @@
   color: var(--color-text-secondary);
   font-style: italic;
 }
+
+
+/* ------------------------------------------------------------ Ticker + Gruppen
+ * Laufbalken-Ticker und nummerierte Regel-Gruppen (Nutzer 05.11.): die
+ * Tageskarte bekommt ein lebendes Element (pulsierender Punkt + Mitlauf-
+ * Zaehler), die Config-Seite eine Leserechnung (Zahl im Kreis pro Gruppe). */
+.mt-ticker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption);
+}
+.mt-ticker__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-secondary);
+}
+.mt-ticker__dot--live {
+  background: var(--color-success);
+  animation: mt-ticker-pulse 1.4s var(--ease-out) infinite;
+}
+@keyframes mt-ticker-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.45); opacity: 0.5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mt-ticker__dot--live { animation: none; }
+}
+.mt-groupnum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.7em;
+  height: 1.7em;
+  margin-right: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-fill-well);
+  color: var(--color-text-primary);
+  font-size: var(--type-caption);
+  font-weight: var(--font-weight-bold);
+}
+.mt-meta__fl {
+  width: 100%;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption);
+}
+.mt-meta__fl--head {
+  margin-top: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+.mt-meta__fl--warn {
+  margin-top: var(--space-2);
+  color: var(--color-warning-ink);
+}
+.mt-fl__gdev {
+  max-width: 13rem;
+}

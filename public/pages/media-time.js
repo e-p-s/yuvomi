@@ -614,6 +614,65 @@ async function doCheckout(checkinId) {
   }
 }
 
+/* Laufbalken-Ticker (Nutzer 05.11.): die Tageskarte lebt. Waehrend eine
+ * Buchung laeuft, tickt der Mitlauf-Zaehler alle 30 Sekunden - das Kind sieht
+ * Bewegung, ohne nachzuladen. Der Timer ist modulintern und endet mit der
+ * Seite (content()-Pruefung), wie ueberall hier kein Leck hinterlaesst. */
+let _tickerTimer = null;
+function openCheckin() {
+  return (state.checkins || []).find((c) => !c.ended_at);
+}
+function tickerElapsedText() {
+  const open = openCheckin();
+  if (!open) return '';
+  const ms = Date.now() - new Date(open.started_at).getTime();
+  const min = Math.max(0, Math.floor(ms / 60000));
+  return t('mediaTime.tickerElapsed', { min: fmtNum(min) });
+}
+function tickerHtml(data) {
+  const open = openCheckin();
+  let text;
+  if (data.quiet_active) text = t('mediaTime.tickerQuiet');
+  else if (open) {
+    const since = new Date(open.started_at);
+    const hh = String(since.getHours()).padStart(2, '0');
+    const mm = String(since.getMinutes()).padStart(2, '0');
+    text = `${t('mediaTime.tickerRunning', { time: `${hh}:${mm}` })} - `;
+  } else text = t('mediaTime.tickerIdle');
+  const live = open && !data.quiet_active;
+  return `<p class="mt-ticker" data-mt-ticker><span class="mt-ticker__dot${live ? ' mt-ticker__dot--live' : ''}" aria-hidden="true"></span>${esc(text)}<span data-mt-ticker-elapsed>${esc(tickerElapsedText())}</span></p>`;
+}
+function startTicker() {
+  if (_tickerTimer) return;
+  _tickerTimer = setInterval(() => {
+    if (!_container?.isConnected || !content()) {
+      clearInterval(_tickerTimer);
+      _tickerTimer = null;
+      return;
+    }
+    const el = _container.querySelector('[data-mt-ticker-elapsed]');
+    if (el) el.textContent = tickerElapsedText();
+  }, 30_000);
+}
+
+/* Family-Link-Istzeit auf der Tageskarte (Spec 287). Ohne Zuordnung steht
+ * hier nichts; ohne Collector-Sitzion steht der Hinweis, NIE eine Null.
+ * Die Minuten zaehlen bereits im Balken (dayUsage-Ersatz) - dieser Block ist
+ * die Auskunft ueber die Quelle, nicht das Konto. */
+function familylinkDetailsHtml(fl) {
+  if (!fl || !fl.mapped) return '';
+  if (fl.status === 'login_noetig') {
+    return `<p class="mt-meta__fl mt-meta__fl--warn">${esc(t(state.canManage ? 'mediaTime.flLoginParent' : 'mediaTime.flLoginChild'))}</p>`;
+  }
+  if (!fl.devices?.length) return `<p class="mt-meta__fl">${esc(t('mediaTime.flNoneToday'))}</p>`;
+  const total = fl.devices.reduce((s, r) => s + (r.consumed_min || 0), 0);
+  const lines = fl.devices.map((r) => {
+    if (!r.media_time_device_id) return '';
+    return `<p class="mt-meta__fl">${esc(r.device_name || t('mediaTime.flDevice'))}: ${esc(t('mediaTime.flGoogleMin', { min: fmtNum(Math.round(r.consumed_min || 0)) }))}</p>`;
+  }).join('');
+  return `<p class="mt-meta__fl mt-meta__fl--head">${esc(t('mediaTime.flSourceLine', { min: fmtNum(Math.round(total)) }))}</p>${lines}`;
+}
+
 function renderToday(el) {
   const data = state.today;
   if (!data) {
@@ -768,6 +827,7 @@ function renderToday(el) {
              aria-valuenow="${fmtNum(remaining)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
              aria-valuetext="${esc(progressLabel)}"><div class="mt-progress__fill" style="--mt-progress:${ratio}"></div></div>
         <p class="mt-progress__label" aria-hidden="true">${esc(progressLabel)}</p>
+        ${tickerHtml(data)}
         <details class="mt-details">
           <summary class="mt-details__summary">${esc(t('mediaTime.detailTitle'))}</summary>
           <p class="mt-details__hint">${esc(t('mediaTime.detailHint'))}</p>
@@ -778,6 +838,7 @@ function renderToday(el) {
           ${metaCell(t('mediaTime.metaPurchased'), minutesLabel(data.purchased_min))}
           ${(Number(data.duty_min) || 0) > 0 ? metaCell(t('mediaTime.metaDuty'), minutesLabel(data.duty_min)) : ''}
           ${tracker}
+          ${familylinkDetailsHtml(data.familylink)}
         </div>
         </details>
       </section>
@@ -1259,12 +1320,36 @@ async function openInventoryModal(deviceId) {
 /* Reiter: Regeln                                                      */
 /* ------------------------------------------------------------------ */
 
+/* Regeln = Config-Seite, nummerierte Gruppen (Nutzer 05.11.: "Config Seite
+ * strukturierter und intuitiver"). Die Reihenfolge folgt den Fragen der
+ * Eltern: An/Aus und Sperre -> Ruhezeit -> Punkte -> Apps -> Google. Jede
+ * Gruppe traegt eine Zahl, damit die Seite eine Leserechnung hat. */
+function groupHeading(id, num, labelKey) {
+  return `<h2 class="mt-section__title u-section-title" id="${id}">`
+    + `<span class="mt-groupnum" aria-hidden="true">${num}</span>${esc(t(labelKey))}</h2>`;
+}
+
 function renderRules(el) {
   el.insertAdjacentHTML('beforeend', `
     <div class="media-time-content__inner">
       <p class="mt-section__note">${esc(state.canManage ? t('mediaTime.rulesIntro') : t('mediaTime.rulesChildHint'))}</p>
+
+      <section class="mt-section" aria-labelledby="mt-basic-title">
+        ${groupHeading('mt-basic-title', 1, 'mediaTime.groupBasics')}
+        <p class="mt-section__note">${esc(t('mediaTime.groupBasicsHint'))}</p>
+        <div id="mt-switch-host"></div>
+        <div class="form-group mt-hardcap-row">
+          <label class="label" for="mt-enforcement">${esc(t('mediaTime.enforcementLabel'))}</label>
+          <select class="input" id="mt-enforcement">
+            <option value="count">${esc(t('mediaTime.enforcementCount'))}</option>
+            <option value="lock">${esc(t('mediaTime.enforcementLock'))}</option>
+          </select>
+          <p class="form-hint">${esc(t('mediaTime.enforcementHelp'))}</p>
+        </div>
+      </section>
+
       <section class="mt-section" aria-labelledby="mt-quiet-title">
-        <h2 class="mt-section__title u-section-title" id="mt-quiet-title">${esc(t('mediaTime.quietTitle'))}</h2>
+        ${groupHeading('mt-quiet-title', 2, 'mediaTime.groupQuiet')}
         <p class="mt-section__note">${esc(t('mediaTime.quietBody'))}</p>
         <div class="mt-quiet-form">
           <label class="label" for="mt-quiet-from">${esc(t('mediaTime.quietFrom'))}</label>
@@ -1278,10 +1363,8 @@ function renderRules(el) {
         </div>
       </section>
 
-      <section class="mt-section" aria-labelledby="mt-settings-title">
-        <h2 class="mt-section__title u-section-title" id="mt-settings-title">${esc(t('mediaTime.settingsTitle'))}</h2>
-        <div id="mt-switch-host"></div>
-        <h3 class="mt-group-title">${esc(t('mediaTime.rateGroupTitle'))}</h3>
+      <section class="mt-section" aria-labelledby="mt-exchange-group-title">
+        ${groupHeading('mt-exchange-group-title', 3, 'mediaTime.groupExchange')}
         <p class="mt-section__note">${esc(t('mediaTime.rateGroupHint'))}</p>
         <div class="form-group">
           <label class="label" for="mt-rate-points">${esc(t('mediaTime.ratePointsLabel'))}</label>
@@ -1303,19 +1386,11 @@ function renderRules(el) {
           </select>
           <p class="form-hint">${esc(t('mediaTime.hardCapHint'))}</p>
         </div>
-        <div class="form-group mt-hardcap-row">
-          <label class="label" for="mt-enforcement">${esc(t('mediaTime.enforcementLabel'))}</label>
-          <select class="input" id="mt-enforcement">
-            <option value="count">${esc(t('mediaTime.enforcementCount'))}</option>
-            <option value="lock">${esc(t('mediaTime.enforcementLock'))}</option>
-          </select>
-          <p class="form-hint">${esc(t('mediaTime.enforcementHelp'))}</p>
-        </div>
       </section>
 
       <section class="mt-section" aria-labelledby="mt-exceptions-title">
         <div class="mt-section__head">
-          <h2 class="mt-section__title u-section-title" id="mt-exceptions-title">${esc(t('mediaTime.exceptionsTitle'))}</h2>
+          ${groupHeading('mt-exceptions-title', 4, 'mediaTime.exceptionsTitle')}
           <button class="btn btn--secondary btn--sm" type="button" data-action="mt-exception-add">
             <i data-lucide="plus" aria-hidden="true"></i>${esc(t('mediaTime.exceptionAdd'))}
           </button>
@@ -1324,6 +1399,13 @@ function renderRules(el) {
         <p class="mt-section__note">${esc(t('mediaTime.exceptionSectionHint'))}</p>
         <div id="mt-exception-host"></div>
       </section>
+
+      ${state.canManage ? `
+      <section class="mt-section" aria-labelledby="mt-fl-title">
+        ${groupHeading('mt-fl-title', 5, 'mediaTime.groupGoogle')}
+        <p class="mt-section__note">${esc(t('mediaTime.flIntro'))}</p>
+        <div id="mt-fl-host"></div>
+      </section>` : ''}
     </div>`);
   wireRules(el);
 }
@@ -1385,6 +1467,133 @@ function wireRules(el) {
   /* (c) Ausnahmen */
   renderExceptionRows(el);
   el.querySelector('[data-action="mt-exception-add"]')?.addEventListener('click', () => openExceptionModal(null));
+
+
+  /* (d) Google Family Link (Eltern): Schalter, Status, Abruf, Zuordnung. */
+  const flHost = el.querySelector('#mt-fl-host');
+  if (flHost) renderFlHost(flHost);
+}
+
+function flStatusText(s) {
+  if (s?.familylink_status === 'ok') return t('mediaTime.flStatusOk');
+  if (s?.familylink_status === 'login_noetig') return t('mediaTime.flLoginParent');
+  return t('mediaTime.flStatusNone');
+}
+
+function renderFlHost(host) {
+  const s = state.settings || {};
+  host.insertAdjacentHTML('beforeend', `
+    <label class="toggle-row toggle-row--switch">
+      <span class="toggle-row__label">${esc(t('mediaTime.flSwitchLabel'))}</span>
+      <span class="toggle">
+        <input type="checkbox" role="switch" id="mt-fl-enabled"${s.familylink_ingest_enabled ? ' checked' : ''}>
+        <span class="toggle__track" aria-hidden="true"></span>
+      </span>
+    </label>
+    <p class="form-hint">${esc(t('mediaTime.flSwitchHint'))}</p>
+    <p class="mt-section__note" id="mt-fl-status">${esc(flStatusText(s))}</p>
+    <div class="mt-row-actions">
+      <button class="btn btn--secondary btn--sm" type="button" data-action="mt-fl-fetch">
+        <i data-lucide="refresh-cw" aria-hidden="true"></i>${esc(t('mediaTime.flFetch'))}
+      </button>
+    </div>
+    <div id="mt-fl-map"></div>`);
+  host.querySelector('#mt-fl-enabled')?.addEventListener('change', async (ev) => {
+    try {
+      await api.put('/media-time/settings', { familylink_ingest_enabled: ev.target.checked });
+      state.settings = { ...state.settings, familylink_ingest_enabled: ev.target.checked };
+      toast(ev.target.checked ? t('mediaTime.flOnToast') : t('mediaTime.flOffToast'));
+    } catch (err) {
+      ev.target.checked = !ev.target.checked;
+      toast(mediaTimeErrorSentence(err), 'danger');
+    }
+  });
+  host.querySelector('[data-action="mt-fl-fetch"]')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    try {
+      const res = await api.post('/media-time/familylink/ingest', {});
+      const status = res?.data?.status;
+      state.settings = { ...state.settings, familylink_status: status };
+      const st = host.querySelector('#mt-fl-status');
+      if (st) st.textContent = flStatusText(state.settings);
+      toast(status === 'ok'
+        ? t('mediaTime.flFetchOk', { written: fmtNum(res?.data?.written ?? 0) })
+        : t('mediaTime.flFetchLogin'));
+    } catch (err) {
+      toast(mediaTimeErrorSentence(err), 'danger');
+    }
+    btn.disabled = false;
+  });
+  loadFlMap(host.querySelector('#mt-fl-map'));
+}
+
+/* Zuordnung Kind <-> Google-Konto und Google-Geraet <-> Medienzeit-Geraet.
+ * Die Google-Kennung ist eine Ziffernfolge aus dem Collector-Bericht
+ * (scripts/familylink) - ein Pseudonym, kein Name. Geraete lassen sich dem
+ * Kind zuordnen, damit die Google-Minuten auf dem richtigen Balken landen. */
+async function loadFlMap(mapEl) {
+  if (!mapEl || state.selectedChildId == null) return;
+  await ensureDevicesLite();
+  let mapping = null;
+  try {
+    const res = await api.get(`/media-time/familylink/mapping?user_id=${state.selectedChildId}`);
+    mapping = res?.data ?? null;
+  } catch { /* ohne Auskunft: Formular leer, nichts behaupten */ }
+  const devices = state.devices || [];
+  const rows = devices.map((dev) => {
+    const mapped = (mapping?.devices || []).find((m) => m.media_time_device_id === dev.id);
+    return `
+      <div class="list-row">
+        <div class="list-row__main">
+          <p class="list-row__name">${esc(dev.name)}</p>
+        </div>
+        <input class="input mt-fl__gdev" data-device-id="${dev.id}" maxlength="64"
+          placeholder="${esc(t('mediaTime.flDeviceGooglePh') || '')}"
+          value="${esc(mapped?.google_device_id || dev.google_device_id || '')}">
+      </div>`;
+  }).join('');
+  const known = (mapping?.devices || []).filter((m) => !m.media_time_device_id).map((m) => m.google_device_id);
+  mapEl.insertAdjacentHTML('beforeend', `
+    <h3 class="mt-group-title">${esc(t('mediaTime.flMapTitle'))}</h3>
+    <p class="form-hint">${esc(t('mediaTime.flMapHint'))}</p>
+    <div class="form-group">
+      <label class="label" for="mt-fl-uid">${esc(t('mediaTime.flGoogleUidLabel'))}</label>
+      <input class="input" id="mt-fl-uid" inputmode="numeric" maxlength="40" value="${esc(mapping?.google_uid || '')}">
+    </div>
+    ${rows ? `<div class="row-carrier">${rows}</div>` : ''}
+    ${known.length ? `<p class="form-hint">${esc(t('mediaTime.flKnownDevices'))}: ${esc(known.join(', '))}</p>` : ''}
+    <div class="mt-row-actions">
+      <button class="btn btn--primary btn--sm" type="button" data-action="mt-fl-map-save">${esc(t('mediaTime.flMapSave'))}</button>
+      <button class="btn btn--secondary btn--sm" type="button" data-action="mt-fl-map-clear">${esc(t('mediaTime.flMapClear'))}</button>
+    </div>`);
+  mapEl.querySelector('[data-action="mt-fl-map-save"]')?.addEventListener('click', async () => {
+    const uid = mapEl.querySelector('#mt-fl-uid').value.trim();
+    if (!/^[0-9]{6,40}$/.test(uid)) {
+      toast(t('mediaTime.flUidProblem'), 'danger');
+      return;
+    }
+    const devs = [...mapEl.querySelectorAll('.mt-fl__gdev')].filter((i) => i.value.trim())
+      .map((i) => ({ google_device_id: i.value.trim(), media_time_device_id: Number(i.dataset.deviceId) }));
+    try {
+      await api.put('/media-time/familylink/mapping', {
+        user_id: state.selectedChildId, google_uid: uid, devices: devs,
+      });
+      toast(t('mediaTime.flMapSaved'));
+      await reloadAfterSave(() => renderCurrentTab(_container, { direction: 0 }));
+    } catch (err) {
+      toast(mediaTimeErrorSentence(err), 'danger');
+    }
+  });
+  mapEl.querySelector('[data-action="mt-fl-map-clear"]')?.addEventListener('click', async () => {
+    try {
+      await api.put('/media-time/familylink/mapping', { user_id: state.selectedChildId, google_uid: null });
+      toast(t('mediaTime.flMapCleared'));
+      await reloadAfterSave(() => renderCurrentTab(_container, { direction: 0 }));
+    } catch (err) {
+      toast(mediaTimeErrorSentence(err), 'danger');
+    }
+  });
 }
 
 async function putQuiet(range) {
@@ -1704,6 +1913,7 @@ export async function render(container, { user } = {}) {
   _container = container;
   renderShell(container);
   await renderCurrentTab(container);
+  startTicker();
 }
 
 /** ?user_id= (Kachel-Sprung, tiefer Link) als Vorauswahl, falls gueltig. */
