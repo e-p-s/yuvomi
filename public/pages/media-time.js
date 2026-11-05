@@ -329,9 +329,9 @@ function renderShell(container) {
   container.insertAdjacentHTML('beforeend', `
     <div class="media-time-page app-page app-page--reading" data-composition="reading">
       <header class="page-toolbar page-toolbar--narrow page-toolbar--tabs-title media-time-toolbar">
-        <h1 class="page-toolbar__title" id="media-time-title">${esc(t('mediaTime.title'))}</h1>
+        <h1 class="page-toolbar__title" id="media-time-title">${esc(t('nav.mediaTime'))}</h1>
         <div class="page-toolbar__actions"></div>
-        <nav class="media-time-tabs page-toolbar__bar" role="tablist" aria-label="${esc(t('mediaTime.title'))}">
+        <nav class="media-time-tabs page-toolbar__bar" role="tablist" aria-label="${esc(t('nav.mediaTime'))}">
           ${tabButton('today', t('mediaTime.tabToday'))}
           ${tabButton('devices', t('mediaTime.tabDevices'))}
           ${tabButton('rules', t('mediaTime.tabRules'))}
@@ -465,7 +465,7 @@ function childPickerHtml() {
     <option value="${c.id}"${c.id === state.selectedChildId ? ' selected' : ''}>${esc(c.display_name)}</option>`).join('');
   return `
     <div class="mt-picker">
-      <label class="label" for="mt-child">${esc(t('mediaTime.childLabel'))}</label>
+      <label class="label" for="mt-child">${esc(t('mediaTime.childSwitchTitle'))}</label>
       <select class="input" id="mt-child">${opts}</select>
     </div>`;
 }
@@ -647,6 +647,20 @@ function renderToday(el) {
     remaining: fmtNum(remaining),
     quota: fmtNum(quota),
   });
+  /* Kindgerechte Rangfolge (Nutzer 05.11., Screenshot): die eine Frage ist
+   * "wie viel Zeit hab ich noch?" - die Antwort steht als Riesenzahl obenauf,
+   * der Zustand als einfacher Satz darunter. Rechenwege (Basis/Anpassung) und
+   * englische Fachworte sind weg; Details kommen erst darunter, aufklarbar. */
+  const barState = data.quiet_active ? 'quiet'
+    : (data.state === 'exceeded' ? 'exceeded'
+      : (data.state === 'nearing' ? 'nearing' : (quota > 0 ? 'ok' : 'none')));
+  const barSentence = {
+    ok: t('mediaTime.barOk'),
+    nearing: t('mediaTime.barNearing'),
+    exceeded: t('mediaTime.barExceeded'),
+    quiet: t('mediaTime.barQuiet'),
+    none: t('mediaTime.barNoQuota'),
+  }[barState];
 
   const quiet = data.quiet
     ? `<span class="mt-chip mt-chip--quiet">${esc(t('mediaTime.quietWindowLabel', {
@@ -660,16 +674,20 @@ function renderToday(el) {
       ${metaCell(t('mediaTime.lastSeenLabel'), esc(seenAgoText(data.tracker?.last_seen_at)))}
       ${quiet ? `<span class="mt-meta__quiet">${quiet}</span>` : ''}`;
 
-  const exchange = (data.exchange && state.canManage) ? `
+  /* Der Tauschweg (Punkte -> Minuten) eroeffnet sich hier, nicht erst im
+   * vierten Reiter (Nutzer 05.11., "12jaehriger muss es verstehen"): Der Kurs-
+   * Satz steht auf der Tageskarte - dieselbe Antwort wie dort, in einem Satz.
+   * Der Knopf bleibt Elternpfad (POST /purchase prueft requireManager); ein
+   * Kind sieht den Satz und fragt zuhause. */
+  const exchange = data.exchange ? `
     <section class="mt-section" aria-labelledby="mt-exchange-title">
       <h2 class="mt-section__title u-section-title" id="mt-exchange-title">${esc(t('mediaTime.exchangeTitle'))}</h2>
-      <p class="mt-section__note">${esc(t('mediaTime.exchangeHint', {
-    points: fmtNum(data.exchange.points),
-    minutes: fmtNum(data.exchange.minutes),
-  }))}</p>
-      <button class="btn btn--primary" type="button" data-action="mt-open-purchase">
-        <i data-lucide="coins" aria-hidden="true"></i>${esc(t('mediaTime.exchangeCta'))}
-      </button>
+      <p class="mt-section__note">${esc(state.canManage
+    ? t('mediaTime.exchangeHint', { points: fmtNum(data.exchange.points), minutes: fmtNum(data.exchange.minutes) })
+    : t('mediaTime.exchangeHintChild', { points: fmtNum(data.exchange.points), minutes: fmtNum(data.exchange.minutes) }))}</p>
+      ${data.exchange ? `<button class="btn btn--primary" type="button" data-action="mt-open-purchase">
+        <i data-lucide="coins" aria-hidden="true"></i>${esc(state.canManage ? t('mediaTime.exchangeCta') : t('mediaTime.exchangeCtaChild'))}
+      </button>` : ''}
     </section>` : '';
 
   /* Die Anpassung des Tages (Eltern-Notizen, Entscheidung 4): Basis + Anpassung
@@ -736,15 +754,23 @@ function renderToday(el) {
       ${header}
       <section class="mt-section mt-card" aria-labelledby="mt-today-title">
         <div class="mt-card__head">
-          <h2 class="mt-card__title" id="mt-today-title">${esc(t('mediaTime.todayTitle'))}</h2>
+          <h2 class="mt-card__title" id="mt-today-title">${esc(
+            state.canManage && state.selectedChildId != null
+              ? t('mediaTime.todayTitleWithChild', { name: childNameFor(state.selectedChildId) })
+              : t('mediaTime.todayTitleChild'))}</h2>
           <span class="${chip.cls}">${esc(chip.label)}</span>
         </div>
+        <p class="mt-hero" aria-hidden="true"><span class="mt-hero__num">${esc(fmtNum(remaining))}</span><span class="mt-hero__unit">${esc(t('mediaTime.bigOfQuota', { quota: fmtNum(quota) }))}</span></p>
+        <p class="mt-hero__sentence mt-hero__sentence--${barState}">${esc(barSentence)}</p>
         ${quotaLine}
         <div class="mt-progress__track" role="progressbar"
              aria-label="${esc(t('mediaTime.progressLabel'))}"
              aria-valuenow="${fmtNum(remaining)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
              aria-valuetext="${esc(progressLabel)}"><div class="mt-progress__fill" style="--mt-progress:${ratio}"></div></div>
         <p class="mt-progress__label" aria-hidden="true">${esc(progressLabel)}</p>
+        <details class="mt-details">
+          <summary class="mt-details__summary">${esc(t('mediaTime.detailTitle'))}</summary>
+          <p class="mt-details__hint">${esc(t('mediaTime.detailHint'))}</p>
         <div class="mt-meta">
           ${metaCell(t('mediaTime.metaCharged'), minutesLabel(data.charged_min))}
           ${metaCell(t('mediaTime.metaExempt'), minutesLabel(data.exempt_min))}
@@ -753,6 +779,7 @@ function renderToday(el) {
           ${(Number(data.duty_min) || 0) > 0 ? metaCell(t('mediaTime.metaDuty'), minutesLabel(data.duty_min)) : ''}
           ${tracker}
         </div>
+        </details>
       </section>
       ${checkinSection}
       ${notesSection}
@@ -931,7 +958,9 @@ function openAdjustModal() {
 /* ------------------------------------------------------------------ */
 
 function openPurchaseModal() {
-  if (!state.canManage) return;
+  /* Der Selbstkauf steht auch Kindern offen (POST /purchase laesst targetId ==
+   * actor zu, Server prüft Punkte und Cap) - der Modal ist bewusst identisch,
+   * der Satz nennt Kurs und Menge, der Rechner bleibt beim Server. */
   const rate = state.today?.exchange;
   if (!rate) return;
   const modalContext = captureModalContext();
@@ -973,7 +1002,7 @@ function openPurchaseModal() {
       submit.disabled = true;
       try {
         const body = { quantity: qty };
-        if (state.selectedChildId != null) body.user_id = state.selectedChildId;
+        if (state.canManage && state.selectedChildId != null) body.user_id = state.selectedChildId;
         await api.post('/media-time/purchase', body);
         toast(t('mediaTime.purchaseDoneToast', {
           minutes: fmtNum(rate.minutes * qty),
@@ -1233,6 +1262,7 @@ async function openInventoryModal(deviceId) {
 function renderRules(el) {
   el.insertAdjacentHTML('beforeend', `
     <div class="media-time-content__inner">
+      <p class="mt-section__note">${esc(state.canManage ? t('mediaTime.rulesIntro') : t('mediaTime.rulesChildHint'))}</p>
       <section class="mt-section" aria-labelledby="mt-quiet-title">
         <h2 class="mt-section__title u-section-title" id="mt-quiet-title">${esc(t('mediaTime.quietTitle'))}</h2>
         <p class="mt-section__note">${esc(t('mediaTime.quietBody'))}</p>
@@ -1251,6 +1281,8 @@ function renderRules(el) {
       <section class="mt-section" aria-labelledby="mt-settings-title">
         <h2 class="mt-section__title u-section-title" id="mt-settings-title">${esc(t('mediaTime.settingsTitle'))}</h2>
         <div id="mt-switch-host"></div>
+        <h3 class="mt-group-title">${esc(t('mediaTime.rateGroupTitle'))}</h3>
+        <p class="mt-section__note">${esc(t('mediaTime.rateGroupHint'))}</p>
         <div class="form-group">
           <label class="label" for="mt-rate-points">${esc(t('mediaTime.ratePointsLabel'))}</label>
           <input class="input mt-rate__field" id="mt-rate-points" type="number" min="1" max="9999" step="1">
@@ -1289,6 +1321,7 @@ function renderRules(el) {
           </button>
         </div>
         <p class="mt-section__note">${esc(t('mediaTime.exceptionsBody'))}</p>
+        <p class="mt-section__note">${esc(t('mediaTime.exceptionSectionHint'))}</p>
         <div id="mt-exception-host"></div>
       </section>
     </div>`);

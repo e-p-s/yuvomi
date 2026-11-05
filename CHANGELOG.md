@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit: menuegerecht fuer Kinder (Redesign 05.11., "ein 12jaehriger muss es
+  verstehen").** Die Tageskarte beantwortet die eine Frage zuoberst: die Restzeit als
+  grosse Zahl mit klarem Satz ("Zeit ist um - Pause" statt "exceeded"); die
+  Fachwort-Zeilen (charged/exempt/unknown/bought) stecken jetzt in einer
+  aufklappbaren "Woher die Minuten kommen"-Sektion. Der Titel nennt das Kind ("Zeit
+  von Max heute"); der Seitentitel entspricht dem Menuwort "Medienzeit". Der
+  Tauschweg (Punkte -> Minuten) ist auf der Tageskarte sichtbar - ein Satz in
+  Kindersprache - und Kinder koennen ihre Zeit selbst kaufen (der Server prueft
+  Punkte und Cap wie vorher). Die Regeln-Seite erhaelt eine Einordnung und eine
+  benannte Punkte-gegen-Minuten-Gruppe.
+
 - **Medienzeit: Einbuchen/Ausbuchen (Check-in) pro Kind und Geraet.** Fuer Geraete ohne Agent
   (Konsole, Fernseher, Tablet) bucht das Kind sich selbst ein und aus: die offene Sitzung zaehlt
   live gegen das Tageskontingent und endet spaetestens an Mitternacht (Migration 286). Neue
