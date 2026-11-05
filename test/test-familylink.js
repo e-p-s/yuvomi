@@ -188,3 +188,17 @@ test('familylinkUsage - ohne Zuordnung mapped:false, mit Zuordnung Geraete mit g
   const linked = use.devices.find((d) => d.google_device_id === 'gdev-linked');
   assert.equal(linked.consumed_min, 45);
 });
+
+test('dayUsage — Kind ohne eigenes Geraet: Google-Summe ist der Verbrauch', () => {
+  const childId = kid('FlPhoneOnly');
+  mapChild(childId, '5555559999');
+  const day = dayKey;
+  db.prepare(`
+    INSERT INTO familylink_daily (google_uid, google_device_id, day, consumed_min, fetched_at)
+    VALUES ('5555559999', 'gd-a', ?, 25, '2026-11-05T10:00:00Z'),
+           ('5555559999', 'gd-b', ?, 10, '2026-11-05T10:00:00Z')
+  `).run(day, day);
+  const u = svc.dayUsage(db, childId, day);
+  assert.equal(u.charged_min, 35, 'zwei Geraete ohne Link: Summe zahlend');
+  assert.equal(u.familylink_min, 35);
+});

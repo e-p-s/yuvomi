@@ -317,6 +317,28 @@ export function dayUsage(d, userId, dayKey) {
     'SELECT google_uid FROM familylink_children WHERE yuvomi_user_id = ? AND enabled = 1'
   ).get(userId);
   if (fl) {
+    // Kein einziges eigenes Geraet (Telefon-Kinder ohne Agent): die Summe
+    // aller gemeldeten Google-Zeilen des Tages ist der Verbrauch - sonst
+    // bliebe die Istzeit ohne Balken-Wirkung, obwohl das Kind zugeordnet ist.
+    const ownDevices = d.prepare(
+      'SELECT COUNT(*) AS n FROM media_time_devices WHERE user_id = ? AND revoked_at IS NULL'
+    ).get(userId).n;
+    if (!ownDevices) {
+      const all = d.prepare(
+        'SELECT COALESCE(SUM(consumed_min), 0) AS m FROM familylink_daily WHERE google_uid = ? AND day = ?'
+      ).get(fl.google_uid, dayKey).m;
+      if (all > 0) {
+        return {
+          charged_min: Math.round(all),
+          exempt_min: row.exempt_min,
+          system_min: row.system_min,
+          unknown_min: row.unknown_min,
+          credit_min: row.credit_min,
+          duty_min: dutyRow.duty_min,
+          familylink_min: Math.round(all),
+        };
+      }
+    }
     const flRows = d.prepare(`
       SELECT fdl.consumed_min, m.media_time_device_id
         FROM familylink_daily fdl
