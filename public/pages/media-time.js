@@ -139,12 +139,27 @@ function mediaTimeErrorSentence(err) {
  * die zaehlen nicht zu den Kindern, bleiben aber als quotaRows stehen. */
 async function ensureChildren() {
   try {
-    const res = await api.get('/media-time/quotas');
+    const [res, members] = await Promise.all([
+      api.get('/media-time/quotas'),
+      // Kinder ohne Kontingent-Zeile existierten fuer die Seite sonst nicht -
+      // genau darin lag, dass das zweite Kind unsichtbar blieb. /family/members
+      // liefert den ganzen Haushalt in der Familienreihenfolge.
+      api.get('/family/members').then((r) => r.data || []).catch(() => []),
+    ]);
     const rows = (res.data || []).filter((r) => Number.isInteger(r.user_id));
     state.quotaRows = rows;
-    state.children = rows
+    const byId = new Map(rows
       .filter((r) => r.device_id == null)
-      .map((r) => ({ id: r.user_id, display_name: r.display_name || r.username || String(r.user_id) }));
+      .map((r) => [r.user_id, { id: r.user_id, display_name: r.display_name || r.username || String(r.user_id) }]));
+    const seen = new Set();
+    const merged = [];
+    for (const m of members) {
+      if (m.family_role !== 'child' || !Number.isInteger(m.id) || seen.has(m.id)) continue;
+      seen.add(m.id);
+      merged.push(byId.get(m.id) || { id: m.id, display_name: m.display_name || String(m.id) });
+    }
+    for (const [id, c] of byId) if (!seen.has(id)) merged.push(c);
+    state.children = merged;
     state.canManage = true;
   } catch (err) {
     if ((err?.status ?? err?.response?.status) === 403) {
