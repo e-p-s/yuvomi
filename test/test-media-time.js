@@ -170,9 +170,9 @@ test('classifySession: unbekanntes Paket => unknown (NIE still abziehen)', () =>
 
 function setQuota(userId, { daily = 60, max = null, enabled = 1 } = {}) {
   db.prepare(`
-    INSERT INTO media_time_quotas (user_id, daily_minutes, max_daily_minutes, enabled)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET daily_minutes = excluded.daily_minutes,
+    INSERT INTO media_time_quotas (user_id, device_id, daily_minutes, max_daily_minutes, enabled)
+    VALUES (?, NULL, ?, ?, ?)
+    ON CONFLICT(user_id) WHERE device_id IS NULL DO UPDATE SET daily_minutes = excluded.daily_minutes,
       max_daily_minutes = excluded.max_daily_minutes, enabled = excluded.enabled
   `).run(userId, daily, max, enabled);
 }

@@ -77,7 +77,7 @@ export function mediaTimePaths() {
         summary: 'Today for one child (or oneself): charged / exempt / unknown minutes',
         tag: 'MediaTime',
         params: [{ name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'A child; parents/admin only. Omitted: the caller themselves.' }],
-        description: 'The day in the household time zone. `charged_min` reduces the quota, `exempt_min` (app exceptions and bought time credit the quota instead) and `system_min` never do, and `unknown_min` is usage of unclassified packages shown for the parents to decide (fail-open: never charged). `quota_min` is `daily_minutes` plus bought minutes plus the parents\' note adjustments of the day (`adjusted_min`, see PUT /media-time/quotas/{userId}/day), capped by `max_daily_minutes` when `hard_cap` is on. `reason` carries the reason of the newest note of the day (null when none) - the child sees every quota change with its explained reason. The household quiet window (`quiet`, `quiet_active`) is a signal visible to every member, not a lock. `tracker.online` says whether a device of this child reported within 12 hours.',
+        description: 'The day in the household time zone. `charged_min` reduces the quota, `exempt_min` (app exceptions and bought time credit the quota instead) and `system_min` never do, and `unknown_min` is usage of unclassified packages shown for the parents to decide (fail-open: never charged). `quota_min` is `daily_minutes` plus bought minutes plus the parents\' note adjustments of the day (`adjusted_min`, see PUT /media-time/quotas/{userId}/day), capped by `max_daily_minutes` when `hard_cap` is on. `reason` carries the reason of the newest note of the day (null when none) - the child sees every quota change with its explained reason. The household quiet window (`quiet`, `quiet_active`) is a signal visible to every member, not a lock. `tracker.online` says whether a device of this child reported within 12 hours. `devices` breaks the counted minutes down per device (same basis: a family link day value replaces the device sessions; usage without a device is the row with `device_id` null).',
         responses: {
           200: {
             description: 'Today',
@@ -95,7 +95,8 @@ export function mediaTimePaths() {
       get: op({
         summary: 'Daily quotas of the household children (parents/admin)',
         tag: 'MediaTime',
-        params: [{ name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'One child instead of the full list.' }],
+        params: [{ name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'One child instead of the full list: the child-wide row plus its per-device rows (with device_name).' }],
+        description: 'With `user_id` the answer is the child-wide base row (`device_id` null) plus one row per device quota (`device_id`/`device_name` set) - a device row overrides the base for exactly that device. The full list keeps the per-child rows with their display names.',
         responses: {
           200: {
             description: 'Quotas',
@@ -115,7 +116,7 @@ export function mediaTimePaths() {
         params: [idParam('userId', 'Child user id')],
         stateChanging: true,
         requestBody: jsonBody('#/components/schemas/MediaTimeQuotaInput'),
-        description: 'Body: { daily_minutes: 0..1440, max_daily_minutes?: 0..1440|null, enabled? }. The point exchange rate is NOT here: it is one rate for the whole household (PUT /media-time/settings).',
+        description: 'Body: { daily_minutes: 0..1440, max_daily_minutes?: 0..1440|null, enabled?, device_id?: int|null }. Without `device_id` this is the child-wide base row (unique per child); with it, a per-device row that overrides the base for exactly that device (unique per child and device). The answer carries the stored row with its `device_name`. The point exchange rate is NOT here: it is one rate for the whole household (PUT /media-time/settings).',
         responses: {
           200: {
             description: 'Stored quota',
@@ -124,7 +125,7 @@ export function mediaTimePaths() {
           400: { $ref: '#/components/responses/BadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
           403: { $ref: '#/components/responses/Forbidden' },
-          404: { description: 'The target (child, device, quota) does not exist in this household.' },
+          404: { description: 'The target (child, device, quota) does not exist in this household (a `device_id` that is unknown, revoked, or belongs to another child).' },
           500: { $ref: '#/components/responses/InternalServerError' },
         },
       }),
@@ -270,11 +271,31 @@ export function mediaTimePaths() {
       }),
     },
     '/api/v1/media-time/sessions': {
+      get: op({
+        summary: 'Charged usage sessions of a household day (own for the child, any child for parents/admin)',
+        tag: 'MediaTime',
+        params: [
+          { name: 'day', in: 'query', required: false, schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, description: 'Household day (YYYY-MM-DD). Omitted: today.' },
+          { name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'The child; required for parents/admin. A non-parent may only read themselves.' },
+        ],
+        description: 'Only rows with `classification` charged, newest start first - the base for the parents\' correction list. `editable` is true only for manual bookings (`source` manual); the raw rows a device reported are never rewritten (adjust philosophy: correct, never erase).',
+        responses: {
+          200: {
+            description: 'Sessions of the day',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeSessionListResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'The target child does not exist in this household.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
       post: op({
         summary: 'Book usage minutes manually for a child (parents/admin; devices without an agent)',
         tag: 'MediaTime',
         stateChanging: true,
-        description: 'Body: { user_id, minutes (1..720), note?, device_id? }. The minutes count as charged usage for today - for consoles, TVs and corrections.',
+        description: 'Body: { user_id, minutes (1..720) | start_at + end_at, note?, device_id? }. The minutes count as charged usage - for consoles, TVs and corrections. With the explicit pair `start_at`/`end_at` (ISO instants with offset, same household day - a booking may not cross midnight) the difference is the length, both instants are stored as given, and `minute_key` follows them (a correction for another day); the pair takes precedence over `minutes`.',
         requestBody: jsonBody('#/components/schemas/MediaTimeManualSessionInput'),
         responses: {
           200: {
@@ -285,6 +306,45 @@ export function mediaTimePaths() {
           401: { $ref: '#/components/responses/Unauthorized' },
           403: { $ref: '#/components/responses/Forbidden' },
           404: { description: 'The target child or the device does not exist in this household.' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/sessions/{id}': {
+      patch: op({
+        summary: 'Correct a manual booking: minutes move started_at, note relabels, device re-books (parents/admin)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        params: [idParam()],
+        requestBody: jsonBody('#/components/schemas/MediaTimeSessionUpdateInput'),
+        description: 'Only rows with `source` manual can be corrected - a raw device session answers 404 (its raw values are never rewritten). `minutes` keeps `ended_at` as the anchor and moves `started_at` to ended_at minus minutes; `note` becomes the `app_label`; `device_id` must belong to the child and be unrevoked (null books without a device). The answer is the row in the GET /sessions shape.',
+        responses: {
+          200: {
+            description: 'Corrected row',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeSessionResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'No manual session with this id (unknown id, or the row is device-raw data).' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+      delete: op({
+        summary: 'Strike a manual booking out (parents/admin)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        params: [idParam()],
+        description: 'Hard delete: a manual booking is not a raw device time and not an audit entry - what the parents booked wrong disappears instead of lingering as a corrected row. Only rows with `source` manual; anything else answers 404.',
+        responses: {
+          200: {
+            description: 'Deleted',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeSessionDeleteResponse' } } },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'No manual session with this id (unknown id, or the row is device-raw data).' },
           500: { $ref: '#/components/responses/InternalServerError' },
         },
       }),
@@ -548,7 +608,8 @@ const CASE_REASONS = {
       + '`media_time_forbidden` (403, reading another child without being a parent)',
   },
   '/api/v1/media-time/quotas/{userId}': {
-    put: REASON_BAD + ', `media_time_forbidden` (403), `media_time_not_a_child` (403, the target is not a child)',
+    put: REASON_BAD + ', `media_time_forbidden` (403), `media_time_not_a_child` (403, the target is not a child), '
+      + '`media_time_not_found` (404, the `device_id` is unknown, revoked, or belongs to another child)',
   },
   '/api/v1/media-time/quotas/{userId}/day': {
     put: REASON_BAD + ' (400, `delta_minutes` is zero, not an integer, out of -1440..1440, or `reason` is missing or outside 3..300 characters), '
@@ -590,8 +651,18 @@ const CASE_REASONS = {
     get: REASON_BAD + ', `media_time_unauthenticated` (401, no session), `media_time_forbidden` (403)',
   },
   '/api/v1/media-time/sessions': {
-    post: REASON_BAD + ' (400, minutes is not an integer 1..720), `media_time_disabled` (403, the household has media time switched off), '
+    get: REASON_BAD + ' (400, `day` is not YYYY-MM-DD, `user_id` is not a number, or a parent reads without naming a child), '
+      + '`media_time_unauthenticated` (401, no session), `media_time_forbidden` (403, reading another child without being a parent)',
+    post: REASON_BAD + ' (400, minutes is not an integer 1..720, or start_at/end_at are incomplete, unparseable, cross the household midnight, or differ by not 1..720 whole minutes), '
+      + '`media_time_disabled` (403, the household has media time switched off), '
       + '`media_time_not_a_child` (403, the target is not a child), `media_time_not_found` (404, the device is unknown)',
+  },
+  '/api/v1/media-time/sessions/{id}': {
+    patch: REASON_BAD + ' (400, `id` is not a number, the body is empty, `minutes` is outside 1..720, `note` is longer than 120 characters, or `device_id` belongs to another child or is revoked), '
+      + '`media_time_forbidden` (403, not a parent or administrator), '
+      + '`media_time_not_found` (404, no manual booking with this id - device-raw rows are never corrected)',
+    delete: REASON_BAD + ', `media_time_forbidden` (403), '
+      + '`media_time_not_found` (404, no manual booking with this id - device-raw rows are never deleted here)',
   },
   '/api/v1/media-time/checkins': {
     get: REASON_BAD + ', `media_time_forbidden` (403, reading another child without being a parent)',

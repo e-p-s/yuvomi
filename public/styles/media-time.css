@@ -455,3 +455,130 @@
 .mt-fl__gdev {
   max-width: 13rem;
 }
+
+/* ============================================================
+   Familienbild des Tages (Redesign 06.11.)
+   ------------------------------------------------------------
+   Zone 1: Kindkarten (mt-child-card) - Hero, Balken (nutzt/Total),
+   Budget-Chip, Geraetezone mit Anteilbalken, Check-in. Zone 2: Buchungen
+   als Liste. Keine neuen Randfarben: alles traegt die geteilten Token. */
+
+/* Fortschritt mit Toenden (Chip-Muster): ok bleibt Akzent, nearing warnt,
+   exceeded alarmiert - dieselben Farben, die die Chips schon sprechen. */
+.mt-progress__fill--nearing {
+  background: var(--color-warning, #d97706);
+}
+
+.mt-progress__fill--exceeded {
+  background: var(--color-danger, #dc2626);
+}
+
+/* Budget-Zeile: der editierbare Chip (Manager) neben dem Satz ueber der
+   harten Obergrenze - nur sichtbar, wenn eine Kontingentzeile sie traegt. */
+.mt-budget-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+button.mt-budget-chip {
+  cursor: pointer;
+  font: inherit;
+}
+
+button.mt-budget-chip:hover {
+  color: var(--module-accent);
+  border-color: color-mix(in srgb, var(--module-accent) var(--tint-hint), transparent);
+}
+
+.mt-hardcap-line {
+  font-size: var(--type-caption);
+  color: var(--color-text-secondary);
+}
+
+/* Geraetezone: Name mit Geraetezeichen (inline im Titel - die Titelregel der
+   Typografie bleibt unangetastet), Minuten und Quelle rechts, der Anteilbalken
+   unter dem Text - schmal wie der große Balken, gleiche Grammatik. */
+.mt-usage,
+.mt-checkin,
+.mt-daynotes,
+.mt-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mt-usage-row__icon {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: var(--space-2);
+  vertical-align: -0.18em;
+  color: var(--color-text-secondary);
+}
+
+.mt-usage-row__end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.mt-share {
+  position: relative;
+  display: block;
+  height: 6px;
+  margin-top: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+  overflow: hidden;
+}
+
+.mt-share__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--module-accent);
+  transform: scaleX(var(--mt-progress, 0));
+  transform-origin: left center;
+  transition: transform var(--duration-xl) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-share__fill {
+    transition: none;
+  }
+}
+
+/* Umschalter im Buchungsdialog (Zeitraum | Dauer): dieselbe Kapsel-Grammatik
+   wie die Reiter, aber ein Formularfeld, keine Tab-Leiste. */
+.mt-mode {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-3);
+}
+
+.mt-mode__btn {
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.mt-mode__btn--on {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+

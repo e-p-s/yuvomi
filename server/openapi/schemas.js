@@ -475,6 +475,9 @@ export const mediaTimeProperties = {
   first_seen_at: utcStamp('UTC instant the package first appeared on the device.'),
   first_install_estimate: { type: ['string', 'null'], description: 'Best effort from the device, may be null.' },
   session_key: { type: 'string', description: 'Idempotency key of the session (unique per device).' },
+  editable: { type: 'boolean', description: "True when the row may be edited or deleted (source 'manual' bookings only; raw device sessions never are)." },
+  app_label: { type: ['string', 'null'], description: 'Label shown for the session (the note of a manual booking).' },
+  source: { type: 'string', enum: ['apk', 'pwa', 'manual', 'adjust', 'backfill', 'win'], description: 'Where the row came from; only manual bookings are editable.' },
   minute_key: isoDay('Household day of the session, set server-side at arrival.'),
   started_at: { type: 'string', description: 'Device-local ISO8601 with offset; only its difference to ended_at matters.' },
   ended_at: { type: ['string', 'null'], description: 'Null while the segment runs (a heartbeat extends it; the server caps running segments at 12 hours).' },
@@ -487,6 +490,8 @@ export const mediaTimeProperties = {
 
 const mediaTimeQuotaFields = {
   user_id: mediaTimeProperties.user_id,
+  device_id: { type: ['integer', 'null'], minimum: 1, description: 'When set, the quota row applies to this device only (overrides the child-wide row for it); null is the child-wide base row.' },
+  device_name: { type: ['string', 'null'], description: 'Display name of the device this quota row belongs to, null on the child-wide row.' },
   daily_minutes: mediaTimeProperties.daily_minutes,
   max_daily_minutes: mediaTimeProperties.max_daily_minutes,
   enabled: { type: 'integer', enum: [0, 1], description: '0 suspends the quota without deleting it.' },
@@ -3792,6 +3797,7 @@ export const schemas = {
             daily_minutes: { type: 'integer', minimum: 0, maximum: 1440 },
             max_daily_minutes: { type: ['integer', 'null'], minimum: 0, maximum: 1440 },
             enabled: { type: 'integer', enum: [0, 1] },
+            device_id: { type: ['integer', 'null'], minimum: 1, description: 'Set to store a per-device quota row (overrides the child-wide row for that device); null or omitted keeps the child-wide base row.' },
           },
         },
         MediaTimeTodayData: {
@@ -3824,6 +3830,19 @@ export const schemas = {
             state: mediaTimeProperties.state,
             wall_time: mediaTimeProperties.wall_time,
             tracker: mediaTimeProperties.tracker,
+            devices: {
+              type: 'array',
+              description: "Usage of the day per device, on the same basis dayUsage counts (tracker sessions, manual bookings, family link replacement per device mapping); usage without a device is the row with device_id null.",
+              items: {
+                type: 'object',
+                required: ['device_id', 'device_name', 'minutes'],
+                properties: {
+                  device_id: { type: ['integer', 'null'], minimum: 1, description: 'The media-time device; null for usage booked without one (and for family link days of a child without devices).' },
+                  device_name: { type: ['string', 'null'], description: 'Display name of the device, null on the no-device row.' },
+                  minutes: { type: 'integer', minimum: 0, description: 'Charged minutes of this device today (family link values replace the device sessions, never add to them).' },
+                },
+              },
+            },
           },
         },
         MediaTimeTodayResponse: {
@@ -4215,10 +4234,13 @@ export const schemas = {
         },
         MediaTimeManualSessionInput: {
           type: 'object',
-          required: ['user_id', 'minutes'],
+          required: ['user_id'],
+          description: 'Either `minutes` (booked backwards from now) or the explicit pair `start_at`/`end_at` (both same household day; the pair wins over minutes).',
           properties: {
             user_id: { type: 'integer', minimum: 1 },
             minutes: { type: 'integer', minimum: 1, maximum: 720, description: 'Booked usage minutes for a device without an agent (console, TV).' },
+            start_at: { type: ['string', 'null'], description: 'ISO instant with offset; the booking start. Needs end_at.' },
+            end_at: { type: ['string', 'null'], description: 'ISO instant with offset; the booking end. Needs start_at; same household day as start_at.' },
             note: { type: ['string', 'null'], maxLength: 120, description: 'Optional reason shown to the child.' },
             device_id: { type: ['integer', 'null'], minimum: 1, description: 'Optional device the booking belongs to.' },
           },
@@ -4235,6 +4257,51 @@ export const schemas = {
         MediaTimeManualSessionResponse: {
           type: 'object', required: ['data'],
           properties: { data: { $ref: '#/components/schemas/MediaTimeManualSessionData' } },
+        },
+        MediaTimeSessionItem: {
+          type: 'object',
+          required: ['id', 'session_key', 'user_id', 'device_id', 'device_name', 'app_label', 'used_minutes', 'started_at', 'ended_at', 'source', 'editable'],
+          description: 'A charged usage row of a household day. `editable` is true only for manual bookings (the raw rows of a device are never rewritten).',
+          properties: {
+            id: mediaTimeProperties.id,
+            session_key: mediaTimeProperties.session_key,
+            user_id: mediaTimeProperties.user_id,
+            device_id: { type: ['integer', 'null'], description: 'Device the row belongs to, null for agent-less bookings (console, TV).' },
+            device_name: { type: ['string', 'null'], description: 'Display name of that device (media_time_devices.name), null when there is none.' },
+            app_label: mediaTimeProperties.app_label,
+            used_minutes: mediaTimeProperties.used_minutes,
+            started_at: mediaTimeProperties.started_at,
+            ended_at: mediaTimeProperties.ended_at,
+            source: mediaTimeProperties.source,
+            editable: mediaTimeProperties.editable,
+          },
+        },
+        MediaTimeSessionListResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { type: 'array', items: { $ref: '#/components/schemas/MediaTimeSessionItem' } } },
+        },
+        MediaTimeSessionUpdateInput: {
+          type: 'object',
+          minProperties: 1,
+          description: 'Correction of a manual booking. `minutes` keeps `ended_at` and moves `started_at` to ended_at minus minutes.',
+          properties: {
+            minutes: { type: 'integer', minimum: 1, maximum: 720, description: 'New length: started_at = ended_at - minutes, ended_at stays the anchor.' },
+            note: { type: ['string', 'null'], maxLength: 120, description: 'New label for the child (app_label).' },
+            device_id: { type: ['integer', 'null'], minimum: 1, description: 'New device (must belong to the child, unrevoked); null books it without a device.' },
+          },
+        },
+        MediaTimeSessionResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeSessionItem' } },
+        },
+        MediaTimeSessionDeleteResponse: {
+          type: 'object', required: ['data'],
+          properties: {
+            data: {
+              type: 'object', required: ['deleted'],
+              properties: { deleted: { type: 'boolean', description: 'True: the manual booking is gone (hard delete - manual rows are not audit data).' } },
+            },
+          },
         },
         MediaTimeCheckinInput: {
           type: 'object',

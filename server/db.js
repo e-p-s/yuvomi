@@ -12460,6 +12460,62 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 288,
+    description: 'media time: per-device quota upserts (unique (user_id, device_id), partial unique global row)',
+    // Migration 285 ergaenzte media_time_quotas um device_id (Kontingent pro
+    // Geraet), aber der Primerschluessel blieb user_id: die Tabelle konnte
+    // pro Kind nie zwei Zeilen tragen (Basis + Geraet). Der PUT-Upschnitt
+    // braucht zwei Konfliktziele: (user_id) WHERE device_id IS NULL fuer die
+    // kindweite Basis, (user_id, device_id) WHERE device_id IS NOT NULL fuer
+    // die Geraet-Zeile. SQLite kann einen PK nicht aendern, deshalb Umbau
+    // wie in 285: neue Tabelle, Daten umziehen, alte tauschen. Idempotent
+    // ueber IF NOT EXISTS plus bedingten Umbau nur wenn device_id noch
+    // fehlt (PRAGMA table_info).
+    up(database) {
+      const cols = database.prepare("PRAGMA table_info(media_time_quotas)").all();
+      const hasDevice = cols.some((c) => c.name === 'device_id');
+      if (!hasDevice) {
+        // Niemals gelaufen (frische Datenbank migriert direkt durch): die
+        // 285-Spalte fehlt - anlegen und in den Umbau unten fallen lassen.
+        database.exec(`
+          ALTER TABLE media_time_quotas
+            ADD COLUMN device_id INTEGER REFERENCES media_time_devices(id) ON DELETE CASCADE;
+        `);
+      }
+      const pkIsUser = database.prepare(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'media_time_quotas'"
+      ).get()?.sql ?? '';
+      if (/user_id\s+INTEGER\s+PRIMARY KEY/i.test(pkIsUser)) {
+        database.exec('PRAGMA foreign_keys=OFF');
+        database.exec(`
+          CREATE TABLE IF NOT EXISTS media_time_quotas__new (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            device_id         INTEGER REFERENCES media_time_devices(id) ON DELETE CASCADE,
+            daily_minutes     INTEGER NOT NULL DEFAULT 0 CHECK (daily_minutes >= 0 AND daily_minutes <= 1440),
+            max_daily_minutes INTEGER CHECK (max_daily_minutes IS NULL OR (max_daily_minutes >= 0 AND max_daily_minutes <= 1440)),
+            enabled           INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+            updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+            updated_by        INTEGER REFERENCES users(id) ON DELETE SET NULL
+          );
+          INSERT INTO media_time_quotas__new
+            (user_id, device_id, daily_minutes, max_daily_minutes, enabled, updated_at, updated_by)
+            SELECT user_id, device_id, daily_minutes, max_daily_minutes, enabled, updated_at, updated_by
+              FROM media_time_quotas;
+          DROP TABLE media_time_quotas;
+          ALTER TABLE media_time_quotas__new RENAME TO media_time_quotas;
+        `);
+        database.exec('PRAGMA foreign_keys=ON');
+      }
+      database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_media_time_quotas_global
+          ON media_time_quotas(user_id) WHERE device_id IS NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_media_time_quotas_device_pair
+          ON media_time_quotas(user_id, device_id) WHERE device_id IS NOT NULL;
+      `);
+    },
+  },
 ];
 
 /**

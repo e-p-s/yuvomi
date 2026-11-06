@@ -382,6 +382,60 @@ export function dayUsage(d, userId, dayKey) {
 }
 
 /**
+ * Nutzung des Tages aufgeschluesselt nach Geraet - dieselbe Grundlage, die
+ * dayUsage zaehlt (GET /today: data.devices fuer die Eltern-Kacheln):
+ *   - charged-Sessions (auch manuelle Buchungen) gesammelt je Geraet,
+ *   - ein Geraet mit Family-Link-Tageswert wird ERSETZT, nicht dazugezaehlt
+ *     (dasselbe Mapping wie dayUsage - kein Doppelzaehlen),
+ *   - Kind ohne eigenes Geraet: die Google-Summe des Tages als Zeile mit
+ *     device_id null (sonst bliebe die Istzeit ohne jede Zeile).
+ * rows: [{ device_id (null = ohne Geraet), device_name, minutes }].
+ */
+export function perDeviceUsage(d, userId, dayKey) {
+  const rows = d.prepare(`
+    SELECT s.device_id AS device_id, dev.name AS device_name,
+           COALESCE(SUM(s.used_minutes), 0) AS minutes
+      FROM media_time_sessions s
+      LEFT JOIN media_time_devices dev ON dev.id = s.device_id
+     WHERE s.user_id = ? AND s.minute_key = ? AND s.classification = 'charged'
+     GROUP BY s.device_id, dev.name
+  `).all(userId, dayKey);
+  const fl = d.prepare(
+    'SELECT google_uid FROM familylink_children WHERE yuvomi_user_id = ? AND enabled = 1'
+  ).get(userId);
+  const ownDevices = d.prepare(
+    'SELECT COUNT(*) AS n FROM media_time_devices WHERE user_id = ? AND revoked_at IS NULL'
+  ).get(userId).n;
+  if (fl && !ownDevices) {
+    const all = d.prepare(
+      'SELECT COALESCE(SUM(consumed_min), 0) AS m FROM familylink_daily WHERE google_uid = ? AND day = ?'
+    ).get(fl.google_uid, dayKey).m;
+    if (all > 0) {
+      rows.push({ device_id: null, device_name: null, minutes: Math.round(all) });
+    }
+    return rows;
+  }
+  if (fl) {
+    const flRows = d.prepare(`
+      SELECT fdl.google_device_id, m.media_time_device_id, fdl.consumed_min
+        FROM familylink_daily fdl
+        JOIN familylink_device_map m
+          ON m.google_uid = fdl.google_uid AND m.google_device_id = fdl.google_device_id
+       WHERE fdl.google_uid = ? AND fdl.day = ? AND m.media_time_device_id IS NOT NULL
+    `).all(fl.google_uid, dayKey);
+    for (const f of flRows) {
+      const existing = rows.find((r) => r.device_id === f.media_time_device_id);
+      if (existing) existing.minutes = Math.round(f.consumed_min || 0);
+      else {
+        const name = d.prepare('SELECT name FROM media_time_devices WHERE id = ?').get(f.media_time_device_id)?.name ?? null;
+        rows.push({ device_id: f.media_time_device_id, device_name: name, minutes: Math.round(f.consumed_min || 0) });
+      }
+    }
+  }
+  return rows;
+}
+
+/**
  * Gekaufte Minuten eines Tages: adjust-Sessions mit classification 'credit'
  * (Punktetausch, Entscheidung 2 + 4). Sie erhoehen das Kontingent des Tages,
  * sie sind kein Verbrauch - die Zeile traegt den Kauf als eigene Historie.

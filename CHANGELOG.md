@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit: Sessions nachlesen und berichtigen, Geraet-Kontingente.** Eltern
+  sehen die angezogenen Nutzungssessions eines Tages (GET `/media-time/sessions`,
+  Tag-Filter, `editable` nur bei manuellen Buchungen), korrigieren sie
+  (PATCH: `minutes` behaelt `ended_at` als Anker, `note`, `device_id`) und
+  streichen sie (DELETE, harte Loeschung - manuelle Buchungen sind kein
+  Audit-Datensatz); Geraet-Rohdaten bleiben unveraenderlich. Die manuelle
+  Buchung akzeptiert nun `start_at`/`end_at` (beide im selben Haushaltstag -
+  ueber Mitternacht: 400). GET `/media-time/today` zeigt die Tagesnutzung pro
+  Geraet (`data.devices`, Family-Link-Ersetzung inklusive), und
+  PUT/GET `/media-time/quotas` pflegen Kontingentzeilen pro Geraet
+  (Migration 288: UNIQUE (user_id, device_id) plus partiell eindeutige
+  Basis-Zeile).
+
 - **Medienzeit: Family-Link-Push-Kanal.** Der Collector-Host (einziger Rechner
   mit Google-Sitzung) kann seinen Report stattdessen einsenden: POST
   `/media-time/familylink/report` mit einem einmal sichtbaren Token

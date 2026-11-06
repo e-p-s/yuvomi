@@ -475,3 +475,289 @@ test('Haushaltsschalter aus => POST /checkins 403 media_time_disabled', async ()
   }
 });
 
+
+/* ── Sessions-Verwaltung (GET/PATCH/DELETE /sessions, Start/Ende-Buchung,
+ *    /today.devices, Geraet-Kontingente) ─────────────────────────────────── */
+
+function dayAgoISO(days) {
+  return svc.mediaTimeDayKey(db, new Date(Date.now() - days * 24 * 3600 * 1000));
+}
+/* Die Grenze zum naechsten Haushalts-Tag (binere Suche auf Minuten, die Zone
+ * des Servers bleibt unbekannt und egal): hi = erste Minute des neuen Tages.
+ * Damit sind Paare innerhalb eines Tages und ueber die Grenze sicher
+ * konstruiert - ein fixer 'T23:30Z'-Trick waere je nach Zone falsch. */
+function nextDayBoundary() {
+  let lo = Date.now();
+  let hi = lo + 25 * 3600e3;
+  while (hi - lo > 60000) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (svc.mediaTimeDayKey(db, new Date(mid)) === svc.mediaTimeDayKey(db, new Date(lo))) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+/** Family-Link-Zuordnung samt Tageswert direkt in die Tabellen (der Collector
+ *  lebt ausserhalb dieses Tests - hier zaehlt nur die dayUsage-Mapping-Regel). */
+function seedFamilylink(childId, googleUid, googleDevice, mediaDeviceId, day, consumedMin) {
+  db.prepare(`
+    INSERT INTO familylink_children (google_uid, yuvomi_user_id, display_name, enabled)
+    VALUES (?, ?, 'Kind', 1)
+    ON CONFLICT(google_uid) DO UPDATE SET yuvomi_user_id = excluded.yuvomi_user_id, enabled = 1
+  `).run(googleUid, childId);
+  if (mediaDeviceId != null) {
+    db.prepare(`
+      INSERT INTO familylink_device_map (google_uid, google_device_id, media_time_device_id)
+      VALUES (?, ?, ?)
+      ON CONFLICT(google_uid, google_device_id) DO UPDATE SET media_time_device_id = excluded.media_time_device_id
+    `).run(googleUid, googleDevice, mediaDeviceId);
+  }
+  db.prepare(`
+    INSERT INTO familylink_daily (google_uid, google_device_id, day, consumed_min, fetched_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(google_uid, google_device_id, day) DO UPDATE SET consumed_min = excluded.consumed_min
+  `).run(googleUid, googleDevice, day, consumedMin, isoAgo(1));
+}
+
+test('GET /sessions — Tag-Filter, nur charged, Reihenfolge, editable; Kind sieht nur die eigenen', async () => {
+  const kid = freshKid();
+  await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 120 } });
+  const dev = await mkDevice(kid.id, 'Handy');
+  // Regel VOR der Buchung: reclassifyForUser wandert sonst spaeter angelegte
+  // manual-Zeilen auf unknown um (package 'manual' trifft keine Regel).
+  await call('PUT', '/tracker/exceptions', {
+    body: { upsert: [{ user_id: kid.id, match_type: 'exact', pattern: 'com.charged.a', exempt_from: 'charged' }] },
+  });
+  // Gestern: eine direkte Buchung (20 Min, minute_key gestern). Heute: zwei
+  // manual (20 + 10), eine Tracker-Session charged (30) und eine unknown (5).
+  const y = dayAgoISO(1);
+  db.prepare(`
+    INSERT INTO media_time_sessions
+      (session_key, user_id, package_name, app_label, started_at, ended_at, used_minutes, minute_key,
+       classification, source, created_at)
+    VALUES (?, ?, 'manual', 'Vorher tagged', ?, ?, 20, ?, 'charged', 'manual', ?)
+  `).run(`manual-alt:${kid.id}`, kid.id, `${y}T10:00:00Z`, `${y}T10:20:00Z`, y, isoAgo(60 * 24));
+  await call('POST', '/sessions', { body: { user_id: kid.id, minutes: 20, note: 'Heute zuerst' } });
+  await call('POST', '/sessions', { body: { user_id: kid.id, minutes: 10, note: 'Heute Konsole' } });
+  await call('POST', '/tracker/sync', { token: dev.token, body: { sessions: [session('sv-1', 'com.charged.a', 30), session('sv-2', 'com.unknown.b', 5)] } });
+
+  const today = await call('GET', `/sessions?user_id=${kid.id}`);
+  assert.equal(today.status, 200, JSON.stringify(today.body));
+  const rows = today.body.data;
+  assert.equal(rows.length, 3, 'nur charged-Zeilen des heutigen Tages (unknown und gestern draussen)');
+  assert.ok(rows.every((r) => r.user_id === kid.id));
+  assert.ok(rows[0].started_at >= rows[1].started_at && rows[1].started_at >= rows[2].started_at, 'neuester Start zuerst');
+  assert.equal(rows.filter((r) => r.editable).length, 2, 'beide manual-Buchungen sind editierbar');
+  const tracker = rows.find((r) => !r.editable);
+  assert.equal(tracker.source, 'apk', 'Rohdaten eines Geraets sind nicht editierbar');
+  assert.equal(tracker.device_id, dev.id);
+  assert.equal(tracker.device_name, 'Handy', 'Geraetename wandert ueber den JOIN mit');
+  assert.ok(rows.some((r) => r.device_id === null && r.device_name === null), 'Buchung ohne Geraet: null-Zeile');
+
+  const yesterday = await call('GET', `/sessions?user_id=${kid.id}&day=${y}`);
+  assert.equal(yesterday.status, 200);
+  assert.equal(yesterday.body.data.length, 1);
+  assert.equal(yesterday.body.data[0].used_minutes, 20);
+  assert.equal(yesterday.body.data[0].app_label, 'Vorher tagged');
+
+  const badDay = await call('GET', `/sessions?user_id=${kid.id}&day=vorgestern`);
+  assert.equal(badDay.status, 400);
+  assert.equal(badDay.body.reason, 'media_time_bad_request');
+
+  // Rechte: das Kind liest die eigenen, fremde Kinder sind 403.
+  const own = await call('GET', '/sessions', { actor: { id: kid.id, role: 'member' } });
+  assert.equal(own.status, 200, 'ohne user_id gilt der eigene Nutzer');
+  assert.ok(own.body.data.every((r) => r.user_id === kid.id));
+  const other = freshKid();
+  const foreign = await call('GET', `/sessions?user_id=${other.id}`, { actor: { id: kid.id, role: 'member' } });
+  assert.equal(foreign.status, 403);
+  assert.equal(foreign.body.reason, 'media_time_forbidden');
+});
+
+test('POST /sessions — start_at/end_at: same-day Pflicht, Minuten = Differenz, Vorrang vor minutes', async () => {
+  const kid = freshKid();
+  await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 120 } });
+  const boundary = nextDayBoundary();
+  const isoOf = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  // Paar mitten im alten Tag (11,5 bis 12 h vor der Grenze): gleicher Tag.
+  const startMs = boundary - 12 * 3600e3;
+  const endMs = boundary - 11.5 * 3600e3;
+  const ok = await call('POST', '/sessions', {
+    body: { user_id: kid.id, minutes: 999, start_at: isoOf(startMs), end_at: isoOf(endMs) },
+  });
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  assert.equal(ok.body.data.day, svc.mediaTimeDayKey(db, new Date(startMs)), 'der Tag folgt der Uebergabe');
+  const stored = db.prepare('SELECT used_minutes, minute_key, started_at, ended_at FROM media_time_sessions WHERE session_key = ?')
+    .get(ok.body.data.session_key);
+  assert.equal(stored.used_minutes, 30, 'Differenz zaehlt, nicht minutes');
+  assert.equal(stored.started_at, isoOf(startMs), 'die Uebergabe wird gespeichert, wie sie kam');
+  assert.equal(stored.ended_at, isoOf(endMs));
+
+  // Ueber die Haushalt-Mitternacht: 400 (eine Buchung ueberquert sie nicht).
+  const cross = await call('POST', '/sessions', {
+    body: { user_id: kid.id, start_at: isoOf(boundary - 60000), end_at: isoOf(boundary + 19 * 60000) },
+  });
+  assert.equal(cross.status, 400);
+  assert.equal(cross.body.reason, 'media_time_bad_request');
+  // Nur eine Uebergabe: 400.
+  const half = await call('POST', '/sessions', { body: { user_id: kid.id, start_at: isoOf(startMs) } });
+  assert.equal(half.status, 400);
+  assert.equal(half.body.reason, 'media_time_bad_request');
+});
+
+test('PATCH /sessions/:id — nur manual, minutes holt started_at nach (ended_at bleibt Anker)', async () => {
+  const kid = freshKid();
+  await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 120 } });
+  const dev = await mkDevice(kid.id, 'Konsole');
+  const booked = await call('POST', '/sessions', { body: { user_id: kid.id, minutes: 30, note: 'Falsch' } });
+  assert.equal(booked.status, 201);
+  const id = db.prepare('SELECT id FROM media_time_sessions WHERE session_key = ?').get(booked.body.data.session_key).id;
+
+  const patched = await call('PATCH', `/sessions/${id}`, {
+    body: { minutes: 45, note: 'Korrektur', device_id: dev.id },
+  });
+  assert.equal(patched.status, 200, JSON.stringify(patched.body));
+  const d = patched.body.data;
+  assert.equal(d.id, id);
+  assert.equal(d.used_minutes, 45);
+  assert.equal(d.app_label, 'Korrektur', 'die Notiz ist die app_label');
+  assert.equal(d.device_id, dev.id);
+  assert.equal(d.device_name, 'Konsole');
+  assert.equal(d.editable, true);
+  assert.equal(Date.parse(d.ended_at) - Date.parse(d.started_at), 45 * 60000,
+    'ended_at bleibt der Anker, started_at = ended_at - minutes');
+  // Ohne minutes bleibt ended_at unveraendert (nur note): Anker bleibt stehen.
+  const endedBefore = d.ended_at;
+  const relabel = await call('PATCH', `/sessions/${id}`, { body: { note: 'Nur Label' } });
+  assert.equal(relabel.status, 200);
+  assert.equal(relabel.body.data.ended_at, endedBefore);
+  assert.equal(relabel.body.data.used_minutes, 45, 'ohne minutes aendert sich die Laenge nicht');
+
+  // Validation: minutes ausserhalb 1..720, fremdes Geraet, leerer Koerper.
+  const bad = await call('PATCH', `/sessions/${id}`, { body: { minutes: 0 } });
+  assert.equal(bad.status, 400);
+  assert.equal(bad.body.reason, 'media_time_bad_request');
+  const foreign = freshKid();
+  const foreignDev = await mkDevice(foreign.id, 'Fremd');
+  const badDev = await call('PATCH', `/sessions/${id}`, { body: { device_id: foreignDev.id } });
+  assert.equal(badDev.status, 400);
+  assert.equal(badDev.body.reason, 'media_time_bad_request');
+  const empty = await call('PATCH', `/sessions/${id}`, { body: {} });
+  assert.equal(empty.status, 400);
+  assert.equal(empty.body.reason, 'media_time_bad_request');
+
+  // Nur manual: die Tracker-Session eines Geraets ist keine Korrektur-Zeile.
+  const raw = db.prepare(`
+    INSERT INTO media_time_sessions
+      (session_key, user_id, device_id, package_name, started_at, used_minutes, minute_key,
+       classification, source, created_at)
+    VALUES ('raw-patch', ?, ?, 'com.raw.app', ?, 10, ?, 'charged', 'apk', ?)
+  `).run(kid.id, dev.id, isoAgo(10), svc.mediaTimeDayKey(db), isoAgo(10)).lastInsertRowid;
+  const noRaw = await call('PATCH', `/sessions/${raw}`, { body: { minutes: 5 } });
+  assert.equal(noRaw.status, 404);
+  assert.equal(noRaw.body.reason, 'media_time_not_found');
+  // Kind darf nicht korrigieren.
+  const asKid = await call('PATCH', `/sessions/${id}`, { actor: { id: kid.id, role: 'member' }, body: { minutes: 5 } });
+  assert.equal(asKid.status, 403);
+});
+
+test('DELETE /sessions/:id — nur manual, harte Loeschung, Kind => 403', async () => {
+  const kid = freshKid();
+  const dev = await mkDevice(kid.id, 'Fernseher');
+  const booked = await call('POST', '/sessions', { body: { user_id: kid.id, minutes: 15 } });
+  const id = db.prepare('SELECT id FROM media_time_sessions WHERE session_key = ?').get(booked.body.data.session_key).id;
+  const raw = db.prepare(`
+    INSERT INTO media_time_sessions
+      (session_key, user_id, device_id, package_name, started_at, used_minutes, minute_key,
+       classification, source, created_at)
+    VALUES ('raw-del', ?, ?, 'com.raw.app', ?, 10, ?, 'charged', 'apk', ?)
+  `).run(kid.id, dev.id, isoAgo(10), svc.mediaTimeDayKey(db), isoAgo(10)).lastInsertRowid;
+
+  const asKid = await call('DELETE', `/sessions/${id}`, { actor: { id: kid.id, role: 'member' } });
+  assert.equal(asKid.status, 403);
+  assert.equal(asKid.body.reason, 'media_time_forbidden');
+
+  const noRaw = await call('DELETE', `/sessions/${raw}`);
+  assert.equal(noRaw.status, 404);
+  assert.equal(noRaw.body.reason, 'media_time_not_found');
+  assert.ok(db.prepare('SELECT id FROM media_time_sessions WHERE id = ?').get(raw), 'Rohdaten bleiben unangetastet');
+
+  const gone = await call('DELETE', `/sessions/${id}`);
+  assert.equal(gone.status, 200);
+  assert.equal(gone.body.data.deleted, true);
+  assert.equal(db.prepare('SELECT id FROM media_time_sessions WHERE id = ?').get(id), undefined,
+    'manuelle Buchungen sind kein Audit-Datensatz - sie verschwinden');
+  const again = await call('DELETE', `/sessions/${id}`);
+  assert.equal(again.status, 404);
+});
+
+test('GET /today — data.devices: Geraet mit Family-Link-Wert wird ersetzt, Nutzung ohne Geraet als null-Zeile', async () => {
+  const kid = freshKid();
+  await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 120 } });
+  const dev = await mkDevice(kid.id, 'Tablet');
+  await call('PUT', '/tracker/exceptions', {
+    body: { upsert: [{ user_id: kid.id, match_type: 'exact', pattern: 'com.fl.app', exempt_from: 'charged' }] },
+  });
+  // Tracker meldet 10 Min aufs Tablet...
+  await call('POST', '/tracker/sync', { token: dev.token, body: { sessions: [session('fl-d-1', 'com.fl.app', 10)] } });
+  // ... und der Family-Link-Tageswert (42) ERSETZT sie (Mapping, kein Doppelzaehlen).
+  seedFamilylink(kid.id, '900100', 'gdev-1', dev.id, svc.mediaTimeDayKey(db), 42);
+  // Buchung ohne Geraet (7 Min) als eigene Zeile.
+  await call('POST', '/sessions', { body: { user_id: kid.id, minutes: 7, note: 'Konsole' } });
+
+  const res = await call('GET', `/today?user_id=${kid.id}`);
+  assert.equal(res.status, 200);
+  const devices = res.body.data.devices;
+  assert.ok(Array.isArray(devices), 'devices ist eine Liste');
+  const tablet = devices.find((r) => r.device_id === dev.id);
+  assert.ok(tablet, 'das gemappte Geraet hat eine Zeile');
+  assert.equal(tablet.device_name, 'Tablet');
+  assert.equal(tablet.minutes, 42, 'der Google-Wert ersetzt die gemeldeten 10 Minuten');
+  const noDevice = devices.find((r) => r.device_id === null);
+  assert.ok(noDevice, 'die Buchung ohne Geraet erscheint als null-Zeile');
+  assert.equal(noDevice.minutes, 7);
+  // Dieselbe Grundlage wie dayUsage: charged_min = 42 + 7.
+  assert.equal(res.body.data.charged_min, 49);
+});
+
+test('PUT /quotas/:userId — device_id: Geraet-Zeile statt Basis, GET /quotas zeigt beide mit device_name', async () => {
+  const kid = freshKid();
+  const dev = await mkDevice(kid.id, 'Handy');
+  const global = await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 60 } });
+  assert.equal(global.status, 200);
+  assert.equal(global.body.data.device_id, null);
+  assert.equal(global.body.data.daily_minutes, 60);
+
+  const perDevice = await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 30, device_id: dev.id } });
+  assert.equal(perDevice.status, 200, JSON.stringify(perDevice.body));
+  assert.equal(perDevice.body.data.device_id, dev.id);
+  assert.equal(perDevice.body.data.device_name, 'Handy');
+  assert.equal(perDevice.body.data.daily_minutes, 30);
+  // Idempotenter Zweit-Upsatz: kein zweiter Datensatz, der neue Wert gewinnt.
+  const again = await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 45, device_id: dev.id } });
+  assert.equal(again.status, 200);
+  assert.equal(again.body.data.daily_minutes, 45);
+  const rows = db.prepare('SELECT * FROM media_time_quotas WHERE user_id = ?').all(kid.id);
+  assert.equal(rows.length, 2, 'Basis und Geraet-Zeile koexistieren');
+
+  const list = await call('GET', `/quotas?user_id=${kid.id}`);
+  assert.equal(list.status, 200);
+  assert.equal(list.body.data.length, 2, 'der Basis-Zeile folgen die Geraet-Zeilen');
+  const base = list.body.data.find((r) => r.device_id === null);
+  const device = list.body.data.find((r) => r.device_id === dev.id);
+  assert.equal(base.daily_minutes, 60);
+  assert.equal(device.daily_minutes, 45);
+  assert.equal(device.device_name, 'Handy');
+  // quotaState fragt pro Geraet zuerst die Geraet-Zeile ab (Ueberschreibung).
+  const state = svc.quotaState(db, kid.id, new Date(), dev.id);
+  assert.equal(state.quota_min, 45, 'das Geraet-Kontingent gilt fuer dieses Geraet');
+
+  // Fremdes Geraet: 404; kaputter Wert: 400.
+  const other = freshKid();
+  const foreignDev = await mkDevice(other.id, 'Fremd');
+  const foreign = await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 10, device_id: foreignDev.id } });
+  assert.equal(foreign.status, 404);
+  assert.equal(foreign.body.reason, 'media_time_not_found');
+  const bad = await call('PUT', `/quotas/${kid.id}`, { body: { daily_minutes: 10, device_id: 'x' } });
+  assert.equal(bad.status, 400);
+  assert.equal(bad.body.reason, 'media_time_bad_request');
+});

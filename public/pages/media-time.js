@@ -19,8 +19,8 @@
  */
 
 import { api } from '/api.js';
-import { t, getNumberFormat } from '/i18n.js';
-import { dateText, dateTimeText } from '/utils/date-format.js';
+import { dateText, dateTimeText, clockText as clockOf } from '/utils/date-format.js';
+import { t, getNumberFormat, parseTimeInput } from '/i18n.js';
 import { esc, REQUIRED_MARK } from '/utils/html.js';
 import { openModal, closeModal, captureModalContext, captureOpenContext, isModalContextCurrent, confirmOverModal, refocusAfterRender } from '/components/modal.js';
 import { createPageFab, setPageFabAction } from '/utils/fab.js';
@@ -64,6 +64,18 @@ let state = {
   /** false = keine Eltern-/Adminrechte; bis der 403 antwortet, gilt true. */
   canManage: true,
   today: null,
+  /* Familienstand des 'heute'-Reiters (Redesign 06.11.): eine Karte je Kind.
+   * Eintrag: { userId, displayName, data (/today), checkins, dayNotes }.
+   * null = Einzelkarten-Modus (Kind ohne Managerrechte, oder Haushalt ohne
+   * Kontingente) - dann tragen today/checkins/dayNotes die eigene Person. */
+  todayCards: null,
+  /* Buchungen des Tages (GET /sessions): null = keine Antwort (in der
+   * Uebergangszeit der Hintergrunddienst nicht da) - die Flaechen sagen dann
+   * nichts, statt "keine Buchungen" zu behaupten. */
+  sessions: null,
+  /* Alle Kontingent-Zeilen (GET /quotas): Kind-zeilen ohne device_id,
+   * Geraete-limits mit device_id (Kontract der Backend-Lane). */
+  quotaRows: null,
   /** Anpassungen des Tages (day-notes) fuer das gewaehlte Kind; null = nie geladen. */
   dayNotes: null,
   checkins: null,
@@ -122,17 +134,23 @@ function mediaTimeErrorSentence(err) {
 
 /* Die Liste der Kinder kommt von GET /media-time/quotas (requireManager,
  * liefert display_name). Ein 403 ist die Auskunft "kein Elternteil": dann gibt
- * es keinen Picker, die Seite fragt nur die eigene Person. */
+ * es keinen Picker, die Seite fragt nur die eigene Person. Die Antwort traegt
+ * seit dem Familien-Redesign auch die Geraete-limits (Zeilen mit device_id) -
+ * die zaehlen nicht zu den Kindern, bleiben aber als quotaRows stehen. */
 async function ensureChildren() {
   try {
     const res = await api.get('/media-time/quotas');
     const rows = (res.data || []).filter((r) => Number.isInteger(r.user_id));
-    state.children = rows.map((r) => ({ id: r.user_id, display_name: r.display_name || r.username || String(r.user_id) }));
+    state.quotaRows = rows;
+    state.children = rows
+      .filter((r) => r.device_id == null)
+      .map((r) => ({ id: r.user_id, display_name: r.display_name || r.username || String(r.user_id) }));
     state.canManage = true;
   } catch (err) {
     if ((err?.status ?? err?.response?.status) === 403) {
       state.canManage = false;
       state.children = null;
+      state.quotaRows = null;
       return;
     }
     throw err;
@@ -145,6 +163,17 @@ async function ensureChildren() {
     || !state.children.some((c) => c.id === state.selectedChildId)) {
     state.selectedChildId = state.children[0].id;
   }
+}
+
+/* Die Kontingent-zeile eines Kindes (ohne Geraetebindung) und das Limit eines
+ * Geraets - beide aus quotaRows; fehlt die Zeile, fehlt die Auskunft. */
+function quotaRowFor(userId) {
+  return (state.quotaRows || []).find((r) => r.user_id === userId && r.device_id == null) ?? null;
+}
+
+function deviceLimitFor(userId, deviceId) {
+  if (deviceId == null) return null;
+  return (state.quotaRows || []).find((r) => r.user_id === userId && r.device_id === deviceId) ?? null;
 }
 
 function childQuery() {
@@ -168,17 +197,79 @@ async function loadSettingsLite() {
   }
 }
 
+/* Der Tag als Schluessel ('YYYY-MM-DD', lokale Zeit) - fuer die Sessions-Abfrage
+ * und fuer die Start-/Ende-Zeiten einer Buchung. */
+function localDayKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/* Die Karte eines Kindes: Tagesstand, Check-ins und Anpassungen parallel. Eine
+ * Kindantwort, die failt, faellt aus der Familienansicht - die andern Kinder
+ * bleiben lesbar (Promise.all statt Abbruch der ganzen Seite). */
+async function loadChildCard(userId) {
+  const [today, checkins, dayNotes] = await Promise.all([
+    api.get(`/media-time/today?user_id=${encodeURIComponent(userId)}`).then((r) => r.data ?? null).catch(() => null),
+    api.get(`/media-time/checkins?user_id=${encodeURIComponent(userId)}`)
+      .then((r) => r.data?.items ?? [])
+      .catch((err) => ((err?.status ?? err?.response?.status) === 403 ? [] : null)),
+    api.get(`/media-time/quotas/${encodeURIComponent(userId)}/day-notes`)
+      .then((r) => r.data?.items ?? [])
+      .catch((err) => ((err?.status ?? err?.response?.status) === 403 ? [] : null)),
+  ]);
+  return { userId, displayName: childNameFor(userId), data: today, checkins, dayNotes };
+}
+
+/* Die Buchungen des Tages. Die Route antwortet pro Kind (GET /sessions mit
+ * user_id); Eltern ziehen alle Kinder parallel und fuellen eine gemeinsame
+ * Liste, ein Kind fragt die eigenen ab (ohne user_id - der Server nimmt den
+ * Anrufer). Scheitern alle Abfragen (die Route waechst in der Parallel-Lane),
+ * bleibt null: die Buchungszone sagt dann nichts - still, ohne Fehlerbild. */
+async function loadSessions() {
+  const day = encodeURIComponent(localDayKey());
+  const ids = state.canManage && state.children?.length
+    ? state.children.map((c) => c.id)
+    : [null];
+  const settled = await Promise.allSettled(ids.map((id) => {
+    const q = id != null ? `&user_id=${encodeURIComponent(id)}` : '';
+    return api.get(`/media-time/sessions?day=${day}${q}`)
+      .then((r) => (Array.isArray(r.data) ? r.data : (r.data?.items ?? [])));
+  }));
+  const ok = settled.filter((s) => s.status === 'fulfilled');
+  if (!ok.length) { state.sessions = null; return; }
+  state.sessions = ok
+    .flatMap((s) => s.value)
+    .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')));
+}
+
 async function loadToday() {
   if (state.canManage) await ensureChildren();
   else state.canManage = false;
-  const [today] = await Promise.all([
-    api.get(`/media-time/today${childQuery()}`),
-    loadSettingsLite(),
-    loadDayNotes(),
-    ensureDevicesLite(),
-    loadCheckins(),
-  ]);
-  state.today = today.data ?? null;
+  const tasks = [loadSettingsLite(), ensureDevicesLite(), loadSessions()];
+  if (state.canManage && state.children?.length) {
+    // Familienansicht: jedes Kind mit eigener Tageskarte, nebeneinander gestapelt.
+    tasks.push((async () => {
+      const cards = await Promise.all(state.children.map((c) => loadChildCard(c.id)));
+      state.todayCards = cards;
+      const first = cards.find((c) => c.data) ?? cards[0] ?? null;
+      state.today = first?.data ?? null;
+      if (first) state.selectedChildId = first.userId;
+    })());
+  } else {
+    // Einzelkarte (Kind ohne Managerrede, oder Haushalt ohne Kontingente).
+    state.todayCards = null;
+    tasks.push((async () => {
+      const [today] = await Promise.all([
+        api.get('/media-time/today'),
+        loadCheckins(),
+        loadDayNotes(),
+      ]);
+      state.today = today.data ?? null;
+    })());
+  }
+  await Promise.all(tasks);
 }
 
 /* Check-ins (Einbuchen/Ausbuchen, Nutzer 05.11.): die offenen und die letzten
@@ -303,14 +394,27 @@ function tabButton(tab, label) {
     </button>`;
 }
 
-/* Der FAB traegt die einzige Primaktion des Reiters: Geraete anlegen. Auf den
- * andern Reitern gibt es keine Primaktion, die einen Knopf verdient haette. */
+/* Der FAB traegt die einzige Primaktion des Reiters: auf 'heute' die Buchung
+ * (Elternpfad), auf 'Geraete' das neue Geraet. Auf den andern Reitern gibt es
+ * keine Primaktion, die einen Knopf verdient haette. */
 let fab = null;
 
 function updateMediaTimeFab() {
   if (!fab) return;
   const keepNoun = () => fab.dataset?.dockLabel || t('newLabel.mediaTime');
-  if (!state.canManage || state.tab !== 'devices') {
+  if (!state.canManage) {
+    setPageFabAction(fab, { hidden: true, dockLabel: keepNoun() });
+    return;
+  }
+  if (state.tab === 'today' && state.children?.length) {
+    setPageFabAction(fab, {
+      label: t('mediaTime.bookingAdd'),
+      dockLabel: t('newLabel.mediaTime'),
+      onClick: () => openBookingModal(),
+    });
+    return;
+  }
+  if (state.tab !== 'devices') {
     setPageFabAction(fab, { hidden: true, dockLabel: keepNoun() });
     return;
   }
@@ -527,19 +631,21 @@ function metaCell(label, value) {
 /* Check-in / Check-out (Einbuchen/Ausbuchen, Nutzer 05.11.)            */
 /* ------------------------------------------------------------------ */
 
-/* Geraete fuer die Kachel: GET /devices ist Manager-Pfad. Fuer die Check-in-
- * Kachel gilt dasselbe Muster wie bei loadDayNotes: Eltern fragen das gewaehlte
- * Kind ab (?user_id=), ein Kind sich selbst - der Server laesst ein Kind nur
- * eigene Geraete sehen. Scheitert der Zugriff (403), bleibt null: die Kachel
- * sagt dann nichts, statt "kein Geraet" zu behaupten. */
+/* Geraete fuer die Karten und den Buchungs-Dialog: GET /devices ist Manager-Pfad
+ * und liefert allen Kindern auf einmal (Gereraeteliste nach user_id gruupierbar);
+ * ein Kind fragt sich selbst ab (?user_id=), der Server laesst es nur eigene
+ * Geraete sehen. Scheitert der Zugriff (403), bleibt null: die Kachel sagt dann
+ * nichts, statt "kein Geraet" zu behaupten. */
 async function ensureDevicesLite() {
   if (state.devices != null) return;
-  const target = state.canManage
-    ? state.selectedChildId
+  const target = state.canManage ? null
     : (Number.isInteger(state.user?.id) ? state.user.id : null);
-  if (target == null) { state.devices = null; return; }
+  if (!state.canManage && target == null) { state.devices = null; return; }
+  const path = state.canManage
+    ? '/media-time/devices'
+    : `/media-time/devices?user_id=${encodeURIComponent(target)}`;
   try {
-    const res = await api.get(`/media-time/devices?user_id=${encodeURIComponent(target)}`);
+    const res = await api.get(path);
     state.devices = res.data ?? [];
   } catch (err) {
     const status = err?.status ?? err?.response?.status;
@@ -552,12 +658,19 @@ function checkinDeviceName(deviceId) {
   return dev?.name || t('mediaTime.deviceLabel');
 }
 
-function renderCheckinSection() {
-  const items = state.checkins;
+/* Check-in-Block pro Kindkarte (Einbuchen/Ausbuchen, Nutzer 05.11.): "Jedes
+ * Kind soll sich einbuchen und ausbuchen koennen." Geraete ohne Agent (Konsole,
+ * Fernseher) fuehrt das Kind den Buch selbst - die offenen Sitzungen zuerst,
+ * darunter ein Knopf je freiem Geraet. Kinder durfen nur ihr eigenes Geraet
+ * buchen (Serverrecht); der Block haengt unter den Geraetezeilen der Karte. */
+function checkinBlockHtml(card) {
+  const items = card.checkins;
   if (!Array.isArray(items)) return '';
   const open = items.filter((c) => !c.ended_at);
   const closed = items.filter((c) => c.ended_at);
-  const devices = (state.devices || []).filter((d) => !d.revoked_at);
+  const devices = (state.devices || [])
+    .filter((d) => !d.revoked_at)
+    .filter((d) => !state.canManage || d.user_id === card.userId);
   if (!devices.length && !open.length) return '';
   const rows = open.map((c) => `
     <li class="list-row">
@@ -572,24 +685,24 @@ function renderCheckinSection() {
   const bookButtons = devices
     .filter((d) => !open.some((c) => c.device_id === d.id))
     .map((d) => `
-      <button class="btn btn--secondary btn--sm" type="button" data-action="mt-checkin" data-device-id="${Number(d.id)}">
+      <button class="btn btn--secondary btn--sm" type="button" data-action="mt-checkin" data-checkin-user="${Number(card.userId)}" data-device-id="${Number(d.id)}">
         <i data-lucide="log-in" aria-hidden="true"></i>${esc(t('mediaTime.checkInOn', { device: esc(d.name) }))}
       </button>`).join(' ');
   const last = closed.slice(0, 3).map((c) =>
     `${esc(checkinDeviceName(c.device_id))} ${esc(dateTimeText(c.started_at))}`
   ).join(', ');
   return `
-    <section class="mt-section" aria-labelledby="mt-checkin-title">
-      <h2 class="mt-section__title u-section-title" id="mt-checkin-title">${esc(t('mediaTime.checkinTitle'))}</h2>
+    <div class="mt-checkin">
+      <h3 class="mt-group-title">${esc(t('mediaTime.checkinTitle'))}</h3>
       <p class="mt-section__note">${esc(t('mediaTime.checkinHint'))}</p>
       ${rows ? `<ul class="row-carrier">${rows}</ul>` : ''}
       ${bookButtons ? `<div class="mt-checkin__actions">${bookButtons}</div>` : ''}
       ${last ? `<p class="mt-section__note">${esc(t('mediaTime.checkinRecent', { list: last }))}</p>` : ''}
-    </section>`;
+    </div>`;
 }
 
-async function doCheckin(deviceId) {
-  const target = state.canManage ? state.selectedChildId : state.user?.id;
+async function doCheckin(childId, deviceId) {
+  const target = childId ?? (Number.isInteger(state.user?.id) ? state.user.id : null);
   if (target == null) return;
   try {
     await api.post('/media-time/checkins', { user_id: target, device_id: deviceId });
@@ -598,7 +711,7 @@ async function doCheckin(deviceId) {
       await renderCurrentTab(_container, { direction: 0 });
     });
   } catch (e) {
-    toast(mediaTimeErrorSentence(e), { type: 'error' });
+    toast(mediaTimeErrorSentence(e), 'danger');
   }
 }
 
@@ -610,37 +723,35 @@ async function doCheckout(checkinId) {
       await renderCurrentTab(_container, { direction: 0 });
     });
   } catch (e) {
-    toast(mediaTimeErrorSentence(e), { type: 'error' });
+    toast(mediaTimeErrorSentence(e), 'danger');
   }
 }
 
-/* Laufbalken-Ticker (Nutzer 05.11.): die Tageskarte lebt. Waehrend eine
+/* Laufbalken-Ticker (Nutzer 05.11.): die Tageskarten leben. Waehrend eine
  * Buchung laeuft, tickt der Mitlauf-Zaehler alle 30 Sekunden - das Kind sieht
- * Bewegung, ohne nachzuladen. Der Timer ist modulintern und endet mit der
- * Seite (content()-Pruefung), wie ueberall hier kein Leck hinterlaesst. */
+ * Bewegung, ohne nachzuladen. Der Zaehler haelt seine Startzeit im Datenattribut,
+ * der Takt aktualisiert alle Karten zugleich; ein zweiter Takt wird nicht
+ * eroffnet (dieselbe Frequenz, die die Seite schon hat). */
 let _tickerTimer = null;
-function openCheckin() {
-  return (state.checkins || []).find((c) => !c.ended_at);
-}
-function tickerElapsedText() {
-  const open = openCheckin();
-  if (!open) return '';
-  const ms = Date.now() - new Date(open.started_at).getTime();
-  const min = Math.max(0, Math.floor(ms / 60000));
+function elapsedTextFor(startIso) {
+  const seen = new Date(startIso).getTime();
+  if (!Number.isFinite(seen)) return '';
+  const min = Math.max(0, Math.floor((Date.now() - seen) / 60000));
   return t('mediaTime.tickerElapsed', { min: fmtNum(min) });
 }
-function tickerHtml(data) {
-  const open = openCheckin();
+function tickerHtml(data, checkins) {
+  const open = (Array.isArray(checkins) ? checkins : []).find((c) => !c.ended_at);
   let text;
+  let live = false;
+  let startAttr = '';
   if (data.quiet_active) text = t('mediaTime.tickerQuiet');
   else if (open) {
-    const since = new Date(open.started_at);
-    const hh = String(since.getHours()).padStart(2, '0');
-    const mm = String(since.getMinutes()).padStart(2, '0');
-    text = `${t('mediaTime.tickerRunning', { time: `${hh}:${mm}` })} - `;
+    text = `${t('mediaTime.tickerRunning', { time: clockOf(open.started_at, { suffix: false }) })} - `;
+    live = true;
+    startAttr = ` data-checkin-start="${esc(open.started_at)}"`;
   } else text = t('mediaTime.tickerIdle');
-  const live = open && !data.quiet_active;
-  return `<p class="mt-ticker" data-mt-ticker><span class="mt-ticker__dot${live ? ' mt-ticker__dot--live' : ''}" aria-hidden="true"></span>${esc(text)}<span data-mt-ticker-elapsed>${esc(tickerElapsedText())}</span></p>`;
+  const elapsed = open ? elapsedTextFor(open.started_at) : '';
+  return `<p class="mt-ticker"><span class="mt-ticker__dot${live ? ' mt-ticker__dot--live' : ''}" aria-hidden="true"></span>${esc(text)}<span data-mt-ticker-elapsed${startAttr}>${esc(elapsed)}</span></p>`;
 }
 function startTicker() {
   if (_tickerTimer) return;
@@ -650,8 +761,9 @@ function startTicker() {
       _tickerTimer = null;
       return;
     }
-    const el = _container.querySelector('[data-mt-ticker-elapsed]');
-    if (el) el.textContent = tickerElapsedText();
+    _container.querySelectorAll('[data-checkin-start]').forEach((el) => {
+      el.textContent = elapsedTextFor(el.dataset.checkinStart);
+    });
   }, 30_000);
 }
 
@@ -673,89 +785,157 @@ function familylinkDetailsHtml(fl) {
   return `<p class="mt-meta__fl mt-meta__fl--head">${esc(t('mediaTime.flSourceLine', { min: fmtNum(Math.round(total)) }))}</p>${lines}`;
 }
 
-function renderToday(el) {
-  const data = state.today;
-  if (!data) {
-    el.insertAdjacentHTML('beforeend', `<div class="media-time-content__inner">${emptyStateHTML({
-      icon: 'hourglass',
-      title: t('mediaTime.emptyTodayTitle'),
-      description: t('mediaTime.emptyTodayBody'),
-    })}</div>`);
-    return;
+/* Familienansicht (Redesign 06.11.): das eine Bild des Tages. Zone 1 ist eine
+ * Karte je Kind (Restzeit als Hero, Klartext-Satz, Balken, Budget-Zeile,
+ * Geraetezone, Check-in, Family-Link eingeklappt). Zone 2 sind die Buchungen
+ * des Tages als eine Liste fuer den ganzen Haushalt. Der Rest (Regeln, Geraete,
+ * Tausch) steht in seinen Reitern. */
+
+/* Die Karten des heutigen Bildes: Manager sehen alle Kinder gestapelt; ohne
+ * Managerliste (Kind, oder Haushalt ohne Kontingente) traegt die eigene Person
+ * die eine Karte - dieselben Bausteine, damit das Bild nie zwei Gesichter hat. */
+function todayCards() {
+  if (state.todayCards?.length) return state.todayCards.filter((c) => c.data);
+  if (state.today) {
+    return [{
+      userId: state.selectedChildId ?? (Number.isInteger(state.user?.id) ? state.user.id : null),
+      displayName: state.canManage && state.selectedChildId != null
+        ? childNameFor(state.selectedChildId) : null,
+      data: state.today,
+      checkins: state.checkins,
+      dayNotes: state.dayNotes,
+    }];
   }
+  return [];
+}
 
-  const header = `${childPickerHtml()}`;
+/* Icon nach Geraeteart (media_time_devices.platform); unbekannt bleibt das
+ * allgemeine Geraetesignal. */
+function platformIcon(platform) {
+  if (platform === 'windows') return 'monitor';
+  if (platform === 'console') return 'gamepad-2';
+  if (platform === 'tv') return 'tv';
+  return 'smartphone';
+}
 
-  if (!data.enabled) {
-    el.insertAdjacentHTML('beforeend', `<div class="media-time-content__inner">${header}
-      <div class="mt-section">${emptyStateHTML({
-        icon: 'hourglass',
-        title: t('mediaTime.disabledTitle'),
-        description: t('mediaTime.disabledBody'),
-      })}</div>
-      ${setupStepsHtml()}</div>`);
-    wireChildPicker(el, _container);
-    return;
-  }
+/* Der Tracker-Stand als Meta-Zeilen (aufgeklappte Einzelheiten der Karte). */
+function trackerMetaHtml(data) {
+  const quiet = data.quiet
+    ? `<span class="mt-meta__quiet"><span class="mt-chip mt-chip--quiet">${esc(t('mediaTime.quietWindowLabel', {
+      from: esc(data.quiet.from), to: esc(data.quiet.to),
+    }))}</span></span>`
+    : '';
+  return `
+      ${metaCell(t('mediaTime.trackerLabel'),
+    data.tracker?.online ? t('mediaTime.trackerOnline') : t('mediaTime.trackerOffline'))}
+      ${metaCell(t('mediaTime.lastSeenLabel'), esc(seenAgoText(data.tracker?.last_seen_at)))}
+      ${quiet}`;
+}
 
+/* Geraetezone der Karte: eine Zeile je Geraet, das GET /today fuer den Tag
+ * nennt (data.devices - Kontract der Backend-Lane). Fehlt das Feld, fehlt die
+ * Zone: kein Bild erfindet hier "keine Nutzung". */
+function deviceUsageHtml(card) {
+  const rows = Array.isArray(card.data.devices) ? card.data.devices : null;
+  if (!rows || !rows.length) return '';
+  const total = rows.reduce((s, r) => s + (Number(r.minutes) || 0), 0);
+  /* Quelle der Minuten: steht auf dem Geraet eine manuelle Buchung des Tages,
+   * sagt das Badge "manuell", sonst "automatisch" (Agent oder Family-Link). */
+  const manualNames = new Set((state.sessions || [])
+    .filter((s) => s.user_id === card.userId && s.source === 'manual')
+    .map((s) => String(s.device_name ?? '')));
+  const items = rows.map((row) => {
+    const dev = (state.devices || []).find((d) => d.id === row.device_id) ?? null;
+    const name = row.device_name || dev?.name || t('mediaTime.deviceUnnamed');
+    const mins = Number(row.minutes) || 0;
+    const share = total > 0 ? Math.min(1, mins / total) : 0;
+    const limit = deviceLimitFor(card.userId, row.device_id);
+    const manual = manualNames.has(String(row.device_name ?? ''));
+    const menu = (state.canManage && row.device_id != null) ? rowMenuHtml({
+      id: `mt-usage-menu-${card.userId}-${row.device_id}`,
+      label: t('common.moreActionsNamed', { name }),
+      items: [{
+        action: 'device-limit', icon: 'sliders-horizontal',
+        label: t('mediaTime.deviceLimitAction'),
+        attrs: { 'data-limit-user': card.userId, 'data-limit-device': row.device_id, 'data-limit-name': name },
+      }],
+    }) : '';
+    return `
+      <li class="list-row mt-usage-row">
+        <div class="list-row__main">
+          <p class="list-row__name"><i class="mt-usage-row__icon" data-lucide="${platformIcon(dev?.platform)}" aria-hidden="true"></i>${esc(name)}</p>
+          <p class="list-row__meta">${esc(platformLabel(dev?.platform))}${limit?.daily_minutes != null ? ` · <span class="tag">${esc(t('mediaTime.deviceLimitChip', { minutes: fmtNum(limit.daily_minutes) }))}</span>` : ''}</p>
+          <span class="mt-share" aria-hidden="true"><span class="mt-share__fill" style="--mt-progress:${share}"></span></span>
+        </div>
+        <div class="mt-usage-row__end">
+          <span class="list-row__end">${esc(minutesLabel(mins))}</span>
+          <span class="tag">${esc(t(manual ? 'mediaTime.sourceManual' : 'mediaTime.sourceAutomatic'))}</span>
+        </div>
+        ${menu ? `<div class="list-row__actions">${menu}</div>` : ''}
+      </li>`;
+  }).join('');
+  return `
+    <div class="mt-usage">
+      <h3 class="mt-group-title">${esc(t('mediaTime.devicesTodayTitle'))}</h3>
+      <ul class="row-carrier">${items}</ul>
+    </div>`;
+}
+
+/* Die eine Kindkarte: Restzeit als Hero, Klartext-Satz, Balken (nutzt/Total),
+ * Budget-Chip (Manager aendert ihn hier), Geraetezone, Check-in-Block, und das
+ * Fachwort (Tracker, Family-Link) eingeklappt unter dem gewohnten Satz. */
+function childCardHtml(card) {
+  const data = card.data;
+  const uid = card.userId ?? 'self';
+  const titleId = `mt-child-${uid}-title`;
   const chip = chipFor(data);
+  const head = `
+        <div class="mt-card__head">
+          <h2 class="mt-card__title" id="${titleId}">${card.displayName ? esc(card.displayName) : esc(t('mediaTime.todayTitleChild'))}</h2>
+          <span class="${chip.cls}">${esc(chip.label)}</span>
+        </div>`;
+  if (!data.enabled) {
+    return `
+      <section class="mt-section mt-card mt-child-card" aria-labelledby="${titleId}">
+        ${head}
+        <p class="mt-section__note">${esc(t('mediaTime.disabledBody'))}</p>
+      </section>`;
+  }
   const quota = Number(data.quota_min || 0);
   const remaining = Math.max(0, Number(data.remaining_min || 0));
-  const ratio = quota > 0 ? Math.max(0, Math.min(1, remaining / quota)) : 0;
+  const used = Math.max(0, quota - remaining);
+  /* Der Balken fuellt sich mit der Nutzung (nutzt/Total). Die Toende folgen dem
+   * Chip-Muster: ok = Akzent, nearing = Warnung, exceeded = Alarm. */
+  const barState = data.quiet_active ? 'quiet'
+    : (data.state === 'exceeded' ? 'exceeded'
+      : (data.state === 'nearing' ? 'nearing' : (quota > 0 ? 'ok' : 'none')));
+  const ratio = quota > 0 ? Math.max(0, Math.min(1, used / quota)) : 0;
   const progressLabel = t('mediaTime.remainingOfQuota', {
     remaining: fmtNum(remaining),
     quota: fmtNum(quota),
   });
-  /* Kindgerechte Rangfolge (Nutzer 05.11., Screenshot): die eine Frage ist
-   * "wie viel Zeit hab ich noch?" - die Antwort steht als Riesenzahl obenauf,
-   * der Zustand als einfacher Satz darunter. Rechenwege (Basis/Anpassung) und
-   * englische Fachworte sind weg; Details kommen erst darunter, aufklarbar. */
-  const barState = data.quiet_active ? 'quiet'
-    : (data.state === 'exceeded' ? 'exceeded'
-      : (data.state === 'nearing' ? 'nearing' : (quota > 0 ? 'ok' : 'none')));
-  const barSentence = {
-    ok: t('mediaTime.barOk'),
-    nearing: t('mediaTime.barNearing'),
-    exceeded: t('mediaTime.barExceeded'),
-    quiet: t('mediaTime.barQuiet'),
-    none: t('mediaTime.barNoQuota'),
+  const usedSentence = t('mediaTime.usedToday', { used: fmtNum(used), quota: fmtNum(quota) });
+  const stateSentence = {
+    ok: '', nearing: t('mediaTime.barNearing'), exceeded: t('mediaTime.barExceeded'),
+    quiet: t('mediaTime.barQuiet'), none: t('mediaTime.barNoQuota'),
   }[barState];
-
-  const quiet = data.quiet
-    ? `<span class="mt-chip mt-chip--quiet">${esc(t('mediaTime.quietWindowLabel', {
-      from: esc(data.quiet.from), to: esc(data.quiet.to),
-    }))}</span>`
+  const sentence = stateSentence ? `${usedSentence} - ${stateSentence}` : usedSentence;
+  /* Die Budget-Zeile: das Tagesbudget als Chip; Manager aendern ihn gleich hier
+   * (Presets + freie Zahl). Die harte Obergrenze ist ein Fortgeschrittenen-Satz
+   * und steht nur, wenn eine Zeile sie traegt. */
+  const qRow = quotaRowFor(card.userId);
+  const budgetValue = qRow?.daily_minutes ?? quota;
+  const budgetChip = state.canManage
+    ? `<button class="mt-chip mt-budget-chip" type="button" data-action="mt-open-budget" data-budget-child="${Number(card.userId)}">
+         <i data-lucide="wallet" aria-hidden="true"></i>${esc(t('mediaTime.budgetChip', { minutes: fmtNum(budgetValue) }))}
+       </button>`
+    : `<span class="mt-chip">${esc(t('mediaTime.budgetChip', { minutes: fmtNum(budgetValue) }))}</span>`;
+  const hardCap = qRow?.max_daily_minutes != null
+    ? `<span class="mt-hardcap-line">${esc(t('mediaTime.budgetHardCap', { minutes: fmtNum(qRow.max_daily_minutes) }))}</span>`
     : '';
-  const trackerOnline = data.tracker?.online;
-  const tracker = `
-      ${metaCell(t('mediaTime.trackerLabel'),
-    trackerOnline ? t('mediaTime.trackerOnline') : t('mediaTime.trackerOffline'))}
-      ${metaCell(t('mediaTime.lastSeenLabel'), esc(seenAgoText(data.tracker?.last_seen_at)))}
-      ${quiet ? `<span class="mt-meta__quiet">${quiet}</span>` : ''}`;
-
-  /* Der Tauschweg (Punkte -> Minuten) eroeffnet sich hier, nicht erst im
-   * vierten Reiter (Nutzer 05.11., "12jaehriger muss es verstehen"): Der Kurs-
-   * Satz steht auf der Tageskarte - dieselbe Antwort wie dort, in einem Satz.
-   * Der Knopf bleibt Elternpfad (POST /purchase prueft requireManager); ein
-   * Kind sieht den Satz und fragt zuhause. */
-  const exchange = data.exchange ? `
-    <section class="mt-section" aria-labelledby="mt-exchange-title">
-      <h2 class="mt-section__title u-section-title" id="mt-exchange-title">${esc(t('mediaTime.exchangeTitle'))}</h2>
-      <p class="mt-section__note">${esc(state.canManage
-    ? t('mediaTime.exchangeHint', { points: fmtNum(data.exchange.points), minutes: fmtNum(data.exchange.minutes) })
-    : t('mediaTime.exchangeHintChild', { points: fmtNum(data.exchange.points), minutes: fmtNum(data.exchange.minutes) }))}</p>
-      ${data.exchange ? `<button class="btn btn--primary" type="button" data-action="mt-open-purchase">
-        <i data-lucide="coins" aria-hidden="true"></i>${esc(state.canManage ? t('mediaTime.exchangeCta') : t('mediaTime.exchangeCtaChild'))}
-      </button>` : ''}
-    </section>` : '';
-
-  /* Die Anpassung des Tages (Eltern-Notizen, Entscheidung 4): Basis + Anpassung
-   * = Kontingent, als eigener Satz UEBER dem Balken - der Balken zeigt das
-   * Ergebnis, dieser nennt, wie es zustande kam. Der Knopf steht nur Eltern
-   * (PUT ist requireManager); die Begruendung der letzten Anpassung (reason aus
-   * /today) sehen Kinder ebenfalls - Transparenz ist hier die Regel, nicht der
-   * Umweg. Fehlt `adjusted_min` in der Antwort (ein Server vor der Anpassung),
-   * gilt er als 0: nur der Basiswert, kein Knopf-Satz ueber einem Irrtum. */
+  /* Die Anpassung des Tages (Eltern-Notiz, Entscheidung 4): Basis + Anpassung =
+   * Kontingent. Der Knopf steht nur Eltern (PUT ist requireManager); die
+   * Begruendung lesen Kinder ohne Frage. */
   const adjusted = Number(data.adjusted_min) || 0;
   const baseQuota = quota - adjusted;
   const reasonText = String(data.reason ?? '').trim();
@@ -766,25 +946,19 @@ function renderToday(el) {
     adjusted: adjusted >= 0 ? `+${fmtNum(adjusted)}` : `-${fmtNum(Math.abs(adjusted))}`,
     quota: fmtNum(quota),
   }))}</span>
-        ${state.canManage ? `<button class="btn btn--secondary btn--sm" type="button" data-action="mt-ope
+        ${state.canManage ? `<button class="btn btn--secondary btn--sm" type="button" data-action="mt-open-adjust" data-adjust-child="${Number(card.userId)}">
           <i data-lucide="pencil" aria-hidden="true"></i>${esc(t('mediaTime.adjustAction'))}
-        </button>
-        <button class="btn btn--secondary btn--sm" type="button" data-action="mt-open-manual">
-          <i data-lucide="plus" aria-hidden="true"></i>${esc(t('mediaTime.manualTitle'))}
         </button>` : ''}
       </p>
       ${reasonText ? `<p class="mt-quota-reason">${esc(t('mediaTime.quotaReason', { reason: reasonText }))}</p>` : ''}`;
-
-  /* Die Anpassungen des Tages als Protokoll: jede Zeile delta + Grund + wann.
-   * Der Zugang ist wie der GET-Endpunkt: Eltern sehen ihr Kind, ein Kind sieht
-   * sich selbst (der Server erlaubt beides). `null` = die Antwort ist nie
-   * gekommen: dann steht hier nichts, was "heute nichts" behauptet. */
-  const notes = state.dayNotes;
-  const notesSection = (state.canManage || (state.user?.id != null)) && Array.isArray(notes) && notes.length
+  /* Die Anpassungen des Tages als Protokoll unter der Karte: Eltern sehen ihr
+   * Kind, ein Kind sieht sich selbst (Transparenz ist die Regel). */
+  const notes = card.dayNotes;
+  const notesBlock = Array.isArray(notes) && notes.length
     ? `
-    <section class="mt-section" aria-labelledby="mt-day-notes-title">
-      <h2 class="mt-section__title u-section-title" id="mt-day-notes-title">${esc(t('mediaTime.dayNotesTitle'))}</h2>
-      <ul class="row-carrier">${notes.map((note) => {
+      <div class="mt-daynotes">
+        <h3 class="mt-group-title">${esc(t('mediaTime.dayNotesTitle'))}</h3>
+        <ul class="row-carrier">${notes.map((note) => {
         const delta = Number(note.delta_minutes) || 0;
         const who = note.created_by === state.user?.id
           ? ''
@@ -798,110 +972,294 @@ function renderToday(el) {
           <span class="list-row__end">${delta >= 0 ? `+${fmtNum(delta)}` : `-${fmtNum(Math.abs(delta))}`} ${esc(t('mediaTime.minutesUnit'))}</span>
         </li>`;
       }).join('')}</ul>
-    </section>` : '';
-
-  /* Einbuchen/Ausbuchen (Nutzer 05.11.): "Jedes Kind soll sich einbuchen und
-   * ausbuchen koennen." Fuer Geraete ohne Agent (Konsole, Fernseher, Tablet)
-   * fuehrt das Kind den Buch selbst: ein Knopf pro Geraet. Die offene Sitzung
-   * laeuft live in den Balken (Server: openCheckinMinutes) und endet spaetestens
-   * an Mitternacht. Kinder durfen nur ihr eigenes Geraet buchen (Serverrecht);
-   * die Kachel ist fuer alle am gewaehlten Kind sichtbar. */
-  const checkinSection = renderCheckinSection();
-
-  el.insertAdjacentHTML('beforeend', `
-    <div class="media-time-content__inner">
-      ${header}
-      <section class="mt-section mt-card" aria-labelledby="mt-today-title">
-        <div class="mt-card__head">
-          <h2 class="mt-card__title" id="mt-today-title">${esc(
-            state.canManage && state.selectedChildId != null
-              ? t('mediaTime.todayTitleWithChild', { name: childNameFor(state.selectedChildId) })
-              : t('mediaTime.todayTitleChild'))}</h2>
-          <span class="${chip.cls}">${esc(chip.label)}</span>
-        </div>
-        <p class="mt-hero" aria-hidden="true"><span class="mt-hero__num">${esc(fmtNum(remaining))}</span><span class="mt-hero__unit">${esc(t('mediaTime.bigOfQuota', { quota: fmtNum(quota) }))}</span></p>
-        <p class="mt-hero__sentence mt-hero__sentence--${barState}">${esc(barSentence)}</p>
-        ${quotaLine}
-        <div class="mt-progress__track" role="progressbar"
-             aria-label="${esc(t('mediaTime.progressLabel'))}"
-             aria-valuenow="${fmtNum(remaining)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
-             aria-valuetext="${esc(progressLabel)}"><div class="mt-progress__fill" style="--mt-progress:${ratio}"></div></div>
-        <p class="mt-progress__label" aria-hidden="true">${esc(progressLabel)}</p>
-        ${tickerHtml(data)}
-        <details class="mt-details">
-          <summary class="mt-details__summary">${esc(t('mediaTime.detailTitle'))}</summary>
-          <p class="mt-details__hint">${esc(t('mediaTime.detailHint'))}</p>
+      </div>` : '';
+  /* Der Tauschweg (Punkte -> Minuten) bleibt auf der Karte: derselbe Kurs wie
+   * im vierten Reiter, in einem Satz; der Knopf ist Elternpfad (POST prueft). */
+  const exchange = data.exchange ? `
+    <div class="mt-exchange">
+      <p class="mt-section__note">${esc(state.canManage
+    ? t('mediaTime.exchangeHint', { points: fmtNum(data.exchange.points), minutes: fmtNum(data.exchange.minutes) })
+    : t('mediaTime.exchangeHintChild', { points: fmtNum(data.exchange.points), minutes: fmtNum(data.exchange.minutes) }))}</p>
+      <div class="mt-row-actions"><button class="btn btn--secondary btn--sm" type="button" data-action="mt-open-purchase" data-purchase-child="${Number(card.userId)}">
+        <i data-lucide="coins" aria-hidden="true"></i>${esc(state.canManage ? t('mediaTime.exchangeCta') : t('mediaTime.exchangeCtaChild'))}
+      </button></div>
+    </div>` : '';
+  return `
+    <section class="mt-section mt-card mt-child-card" aria-labelledby="${titleId}">
+      ${head}
+      <p class="mt-hero" aria-hidden="true"><span class="mt-hero__num">${esc(fmtNum(remaining))}</span><span class="mt-hero__unit">${esc(t('mediaTime.heroFreeUnit'))}</span></p>
+      <p class="mt-hero__sentence mt-hero__sentence--${barState}">${esc(sentence)}</p>
+      <div class="mt-progress__track" role="progressbar"
+           aria-label="${esc(t('mediaTime.progressLabel'))}"
+           aria-valuenow="${fmtNum(used)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
+           aria-valuetext="${esc(progressLabel)}"><div class="mt-progress__fill mt-progress__fill--${barState}" style="--mt-progress:${ratio}"></div></div>
+      <p class="mt-progress__label" aria-hidden="true">${esc(progressLabel)}</p>
+      <p class="mt-budget-line">${budgetChip}${hardCap}</p>
+      ${quotaLine}
+      ${deviceUsageHtml(card)}
+      ${tickerHtml(data, card.checkins)}
+      ${checkinBlockHtml(card)}
+      ${exchange}
+      <details class="mt-details">
+        <summary class="mt-details__summary">${esc(t('mediaTime.detailTitle'))}</summary>
+        <p class="mt-details__hint">${esc(t('mediaTime.detailHint'))}</p>
         <div class="mt-meta">
           ${metaCell(t('mediaTime.metaCharged'), minutesLabel(data.charged_min))}
           ${metaCell(t('mediaTime.metaExempt'), minutesLabel(data.exempt_min))}
           ${metaCell(t('mediaTime.metaUnknown'), minutesLabel(data.unknown_min))}
           ${metaCell(t('mediaTime.metaPurchased'), minutesLabel(data.purchased_min))}
           ${(Number(data.duty_min) || 0) > 0 ? metaCell(t('mediaTime.metaDuty'), minutesLabel(data.duty_min)) : ''}
-          ${tracker}
+          ${trackerMetaHtml(data)}
           ${familylinkDetailsHtml(data.familylink)}
         </div>
-        </details>
-      </section>
-      ${checkinSection}
-      ${notesSection}
-      ${exchange}
-      ${setupStepsHtml()}
-    </div>`);
-  wireChildPicker(el, _container);
-  el.querySelector('[data-action="mt-open-purchase"]')
-    ?.addEventListener('click', () => openPurchaseModal());
-  el.querySelector('[data-action="mt-open-adjust"]')
-    ?.addEventListener('click', () => openAdjustModal());
-  el.querySelector('[data-action="mt-open-manual"]')
-    ?.addEventListener('click', () => openManualModal());
-  el.querySelectorAll('[data-action="mt-checkin"]').forEach((btn) =>
-    btn.addEventListener('click', () => doCheckin(Number(btn.dataset.deviceId))));
-  el.querySelectorAll('[data-action="mt-checkout"]').forEach((btn) =>
-    btn.addEventListener('click', () => doCheckout(Number(btn.dataset.checkinId))));
+      </details>
+      ${notesBlock}
+    </section>`;
 }
 
-/* Manuelle Buchung (A1: Konsole/Fernseher ohne Agent, und Korrekturen).
- * minutes 1..720, Grund optional; der Server fuehrt die Session als charged. */
-function openManualModal() {
-  if (!state.canManage || state.selectedChildId == null) return;
+/* Zone 2: die Buchungen des Tages, eine Liste fuer den ganzen Haushalt. Keine
+ * Antwort (die Route waechst in der Parallel-Lane) laesst die Zone still
+ * wegfallen - eine Antwort mit leerer Liste ist der erklaerende Leerzustand. */
+function bookingsSectionHtml() {
+  const rows = state.sessions;
+  if (!Array.isArray(rows)) return '';
+  const add = state.canManage ? `
+      <button class="btn btn--primary btn--sm" type="button" data-action="mt-booking-add">
+        <i data-lucide="plus" aria-hidden="true"></i>${esc(t('mediaTime.bookingAdd'))}
+      </button>` : '';
+  const body = rows.length
+    ? `<ul class="row-carrier">${rows.map(bookingRowHtml).join('')}</ul>`
+    : emptyStateHTML({
+      icon: 'calendar-clock',
+      title: t('mediaTime.bookingsEmptyTitle'),
+      description: t('mediaTime.bookingsEmptyBody'),
+      action: state.canManage
+        // secondary: der FAB traegt 'Zeit buchen' bereits als Primaktion.
+        ? { label: t('mediaTime.bookingAdd'), icon: 'plus', tone: 'secondary', className: 'mt-booking-add' }
+        : undefined,
+    });
+  return `
+    <section class="mt-section" aria-labelledby="mt-bookings-title">
+      <div class="mt-section__head">
+        <h2 class="mt-section__title u-section-title" id="mt-bookings-title">${esc(t('mediaTime.bookingsTitle'))}</h2>
+        ${add}
+      </div>
+      ${body}
+    </section>`;
+}
+
+/* Eine Buchungszeile: 'HH:MM - HH:MM · Kind · Geraet · N Min' mit Quelle-Badge.
+ * Bearbeiten/Loeschen nur wo der Server die Zeile freigibt (editable) und die
+ * Rechte stehen; Zeilen des Laufs (automatisch) bleiben, wie sie sind. Die
+ * Notiz steckt in app_label ('manual' ist der Platzhalter des Servers). */
+function bookingRowHtml(s) {
+  const from = s.started_at ? clockOf(s.started_at, { suffix: false }) : '';
+  const to = s.ended_at ? clockOf(s.ended_at, { suffix: false }) : '';
+  const time = from && to ? `${from} - ${to}` : (from || dateTimeText(s.started_at));
+  const device = s.device_name || t('mediaTime.bookingDeviceNone');
+  const noteText = s.app_label && s.app_label !== 'manual' ? s.app_label : '';
+  const app = noteText ? ` · ${esc(noteText)}` : '';
+  const menu = (state.canManage && s.editable) ? rowMenuHtml({
+    id: `mt-booking-menu-${s.id}`,
+    label: t('common.moreActionsNamed', { name: device }),
+    items: [
+      { action: 'booking-edit', icon: 'pencil', label: t('mediaTime.bookingEdit'), attrs: { 'data-booking-edit': s.id } },
+      { action: 'booking-delete', icon: 'trash-2', label: t('mediaTime.bookingDelete'), danger: true, attrs: { 'data-booking-delete': s.id } },
+    ],
+  }) : '';
+  return `
+    <li class="list-row" data-booking="${Number(s.id)}">
+      <div class="list-row__main">
+        <p class="list-row__name">${esc(time)} <span class="tag">${esc(t(s.source === 'manual' ? 'mediaTime.sourceManual' : 'mediaTime.sourceAutomatic'))}</span></p>
+        <p class="list-row__meta">${esc(childNameFor(s.user_id))} · ${esc(device)} · ${esc(minutesLabel(s.used_minutes))}${app}</p>
+      </div>
+      ${menu ? `<div class="list-row__actions">${menu}</div>` : ''}
+    </li>`;
+}
+
+function renderToday(el) {
+  const cards = todayCards();
+  const cardBlocks = cards.map(childCardHtml).join('');
+  const emptyBlock = cards.length ? '' : emptyStateHTML({
+    icon: 'hourglass',
+    title: t('mediaTime.emptyTodayTitle'),
+    description: t('mediaTime.emptyTodayBody'),
+  });
+  el.insertAdjacentHTML('beforeend', `
+    <div class="media-time-content__inner">
+      ${cardBlocks}${emptyBlock}
+      ${bookingsSectionHtml()}
+      ${setupStepsHtml()}
+    </div>`);
+  installPopoverMenus(el);
+  el.querySelector('[data-action="mt-booking-add"]')
+    ?.addEventListener('click', () => openBookingModal());
+  el.querySelector('.mt-booking-add')
+    ?.addEventListener('click', () => openBookingModal());
+  el.querySelectorAll('[data-budget-child]').forEach((btn) =>
+    btn.addEventListener('click', () => openBudgetModal(Number(btn.dataset.budgetChild))));
+  el.querySelectorAll('[data-adjust-child]').forEach((btn) =>
+    btn.addEventListener('click', () => openAdjustModal(Number(btn.dataset.adjustChild))));
+  el.querySelectorAll('[data-purchase-child]').forEach((btn) =>
+    btn.addEventListener('click', () => openPurchaseModal(Number(btn.dataset.purchaseChild))));
+  el.querySelectorAll('[data-action="mt-checkin"]').forEach((btn) =>
+    btn.addEventListener('click', () =>
+      doCheckin(Number(btn.dataset.checkinUser), Number(btn.dataset.deviceId))));
+  el.querySelectorAll('[data-action="mt-checkout"]').forEach((btn) =>
+    btn.addEventListener('click', () => doCheckout(Number(btn.dataset.checkinId))));
+  el.querySelectorAll('[data-limit-user]').forEach((btn) =>
+    btn.addEventListener('click', () => openDeviceLimitModal(
+      Number(btn.dataset.limitUser), Number(btn.dataset.limitDevice), btn.dataset.limitName ?? '')));
+  el.querySelectorAll('[data-booking-edit]').forEach((btn) =>
+    btn.addEventListener('click', () => openBookingModal(
+      null, (state.sessions || []).find((s) => s.id === Number(btn.dataset.bookingEdit)) ?? null)));
+  el.querySelectorAll('[data-booking-delete]').forEach((btn) =>
+    btn.addEventListener('click', () => deleteBooking(
+      (state.sessions || []).find((s) => s.id === Number(btn.dataset.bookingDelete)))));
+}
+
+/* ------------------------------------------------------------------ */
+/* Buchen, Budget, Geraete-Limit                                       */
+/* ------------------------------------------------------------------ */
+
+/* Die Geraete-Auswahl des Buchungs-Dialogs: die Geraete des gewaehlten Kindes,
+ * vornan 'Ohne Geraet' (null) fuer die Zeit ohne Tracker. */
+function bookingDeviceOptions(userId, selectedDeviceId) {
+  const devices = (state.devices || [])
+    .filter((d) => !d.revoked_at && d.user_id === userId)
+    .map((d) => `
+    <option value="${d.id}"${d.id === selectedDeviceId ? ' selected' : ''}>${esc(d.name)}</option>`).join('');
+  return `<option value=""${selectedDeviceId == null ? ' selected' : ''}>${esc(t('mediaTime.bookingDeviceNone'))}</option>${devices}`;
+}
+
+/* Kindwechsel im offenen Dialog: die Auswahl wird ueber die DOM-API neu
+ * gebaut (der innerHTML-Kanon der App schreibt keine Nutzerdaten als
+ * HTML-Zeichenkette zurueck). */
+function paintBookingDevices(sel, userId) {
+  sel.replaceChildren();
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = t('mediaTime.bookingDeviceNone');
+  sel.appendChild(none);
+  (state.devices || [])
+    .filter((d) => !d.revoked_at && d.user_id === userId)
+    .forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = String(d.id);
+      opt.textContent = d.name;
+      sel.appendChild(opt);
+    });
+}
+
+/* Buchung anlegen oder aendern: wahlweise Zeitraum (Start + Ende) oder Dauer
+ * (Minuten), dazu Geraet und Notiz. POST /media-time/sessions traegt beide
+ * Formen (Kontract der Backend-Lane), Aenderungen laufen ueber PATCH. Die
+ * Zeiteingabe folgt dem weiten Eingabekanon der App (parseTimeInput: "9:30",
+ * "0930" und "9h30" sind dasselbe). */
+function openBookingModal(presetChildId = null, existing = null) {
+  if (!state.canManage) return;
+  const children = state.children || [];
+  if (!children.length) return;
+  const userId = existing?.user_id ?? presetChildId ?? state.selectedChildId ?? children[0].id;
+  /* Die Zeile von /sessions traegt den device_id (aeeltere Antworten nur den
+   * Namen): erst die Kennung, dann der Name, sonst 'Ohne Geraet'. */
+  let deviceId = existing?.device_id ?? null;
+  if (existing && existing.device_id == null && existing.device_name) {
+    const dev = (state.devices || [])
+      .find((d) => d.user_id === userId && d.name === existing.device_name);
+    deviceId = dev?.id ?? null;
+  }
+  /* PATCH aendert die Dauer (ended_at bleibt der Anker), nicht die Uhrzeit:
+   * die Bearbeiten-Ansicht bietet darum nur die Dauer - der Zeitraum steht,
+   * wie er gelaufen ist. */
+  const modeLocked = !!existing;
+  const hhmm = (iso) => (iso ? clockOf(iso, { suffix: false }) : '');
   const modalContext = captureModalContext();
   openModal({
-    title: t('mediaTime.manualTitle'),
+    title: existing ? t('mediaTime.bookingEditTitle') : t('mediaTime.bookingAdd'),
+    initialFocus: 'edit',
     content: `
-      <form id="mt-manual-form" novalidate>
+      <form id="mt-booking-form" novalidate>
         <div class="form-group">
-          <label class="label" for="mt-manual-minutes">${esc(t('mediaTime.manualMinutesLabel'))}${REQUIRED_MARK}</label>
-          <input class="input" id="mt-manual-minutes" type="number" min="1" max="720" step="1" required inputmode="numeric" autocomplete="off">
+          <label class="label" for="mt-booking-child">${esc(t('mediaTime.bookingChildLabel'))}${REQUIRED_MARK}</label>
+          <select class="input" id="mt-booking-child" required>${children.map((c) => `
+            <option value="${c.id}"${c.id === userId ? ' selected' : ''}>${esc(c.display_name)}</option>`).join('')}</select>
         </div>
         <div class="form-group">
-          <label class="label" for="mt-manual-note">${esc(t('mediaTime.manualNoteLabel'))}</label>
-          <input class="input" id="mt-manual-note" maxlength="120">
+          <label class="label" for="mt-booking-device">${esc(t('mediaTime.deviceLabel'))}</label>
+          <select class="input" id="mt-booking-device">${bookingDeviceOptions(userId, deviceId)}</select>
         </div>
-        <div id="mt-manual-error" class="form-error" role="alert" hidden></div>
+        ${modeLocked ? '' : `
+        <div class="form-group">
+          <span class="label" id="mt-booking-mode-label">${esc(t('mediaTime.bookingModeGroupLabel'))}</span>
+          <div class="mt-mode" role="group" aria-labelledby="mt-booking-mode-label">
+            <button class="mt-mode__btn" type="button" data-mode="period" aria-pressed="false">${esc(t('mediaTime.bookingModePeriod'))}</button>
+            <button class="mt-mode__btn mt-mode__btn--on" type="button" data-mode="duration" aria-pressed="true">${esc(t('mediaTime.bookingModeDuration'))}</button>
+          </div>
+        </div>
+        <div data-mode-block="period" hidden>
+          <div class="form-group">
+            <label class="label" for="mt-booking-start">${esc(t('mediaTime.bookingFromLabel'))}${REQUIRED_MARK}</label>
+            <input class="input mt-quiet__time" id="mt-booking-start" type="time" required value="">
+          </div>
+          <div class="form-group">
+            <label class="label" for="mt-booking-end">${esc(t('mediaTime.bookingToLabel'))}${REQUIRED_MARK}</label>
+            <input class="input mt-quiet__time" id="mt-booking-end" type="time" required value="">
+          </div>
+        </div>`}
+        <div data-mode-block="duration">
+          <div class="form-group">
+            <label class="label" for="mt-booking-minutes">${esc(t('mediaTime.manualMinutesLabel'))}${REQUIRED_MARK}</label>
+            <input class="input" id="mt-booking-minutes" type="number" min="1" max="720" step="1" inputmode="numeric" autocomplete="off" required
+                   value="${existing && Number.isInteger(Number(existing.used_minutes)) && Number(existing.used_minutes) > 0 ? Number(existing.used_minutes) : ''}">
+            ${existing && existing.started_at ? `<p class="form-hint">${esc(t('mediaTime.bookingEditAnchor', { time: `${hhmm(existing.started_at)} - ${hhmm(existing.ended_at)}` }))}</p>` : ''}
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="label" for="mt-booking-note">${esc(t('mediaTime.manualNoteLabel'))}</label>
+          <input class="input" id="mt-booking-note" maxlength="120" value="${esc(existing?.app_label && existing.app_label !== 'manual' ? existing.app_label : '')}">
+        </div>
+        <div id="mt-booking-error" class="form-error" role="alert" hidden></div>
         <div class="modal-panel__footer modal-panel__footer--plain">
           <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
-          <button type="submit" class="btn btn--primary" id="mt-manual-submit">${esc(t('common.add'))}</button>
+          <button type="submit" class="btn btn--primary" id="mt-booking-submit">${esc(existing ? t('common.save') : t('common.add'))}</button>
         </div>
       </form>`,
     onSave: async (panel) => {
-      const errEl = panel.querySelector('#mt-manual-error');
-      const submit = panel.querySelector('#mt-manual-submit');
+      const errEl = panel.querySelector('#mt-booking-error');
+      const submit = panel.querySelector('#mt-booking-submit');
       const fail = (msg) => { errEl.textContent = msg; errEl.hidden = false; };
-      const minutes = Number.parseInt(panel.querySelector('#mt-manual-minutes').value, 10);
-      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
-        fail(t('mediaTime.adjustDeltaProblem'));
-        return;
+      const selChild = Number(panel.querySelector('#mt-booking-child').value) || userId;
+      const devRaw = panel.querySelector('#mt-booking-device').value;
+      const note = String(panel.querySelector('#mt-booking-note').value || '').trim() || null;
+      const body = { user_id: selChild, device_id: devRaw === '' ? null : Number(devRaw), note };
+      const active = panel.querySelector('.mt-mode__btn--on')?.dataset.mode || 'duration';
+      if (active === 'period') {
+        const st = parseTimeInput(panel.querySelector('#mt-booking-start').value);
+        const en = parseTimeInput(panel.querySelector('#mt-booking-end').value);
+        if (!st || !en) { fail(t('mediaTime.bookingTimeProblem')); return; }
+        if (en <= st) { fail(t('mediaTime.bookingTimeOrder')); return; }
+        const day = localDayKey();
+        body.start_at = new Date(`${day}T${st}:00`).toISOString();
+        body.end_at = new Date(`${day}T${en}:00`).toISOString();
+      } else {
+        const minutes = Number.parseInt(panel.querySelector('#mt-booking-minutes').value, 10);
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
+          fail(t('mediaTime.bookingMinutesProblem'));
+          return;
+        }
+        body.minutes = minutes;
       }
       submit.disabled = true;
       try {
-        await api.post('/media-time/sessions', {
-          user_id: state.selectedChildId,
-          minutes,
-          note: String(panel.querySelector('#mt-manual-note').value || '').trim() || null,
-        });
+        if (existing) {
+          await api.patch(`/media-time/sessions/${encodeURIComponent(existing.id)}`, body);
+        } else {
+          await api.post('/media-time/sessions', body);
+        }
         if (!isModalContextCurrent(modalContext)) return;
         closeModal({ force: true, context: modalContext });
-        toast(t('mediaTime.manualSaved'));
+        toast(t('mediaTime.bookingSaved'));
         await reloadAfterSave(async () => {
           await renderCurrentTab(_container, { direction: 0 });
           refocusAfterRender();
@@ -909,6 +1267,184 @@ function openManualModal() {
       } catch (e) {
         submit.disabled = false;
         fail(mediaTimeErrorSentence(e));
+      }
+    },
+  });
+  /* Kind wechseln = Geraeteliste wechseln; der Umschalter schiebt die Felder.
+   * Der Blick in den laufenden Dialog folgt dem offenen Muster der Seite
+   * (openTokenModal): erst einhaengen, dann lauschen. */
+  setTimeout(() => {
+    const panel = document.querySelector('.modal-panel');
+    if (!panel) return;
+    panel.querySelector('#mt-booking-child')?.addEventListener('change', (ev) => {
+      const sel = panel.querySelector('#mt-booking-device');
+      if (sel) paintBookingDevices(sel, Number(ev.target.value));
+    });
+    panel.querySelectorAll('.mt-mode__btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        panel.querySelectorAll('.mt-mode__btn').forEach((b) => {
+          const on = b === btn;
+          b.classList.toggle('mt-mode__btn--on', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        panel.querySelectorAll('[data-mode-block]').forEach((block) => {
+          block.hidden = block.dataset.modeBlock !== btn.dataset.mode;
+        });
+      });
+    });
+  }, 0);
+}
+
+/* Buchung loeschen: die Rueckfrage nennt, was fort ist; der Tag rechnet neu
+ * (dieselbe Confirm/Toast-Grammatik wie der Geraete-Entzug). */
+async function deleteBooking(session) {
+  if (!session || !state.canManage) return;
+  const ok = await confirmOverModal(t('mediaTime.bookingDeleteTitle'), {
+    confirmLabel: t('common.delete'),
+    danger: true,
+    detail: t('mediaTime.bookingDeleteDetail', {
+      who: childNameFor(session.user_id),
+      minutes: fmtNum(session.used_minutes),
+    }),
+  });
+  if (!ok) return;
+  try {
+    await api.delete(`/media-time/sessions/${encodeURIComponent(session.id)}`);
+    toast(t('mediaTime.bookingDeleted'));
+    await reloadAfterSave(async () => {
+      await renderCurrentTab(_container, { direction: 0 });
+      refocusAfterRender();
+    });
+  } catch (err) {
+    const status = err?.status ?? err?.response?.status;
+    if (status === 403) {
+      state.canManage = false;
+      await renderCurrentTab(_container, { direction: 0 });
+      return;
+    }
+    toast(mediaTimeErrorSentence(err), 'danger');
+  }
+}
+
+/* Tagesbudget (der editierbare Chip der Karte): Preset oder freie Zahl, PUT auf
+ * die Kind-Zeile. PUT schreibt, was die Zeile schon haelt (enabled, harte
+ * Obergrenze) - der Chip aendert die Zahl, keinen stillen Ruecksetzer. */
+function openBudgetModal(childId) {
+  if (!state.canManage) return;
+  const row = quotaRowFor(childId);
+  const card = (state.todayCards || []).find((c) => c.userId === childId);
+  const current = row?.daily_minutes ?? Number(card?.data?.quota_min ?? 0);
+  const maxCap = row?.max_daily_minutes ?? null;
+  const presets = [30, 45, 60, 90];
+  const modalContext = captureModalContext();
+  openModal({
+    title: t('mediaTime.budgetTitle', { name: childNameFor(childId) }),
+    content: `
+      <form id="mt-budget-form" novalidate>
+        <div class="form-group">
+          <span class="label">${esc(t('mediaTime.budgetPresetsLabel'))}</span>
+          <div class="mt-row-actions">
+            ${presets.map((p) => `<button class="btn btn--secondary btn--sm" type="button" data-budget-preset="${p}">${esc(minutesLabel(p))}</button>`).join('')}
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="label" for="mt-budget-minutes">${esc(t('mediaTime.budgetMinutesLabel'))}${REQUIRED_MARK}</label>
+          <input class="input" id="mt-budget-minutes" type="number" min="1" max="1440" step="1" inputmode="numeric" autocomplete="off" required
+                 value="${Number.isInteger(Number(current)) && Number(current) > 0 ? Number(current) : ''}">
+          ${maxCap != null ? `<p class="form-hint">${esc(t('mediaTime.budgetHardCap', { minutes: fmtNum(maxCap) }))}</p>` : ''}
+        </div>
+        <div id="mt-budget-error" class="form-error" role="alert" hidden></div>
+        <div class="modal-panel__footer modal-panel__footer--plain">
+          <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
+          <button type="submit" class="btn btn--primary" id="mt-budget-submit">${esc(t('common.save'))}</button>
+        </div>
+      </form>`,
+    onSave: async (panel) => {
+      const errEl = panel.querySelector('#mt-budget-error');
+      const submit = panel.querySelector('#mt-budget-submit');
+      const minutes = Number.parseInt(panel.querySelector('#mt-budget-minutes').value, 10);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+        errEl.textContent = t('mediaTime.budgetProblem');
+        errEl.hidden = false;
+        return;
+      }
+      const body = { daily_minutes: minutes, enabled: row ? row.enabled !== false : true };
+      if (maxCap != null) body.max_daily_minutes = maxCap;
+      submit.disabled = true;
+      try {
+        await api.put(`/media-time/quotas/${encodeURIComponent(childId)}`, body);
+        if (!isModalContextCurrent(modalContext)) return;
+        closeModal({ force: true, context: modalContext });
+        toast(t('mediaTime.budgetSaved'));
+        await reloadAfterSave(async () => {
+          await renderCurrentTab(_container, { direction: 0 });
+          refocusAfterRender();
+        });
+      } catch (err) {
+        submit.disabled = false;
+        errEl.textContent = mediaTimeErrorSentence(err);
+        errEl.hidden = false;
+      }
+    },
+  });
+  setTimeout(() => {
+    const panel = document.querySelector('.modal-panel');
+    panel?.querySelectorAll('[data-budget-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = panel.querySelector('#mt-budget-minutes');
+        if (input) input.value = btn.dataset.budgetPreset;
+      });
+    });
+  }, 0);
+}
+
+/* Limit je Geraet (optional, Kontract: Zeile mit device_id): Minuten pro Tag
+ * auf diesem Geraet; 0 hebt das Limit auf. */
+function openDeviceLimitModal(childId, deviceId, deviceName) {
+  if (!state.canManage) return;
+  const limit = deviceLimitFor(childId, deviceId);
+  const modalContext = captureModalContext();
+  openModal({
+    title: t('mediaTime.deviceLimitTitle', { name: deviceName || t('mediaTime.deviceLabel') }),
+    content: `
+      <form id="mt-limit-form" novalidate>
+        <div class="form-group">
+          <label class="label" for="mt-limit-minutes">${esc(t('mediaTime.deviceLimitMinutesLabel'))}${REQUIRED_MARK}</label>
+          <input class="input" id="mt-limit-minutes" type="number" min="0" max="1440" step="1" inputmode="numeric" autocomplete="off" required
+                 value="${limit?.daily_minutes != null ? Number(limit.daily_minutes) : ''}">
+          <p class="form-hint">${esc(t('mediaTime.deviceLimitHint'))}</p>
+        </div>
+        <div id="mt-limit-error" class="form-error" role="alert" hidden></div>
+        <div class="modal-panel__footer modal-panel__footer--plain">
+          <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.cancel'))}</button>
+          <button type="submit" class="btn btn--primary" id="mt-limit-submit">${esc(t('common.save'))}</button>
+        </div>
+      </form>`,
+    onSave: async (panel) => {
+      const errEl = panel.querySelector('#mt-limit-error');
+      const submit = panel.querySelector('#mt-limit-submit');
+      const minutes = Number.parseInt(panel.querySelector('#mt-limit-minutes').value, 10);
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+        errEl.textContent = t('mediaTime.budgetProblem');
+        errEl.hidden = false;
+        return;
+      }
+      submit.disabled = true;
+      try {
+        await api.put(`/media-time/quotas/${encodeURIComponent(childId)}`, {
+          device_id: deviceId, daily_minutes: minutes,
+        });
+        if (!isModalContextCurrent(modalContext)) return;
+        closeModal({ force: true, context: modalContext });
+        toast(t('mediaTime.deviceLimitSaved'));
+        await reloadAfterSave(async () => {
+          await renderCurrentTab(_container, { direction: 0 });
+          refocusAfterRender();
+        });
+      } catch (err) {
+        submit.disabled = false;
+        errEl.textContent = mediaTimeErrorSentence(err);
+        errEl.hidden = false;
       }
     },
   });
@@ -931,9 +1467,12 @@ function childNameFor(userId) {
  * Kind ihn liest - eine Anpassung ohne Satz waere eine Zahl ohne Antwort.
  * Vor dem Speichern die Rueckfrage mit Detail (confirmOverModal-Muster): was
  * sich aendert, steht in der Frage, nicht erst hinter ihr. */
-function openAdjustModal() {
-  if (!state.canManage || state.selectedChildId == null) return;
-  const data = state.today;
+function openAdjustModal(childId = null) {
+  if (!state.canManage) return;
+  const target = childId ?? state.selectedChildId;
+  if (target == null) return;
+  const card = (state.todayCards || []).find((c) => c.userId === target);
+  const data = card?.data ?? state.today;
   if (!data) return;
   const quota = Number(data.quota_min || 0);
   const adjusted = Number(data.adjusted_min) || 0;
@@ -946,7 +1485,7 @@ function openAdjustModal() {
     refocusAfterRender();
   };
   openModal({
-    title: t('mediaTime.adjustTitle', { name: childNameFor(state.selectedChildId) }),
+    title: t('mediaTime.adjustTitle', { name: childNameFor(target) }),
     content: `
       <form id="mt-adjust-form" novalidate>
         <div class="form-group">
@@ -1000,7 +1539,7 @@ function openAdjustModal() {
       if (!confirmed) return;
       submit.disabled = true;
       try {
-        await api.put(`/media-time/quotas/${encodeURIComponent(state.selectedChildId)}/day`, {
+        await api.put(`/media-time/quotas/${encodeURIComponent(target)}/day`, {
           delta_minutes: delta,
           reason,
         });
@@ -1018,11 +1557,13 @@ function openAdjustModal() {
 /* Punkte gegen Minuten tauschen                                       */
 /* ------------------------------------------------------------------ */
 
-function openPurchaseModal() {
+function openPurchaseModal(childId = null) {
   /* Der Selbstkauf steht auch Kindern offen (POST /purchase laesst targetId ==
    * actor zu, Server prüft Punkte und Cap) - der Modal ist bewusst identisch,
    * der Satz nennt Kurs und Menge, der Rechner bleibt beim Server. */
-  const rate = state.today?.exchange;
+  const target = childId ?? state.selectedChildId ?? null;
+  const rate = (state.todayCards || []).find((c) => c.userId === target)?.data?.exchange
+    ?? state.today?.exchange;
   if (!rate) return;
   const modalContext = captureModalContext();
   const refresh = async () => {
@@ -1063,7 +1604,7 @@ function openPurchaseModal() {
       submit.disabled = true;
       try {
         const body = { quantity: qty };
-        if (state.canManage && state.selectedChildId != null) body.user_id = state.selectedChildId;
+        if (state.canManage && target != null) body.user_id = target;
         await api.post('/media-time/purchase', body);
         toast(t('mediaTime.purchaseDoneToast', {
           minutes: fmtNum(rate.minutes * qty),

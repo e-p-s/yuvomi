@@ -50,6 +50,7 @@ import {
   exceptionsVersion,
   trackerStatus,
   mediaTimeDayKey,
+  perDeviceUsage,
   householdWallTime,
 } from '../services/media-time.js';
 
@@ -71,6 +72,42 @@ function isoNow() {
 function toInt(val) {
   const n = Math.trunc(Number(val));
   return Number.isFinite(n) ? n : NaN;
+}
+
+/**
+ * Eine Session in der GET-form (Liste und PATCH-Antwort antworten identisch).
+ * device_name ueber die Geraete-Zeile (null ok), editable = manuell gebucht.
+ */
+function sessionRowShape(d, id) {
+  return d.prepare(`
+    SELECT s.id, s.session_key, s.user_id, s.device_id, dev.name AS device_name,
+           s.app_label, s.used_minutes, s.started_at, s.ended_at, s.source
+      FROM media_time_sessions s
+      LEFT JOIN media_time_devices dev ON dev.id = s.device_id
+     WHERE s.id = ?
+  `).get(id);
+}
+
+function sessionAsData(d, id) {
+  const row = sessionRowShape(d, id);
+  if (!row) return null;
+  return { ...row, editable: row.source === 'manual' };
+}
+
+/**
+ * `minutes` Minuten vor einer ISO-Uebergabe, in derselben Wandzeit-Zonen
+ * (offset erhalten): ended_at bleibt der Anker, started_at rutscht.
+ */
+function minusMinutesIso(iso, minutes) {
+  const m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d{1,3})?((?:Z|[+-]\d{2}:\d{2})?)$/.exec(String(iso));
+  if (!m) return null;
+  const base = Date.parse(`${m[1]}${m[2] ?? ''}Z`);
+  if (!Number.isFinite(base)) return null;
+  const shifted = new Date(base - minutes * 60000).toISOString();
+  const ms = m[2] ? shifted.slice(19, 22) : '';
+  const stamp = shifted.slice(0, 19);
+  const offset = m[3] && m[3] !== 'Z' ? m[3] : 'Z';
+  return offset === 'Z' ? `${stamp}${ms}Z` : `${stamp}${ms}${offset}`;
 }
 
 /** Eltern (dad/mom/parent) oder Admin - dieselbe Frage wie bei Konsequenzen. */
@@ -549,6 +586,15 @@ router.get('/today', (req, res) => {
         state: state.state,
         wall_time: householdWallTime(d),
         tracker: { last_seen_at: tracker.last_seen_at, online: tracker.online },
+        // Nutzung des Tages nach Geraet (dieselbe Grundlage wie dayUsage:
+        // Tracker-Sessions, manuelle Buchungen, Family-Link-Ersetzung je
+        // Mapping; Nutzung ohne Geraet als Zeile mit device_id null).
+        devices: perDeviceUsage(d, requested, state.day)
+          .map((r) => ({
+            device_id: r.device_id,
+            device_name: r.device_name,
+            minutes: Math.round(r.minutes),
+          })),
         // Family-Link-Istzeit (Spec 287): Status + Istzeit pro Geraet fuer die
         // Tageskarte. Status 'login_noetig' zeigt den Hinweis, nie eine Null.
         familylink: familylinkUsage(d, requested, state.day),
@@ -570,7 +616,20 @@ router.get('/quotas', requireManager, (req, res) => {
     if (requested != null) {
       const refusal = childRefusal(d, requested);
       if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.status, reason: refusal.reason });
-      return res.json({ data: [quotaRow(d, requested) ?? { user_id: requested, daily_minutes: 0, enabled: 1, quota_min: 0 }] });
+      const global = quotaRow(d, requested);
+      if (!global) {
+        return res.json({ data: [{ user_id: requested, device_id: null, device_name: null, daily_minutes: 0, enabled: 1, quota_min: 0 }] });
+      }
+      // Die kindweite Basis plus die Geraet-Zeilen desselben Kindes
+      // (Migration 288: UNIQUE (user_id, device_id) WHERE device_id IS NOT NULL).
+      const rows = d.prepare(`
+        SELECT q.*, dev.name AS device_name
+          FROM media_time_quotas q
+          LEFT JOIN media_time_devices dev ON dev.id = q.device_id
+         WHERE q.user_id = ?
+         ORDER BY q.device_id IS NOT NULL, q.device_id
+      `).all(requested);
+      return res.json({ data: rows });
     }
     const rows = d.prepare(`
       SELECT q.*, u.display_name, u.username
@@ -614,19 +673,43 @@ router.put('/quotas/:userId', requireManager, (req, res) => {
     // 'ein Kurs fuer alle') - die quota-Zeile kennt keine Kurs-Spalten.
     const enabled = body.enabled === undefined ? 1 : (body.enabled ? 1 : 0);
 
+    // device_id null = die kindweite Basis (bisheriges Verhalten); mit Wert
+    // gilt die Zeile fuer genau dieses Geraet (Ueberschreibung, siehe
+    // quotaRow). Die Konfliktziele sind die partiellen UNIQUE-Indexe aus
+    // Migration 288 - ihr WHERE muss dabeistehen, sonst erkennt SQLite sie
+    // nicht als Konfliktziel (NULL und Wert duerfen koexistieren).
+    let deviceId = null;
+    if (body.device_id !== undefined && body.device_id !== null) {
+      deviceId = toInt(body.device_id);
+      if (!Number.isInteger(deviceId) || deviceId <= 0) {
+        return res.status(400).json({ error: 'device_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+      }
+      const dev = d.prepare(
+        'SELECT id FROM media_time_devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL'
+      ).get(deviceId, userId);
+      if (!dev) {
+        return res.status(404).json({ error: 'Device not found.', code: 404, reason: 'media_time_not_found' });
+      }
+    }
+    const conflict = deviceId == null
+      ? 'ON CONFLICT(user_id) WHERE device_id IS NULL DO UPDATE SET'
+      : 'ON CONFLICT(user_id, device_id) WHERE device_id IS NOT NULL DO UPDATE SET';
     d.prepare(`
       INSERT INTO media_time_quotas
-        (user_id, daily_minutes, max_daily_minutes, enabled, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
+        (user_id, device_id, daily_minutes, max_daily_minutes, enabled, updated_at, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ${conflict}
         daily_minutes = excluded.daily_minutes,
         max_daily_minutes = excluded.max_daily_minutes,
         enabled = excluded.enabled,
         updated_at = excluded.updated_at,
         updated_by = excluded.updated_by
-    `).run(userId, daily, maxDaily, enabled, isoNow(), actingUser(req));
+    `).run(userId, deviceId, daily, maxDaily, enabled, isoNow(), actingUser(req));
 
-    return res.json({ data: quotaRow(d, userId) });
+    const saved = quotaRow(d, userId, deviceId);
+    const deviceName = deviceId == null ? null
+      : d.prepare('SELECT name FROM media_time_devices WHERE id = ?').get(deviceId)?.name ?? null;
+    return res.json({ data: saved ? { ...saved, device_id: saved.device_id ?? null, device_name: deviceName } : saved });
   } catch (err) {
     log.error('PUT /quotas/:userId error:', err);
     return res.status(500).json({ error: 'Failed to save quota.', code: 500 });
@@ -924,7 +1007,12 @@ router.post('/checkins/:id/end', (req, res) => {
 
 /* POST /sessions - eine manuelle Nutzungszeit buchen (Eltern). Quelle fuer
  * Geraete ohne Agent (Konsole, Fernseher, Nutzer 31.10.) und fuer Korrekturen.
- * Eine Session als classification 'charged', source 'manual', day_key = heute. */
+ * Eine Session als classification 'charged', source 'manual'. Ohne explizite
+ * Uebergabe: day_key = heute, start = jetzt minus minutes. Mit start_at und
+ * end_at (ISO): beide muessen in demselben Medienzeit-Haushaltstag liegen
+ * (der Tag ueberquert Mitternacht - 1,5 h vor 24 Uhr zaehlen halst), minutes
+ * ist die Differenz, und minute_key folgt der Uebergabe (Nachtrag fuer einen
+ * anderen Tag). Explizite Uebergabe hat Vorrang vor minutes. */
 router.post('/sessions', requireManager, (req, res) => {
   try {
     const d = db.get();
@@ -940,10 +1028,6 @@ router.post('/sessions', requireManager, (req, res) => {
     }
     const refusal = childRefusal(d, userId);
     if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.status, reason: refusal.reason });
-    const minutes = Number(raw.minutes);
-    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
-      return res.status(400).json({ error: 'minutes must be an integer 1..720.', code: 400, reason: 'media_time_bad_request' });
-    }
     const deviceId = raw.device_id == null ? null : toInt(raw.device_id);
     if (deviceId != null) {
       const dev = d.prepare(
@@ -953,17 +1037,53 @@ router.post('/sessions', requireManager, (req, res) => {
         return res.status(404).json({ error: 'Device not found.', code: 404, reason: 'media_time_not_found' });
       }
     }
-    const dayKey = mediaTimeDayKey(d);
+
+    // Explizite Uebergabe (Vorrang) oder Minuten-Rueckrechnung ab jetzt.
+    let startedAt = null;
+    let endedAt = null;
+    let minutes = null;
+    let dayKey = mediaTimeDayKey(d);
+    if (raw.start_at != null || raw.end_at != null) {
+      startedAt = typeof raw.start_at === 'string' ? raw.start_at : null;
+      endedAt = typeof raw.end_at === 'string' ? raw.end_at : null;
+      const startMs = startedAt != null ? Date.parse(startedAt) : NaN;
+      const endMs = endedAt != null ? Date.parse(endedAt) : NaN;
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+        return res.status(400).json({
+          error: 'start_at and end_at must both be ISO strings.', code: 400, reason: 'media_time_bad_request',
+        });
+      }
+      if (mediaTimeDayKey(d, new Date(startMs)) !== mediaTimeDayKey(d, new Date(endMs))) {
+        return res.status(400).json({
+          error: 'start_at and end_at must be in the same household day.', code: 400, reason: 'media_time_bad_request',
+        });
+      }
+      minutes = Math.floor((endMs - startMs) / 60000);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
+        return res.status(400).json({
+          error: 'start_at/end_at must differ by an integer number of minutes 1..720.', code: 400, reason: 'media_time_bad_request',
+        });
+      }
+      dayKey = mediaTimeDayKey(d, new Date(startMs));
+    } else {
+      minutes = Number(raw.minutes);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
+        return res.status(400).json({ error: 'minutes must be an integer 1..720.', code: 400, reason: 'media_time_bad_request' });
+      }
+      const now = isoNow();
+      startedAt = new Date(Date.now() - minutes * 60000).toISOString();
+      endedAt = now;
+    }
+
     const key = `manual:${userId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
     const now = isoNow();
-    const start = new Date(Date.now() - minutes * 60000).toISOString();
     const label = String(raw.note ?? '').trim() || 'manual';
     d.prepare(`
       INSERT INTO media_time_sessions
         (session_key, user_id, device_id, package_name, app_label, started_at, ended_at,
          used_minutes, minute_key, kind, system_component, classification, source, reported_by, created_at)
       VALUES (?, ?, ?, 'manual', ?, ?, ?, ?, ?, 'foreground', 0, 'charged', 'manual', ?, ?)
-    `).run(key, userId, deviceId, label.slice(0, 120), start, now, minutes, dayKey, actingUser(req), now);
+    `).run(key, userId, deviceId, label.slice(0, 120), startedAt, endedAt, minutes, dayKey, actingUser(req), now);
     const state = quotaState(d, userId);
     return res.status(201).json({
       data: {
@@ -975,6 +1095,164 @@ router.post('/sessions', requireManager, (req, res) => {
   } catch (err) {
     log.error('POST /sessions error:', err);
     return res.status(500).json({ error: 'Failed to book usage.', code: 500 });
+  }
+});
+
+/* GET /sessions?day=&user_id= - die angezogenen Sessions eines Haushalts-Tages
+ * (Eltern jedes Kind, das Kind nur die eigenen). Quelle der Nachbearbeitung:
+ * manual-Zeilen sind im answer editable (PATCH/DELETE), Tracker-Rohdaten
+ * bleiben unveraenderlich (adjust-Philosophie: Rohwerte radiert niemand). */
+router.get('/sessions', (req, res) => {
+  try {
+    const d = db.get();
+    const actor = actingUser(req);
+    if (!actor) {
+      return res.status(401).json({ error: 'Authentication required.', code: 401, reason: 'media_time_unauthenticated' });
+    }
+    const dayRaw = req.query.day;
+    let day;
+    if (dayRaw === undefined) {
+      day = mediaTimeDayKey(d);
+    } else {
+      day = String(dayRaw);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+        return res.status(400).json({ error: 'day must be YYYY-MM-DD.', code: 400, reason: 'media_time_bad_request' });
+      }
+    }
+    const requested = req.query.user_id !== undefined ? toInt(req.query.user_id) : (isParentOrAdmin(req) ? null : actor);
+    if (requested !== null && (!Number.isInteger(requested) || requested <= 0)) {
+      return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    if (requested == null) {
+      return res.status(400).json({
+        error: 'user_id is required when reading another household member.', code: 400, reason: 'media_time_bad_request',
+      });
+    }
+    if (requested !== actor && !isParentOrAdmin(req)) {
+      return res.status(403).json({
+        error: 'Only parents can read another child.', code: 403, reason: 'media_time_forbidden',
+      });
+    }
+    const target = d.prepare('SELECT id FROM users WHERE id = ?').get(requested);
+    if (!target) return res.status(404).json({ error: 'User not found.', code: 404 });
+    const rows = d.prepare(`
+      SELECT s.id, s.session_key, s.user_id, s.device_id, dev.name AS device_name,
+             s.app_label, s.used_minutes, s.started_at, s.ended_at, s.source
+        FROM media_time_sessions s
+        LEFT JOIN media_time_devices dev ON dev.id = s.device_id
+       WHERE s.user_id = ? AND s.minute_key = ? AND s.classification = 'charged'
+       ORDER BY s.started_at DESC
+    `).all(requested, day);
+    return res.json({
+      data: rows.map((r) => ({ ...r, editable: r.source === 'manual' })),
+    });
+  } catch (err) {
+    log.error('GET /sessions error:', err);
+    return res.status(500).json({ error: 'Failed to read sessions.', code: 500 });
+  }
+});
+
+/* PATCH /sessions/:id - eine manuelle Buchung berichtigen (Eltern). Nur
+ * source='manual' (Rohdaten eines Geraets sind keine Korrektur-Zeile);
+ * minutes verschiebt started_at, ended_at bleibt der Anker; note ist die
+ * app_label; device_id muss dem Kind hoeren und fuehren frei (null). */
+router.patch('/sessions/:id', requireManager, (req, res) => {
+  try {
+    const d = db.get();
+    const id = toInt(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    const row = d.prepare("SELECT id, user_id, ended_at, source FROM media_time_sessions WHERE id = ?").get(id);
+    if (!row || row.source !== 'manual') {
+      return res.status(404).json({ error: 'Manual session not found.', code: 404, reason: 'media_time_not_found' });
+    }
+    const body = req.body ?? {};
+    const sets = [];
+    const args = [];
+    let newMinutes = null;
+    if (body.minutes !== undefined) {
+      newMinutes = toInt(body.minutes);
+      if (!Number.isInteger(newMinutes) || newMinutes < 1 || newMinutes > 720) {
+        return res.status(400).json({
+          error: 'minutes must be an integer 1..720.', code: 400, reason: 'media_time_bad_request',
+        });
+      }
+    }
+    if (body.note !== undefined) {
+      if (body.note !== null && (typeof body.note !== 'string' || body.note.length > 120)) {
+        return res.status(400).json({
+          error: 'note must be a string up to 120 characters or null.', code: 400, reason: 'media_time_bad_request',
+        });
+      }
+      sets.push('app_label = ?');
+      args.push(body.note == null ? null : body.note.trim().slice(0, 120));
+    }
+    if (body.device_id !== undefined) {
+      if (body.device_id === null) {
+        sets.push('device_id = NULL');
+      } else {
+        const deviceId = toInt(body.device_id);
+        if (!Number.isInteger(deviceId) || deviceId <= 0) {
+          return res.status(400).json({ error: 'device_id must be an integer or null.', code: 400, reason: 'media_time_bad_request' });
+        }
+        const dev = d.prepare(
+          'SELECT id FROM media_time_devices WHERE id = ? AND user_id = ? AND revoked_at IS NULL'
+        ).get(deviceId, row.user_id);
+        if (!dev) {
+          return res.status(400).json({
+            error: 'Device not found for this child.', code: 400, reason: 'media_time_bad_request',
+          });
+        }
+        sets.push('device_id = ?');
+        args.push(deviceId);
+      }
+    }
+    if (newMinutes != null) {
+      // ended_at ist der Anker (die Buchung endet, wo sie endete); fehlendes
+      // Ende (manuelle Zeilen haben stets eines) weicht auf jetzt aus.
+      const anchorIso = row.ended_at || isoNow();
+      const startIso = minusMinutesIso(anchorIso, newMinutes);
+      if (!startIso) {
+        return res.status(400).json({ error: 'ended_at is not a valid ISO instant.', code: 400, reason: 'media_time_bad_request' });
+      }
+      sets.push('started_at = ?', 'ended_at = ?', 'used_minutes = ?');
+      args.push(startIso, anchorIso, newMinutes);
+    }
+    if (!sets.length) {
+      return res.status(400).json({
+        error: 'Body needs at least one of minutes, note, device_id.', code: 400, reason: 'media_time_bad_request',
+      });
+    }
+    sets.push('updated_at = ?');
+    args.push(isoNow(), id);
+    d.prepare(`UPDATE media_time_sessions SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+    return res.json({ data: sessionAsData(d, id) });
+  } catch (err) {
+    log.error('PATCH /sessions/:id error:', err);
+    return res.status(500).json({ error: 'Failed to update session.', code: 500 });
+  }
+});
+
+/* DELETE /sessions/:id - eine manuelle Buchung streichen (Eltern). Harte
+ * Loeschung: eine manuelle Buchung ist keine Rohzeit eines Geraets und kein
+ * Audit-Eintrag - was Eltern falsch gebucht haben, verschwindet, statt als
+ * korrigierte Zeile weiter mitzusaehlen. */
+router.delete('/sessions/:id', requireManager, (req, res) => {
+  try {
+    const d = db.get();
+    const id = toInt(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'id must be an integer.', code: 400, reason: 'media_time_bad_request' });
+    }
+    const info = d.prepare("DELETE FROM media_time_sessions WHERE id = ? AND source = 'manual'").run(id);
+    if (info.changes === 0) {
+      return res.status(404).json({ error: 'Manual session not found.', code: 404, reason: 'media_time_not_found' });
+    }
+    return res.json({ data: { deleted: true } });
+  } catch (err) {
+    log.error('DELETE /sessions/:id error:', err);
+    return res.status(500).json({ error: 'Failed to delete session.', code: 500 });
   }
 });
 
