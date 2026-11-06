@@ -1521,6 +1521,11 @@ export const schemas = {
           type: 'object',
           properties: {
             version: { type: 'string' },
+            build_revision: {
+              type: 'string',
+              description: 'Fork build revision (APP_BUILD_REVISION of the deployment), shown so a household '
+                + 'can tell which build arrived. Only for authenticated callers, like `version`.',
+            },
             product: {
               type: 'string',
               enum: ['yuvomi'],

@@ -88,6 +88,13 @@ function buildInfoRows(info) {
       value: t('settings.systemVersionValue', { version: info.version }),
     });
   }
+  // Der Fork-Bau, der diesen Dienst wirklich ausliefert (APP_BUILD_REVISION).
+  if (info.build_revision) {
+    rows.push({
+      label: t('settings.systemBuildLabel'),
+      value: String(info.build_revision),
+    });
+  }
   rows.push({
     label: t('settings.systemLicenseLabel'),
     value: 'MIT',

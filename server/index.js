@@ -443,6 +443,12 @@ function buildVersionPayload(includeVersion = false) {
   }
   return {
     ...(includeVersion ? { version: APP_VERSION } : {}),
+    // Der Fork-Bau: setzt deploy-prod.sh in .env. Die Oberflaeche zeigt ihn im
+    // Konto-Menue und im Blatt System - damit sieht der Haushalt, dass ein
+    // Deploy angekommen ist (die Anwendungsversion aendert sich dafuer nicht).
+    ...(includeVersion && process.env.APP_BUILD_REVISION
+      ? { build_revision: String(process.env.APP_BUILD_REVISION) }
+      : {}),
     // Fest, anders als `app_name`, den ein Haushalt umbenennen kann.
     product: 'yuvomi',
     client_api: CLIENT_API_VERSION,

@@ -745,6 +745,34 @@ function setAppVersion(version) {
   }
 }
 
+/* Die Fork-Bau-Revision (APP_BUILD_REVISION auf dem Server): sie aendert sich
+ * mit jedem Deploy, die Anwendungsversion nicht - wer pruefen will, ob ein
+ * Deploy angekommen ist, sieht hier nach. Konto-Menue und Blatt System
+ * zeigen sie. */
+const APP_BUILD_REVISION_STORAGE_KEY = 'yuvomi-build-revision';
+
+function getBuildRevision() {
+  return localStorage.getItem(APP_BUILD_REVISION_STORAGE_KEY) || '';
+}
+
+function setBuildRevision(revision) {
+  const next = String(revision || '').trim();
+  if (next) {
+    localStorage.setItem(APP_BUILD_REVISION_STORAGE_KEY, next);
+  } else {
+    localStorage.removeItem(APP_BUILD_REVISION_STORAGE_KEY);
+  }
+  syncSidebarBuild();
+}
+
+function syncSidebarBuild(root = document) {
+  const text = getBuildRevision();
+  root.querySelectorAll('.nav-account__build').forEach((el) => {
+    el.textContent = text ? `${t('nav.buildLabel')} ${text}` : '';
+    el.hidden = !text;
+  });
+}
+
 /**
  * Dokumenttitel einer Route - die einzige Ansage, die ein Screenreader beim
  * Seitenwechsel in einer SPA bekommt (WCAG 2.4.2, Level A). Zugleich Tab-Text,
@@ -968,6 +996,7 @@ async function syncPreferencesOnce() {
   const versionApplied = Promise.all([startHandoff.takeVersion() ?? api.get('/version'), preferencesApplied])
     .then(([res]) => {
       if (res?.version) setAppVersion(res.version);
+      setBuildRevision(res?.build_revision);
       if (res?.app_name) setAppName(res.app_name);
       // Die Upload-Grenze kommt vom Server, damit Hinweis und Pruefung im Browser
       // dieselbe Zahl nennen wie er (#806).
@@ -1268,6 +1297,12 @@ function sidebarAccountEl({ isDisplayShell = false } = {}) {
     // `nav-item--changelog` traegt den Update-Hinweis im Namen (applyUpdateBadge).
     item('changelog', 'history', 'nav.changelog', 'nav-item--changelog'),
   );
+  // Die Bau-Revision des Deploys (stillschweigend, wenn der Server keine nennt).
+  const buildRow = document.createElement('div');
+  buildRow.className = 'nav-account__build';
+  buildRow.setAttribute('aria-live', 'polite');
+  menu.append(buildRow);
+  syncSidebarBuild(wrap);
   // FUER EIN DISPLAY GIBT ES KEIN ABMELDEN (#1208). Ein Tablett meldet sich
   // nicht ab, es wird widerrufen - und `POST /auth/logout` beantwortet der
   // Server ihm mit 403. Der Eintrag haette eine Abmeldung versprochen, die nie
@@ -5776,6 +5811,7 @@ if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
       const v = await version;
       routerState._setupRequired = v?.setup_required === true;
       if (v?.version) setAppVersion(v.version);
+      setBuildRevision(v?.build_revision);
       if (v?.app_name) setAppName(v.app_name);
       startHandoff.holdVersion(v);
     } catch {
