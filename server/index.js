@@ -73,6 +73,7 @@ import weatherRouter from './routes/weather.js';
 import preferencesRouter from './routes/preferences.js';
 import screensaverRouter from './routes/screensaver.js';
 import mediaTimeRouter from './routes/media-time.js';
+import { familylinkReportRouter } from './routes/familylink-report.js';
 import remindersRouter from './routes/reminders.js';
 import searchRouter from './routes/search.js';
 import familyRouter from './routes/family.js';
@@ -658,6 +659,10 @@ app.use('/mcp', apiLimiter, requireAuth, trackAdmittedWrite, mcpRouter);
 // eine Route; alles andere unter /displays faellt durch und landet weiter unten
 // im Administrator-Router hinter requireAuth.
 app.use('/api/v1/displays', pairingRouter);
+// Family-Link-Report-Push (#Uebergabe 05.11.): eigener Credential-Weg wie das
+// Tablett-Pairing - kein Sitzungs-Cookie auf dem Collector-Host, der Hash des
+// x-familylink-token entscheidet. Route liegt bewusst auch in der OpenAPI.
+app.use('/api/v1', familylinkReportRouter);
 app.use('/api/v1', requireAuth);
 // Ab hier steht die Identitaet fest: schreibende Anfragen wartet ein Restore ab (#1431).
 app.use('/api/v1', trackAdmittedWrite);

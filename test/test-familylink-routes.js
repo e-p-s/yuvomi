@@ -17,6 +17,7 @@ import express from 'express';
 
 const dbmod = await import('../server/db.js');
 const { default: mediaTimeRouter } = await import('../server/routes/media-time.js');
+const { familylinkReportRouter } = await import('../server/routes/familylink-report.js');
 const svc = await import('../server/services/media-time.js');
 const db = dbmod.get();
 
@@ -45,6 +46,7 @@ app.use((req, _res, next) => {
   next();
 });
 app.use(express.json());
+app.use('/', familylinkReportRouter);
 app.use('/', mediaTimeRouter);
 const server = app.listen(0, '127.0.0.1');
 const baseUrl = await new Promise((r) => server.on('listening', () => r(`http://127.0.0.1:${server.address().port}`)));
@@ -172,7 +174,7 @@ test('POST /familylink/token + /familylink/report — Fluss: Token 401/401/200/4
   assert.equal(t.status, 200);
   const token = t.body.data.token;
   assert.ok(String(token).startsWith('flk_'), 'Token-Format');
-  const post = (tok, body) => fetch(`${baseUrl}/familylink/report`, {
+  const post = (tok, body) => fetch(`${baseUrl}/media-time/familylink/report`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(tok ? { 'x-familylink-token': tok } : {}) },
     body: JSON.stringify(body),

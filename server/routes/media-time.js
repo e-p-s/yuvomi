@@ -21,7 +21,7 @@ import express from 'express';
 
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
-import { familylinkStatus, familylinkUsage, runFamilylinkIngest, ingestFamilylinkReport, setStatus } from '../services/familylink.js';
+import { familylinkStatus, familylinkUsage, runFamilylinkIngest } from '../services/familylink.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
@@ -1447,29 +1447,6 @@ router.post('/familylink/token', requireManager, (req, res) => {
   } catch (err) {
     log.error('POST /familylink/token error:', err);
     return res.status(500).json({ error: 'Failed to create family link token.', code: 500 });
-  }
-});
-
-/* Report-Push vom Collector-Host: dieselbe Ingest-Funktion wie der lokale
- * Lauf. Ungleicher/fehlender Token => 401, kaputter Koerper => 400 -
- * geschrieben wird nie etwas Halbes, nie eine Null (Spec-Regel). */
-router.post('/familylink/report', (req, res) => {
-  try {
-    const d = db.get();
-    const stored = d.prepare(
-      "SELECT value FROM sync_config WHERE key = 'familylink_report_token_hash'"
-    ).get()?.value;
-    const given = req.get('x-familylink-token') || '';
-    if (!stored || !given || hashDeviceToken(given) !== stored) {
-      return res.status(401).json({ error: 'Valid x-familylink-token required.', code: 401, reason: 'media_time_unauthenticated' });
-    }
-    const r = ingestFamilylinkReport(d, req.body);
-    // Ein angenommener Push ist ein erfolgreicher Lauf - derselbe Status,
-    // den der lokale Takt setzt (UI zeigt "Letzter Abruf: okay").
-    setStatus(d, 'ok');
-    return res.json({ data: { written: r.written, errors: r.errors } });
-  } catch (err) {
-    return res.status(400).json({ error: 'Report not accepted.', code: 400, reason: 'media_time_bad_request' });
   }
 });
 
