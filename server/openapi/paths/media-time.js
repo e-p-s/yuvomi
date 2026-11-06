@@ -276,7 +276,7 @@ export function mediaTimePaths() {
         tag: 'MediaTime',
         params: [
           { name: 'day', in: 'query', required: false, schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, description: 'Household day (YYYY-MM-DD). Omitted: today.' },
-          { name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'The child; required for parents/admin. A non-parent may only read themselves.' },
+          { name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'A child; parents/admin only. Omitted: parents/admin get every child of the household day, a child gets themselves.' },
         ],
         description: 'Only rows with `classification` charged, newest start first - the base for the parents\' correction list. `editable` is true only for manual bookings (`source` manual); the raw rows a device reported are never rewritten (adjust philosophy: correct, never erase).',
         responses: {

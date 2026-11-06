@@ -567,8 +567,15 @@ test('GET /sessions — Tag-Filter, nur charged, Reihenfolge, editable; Kind sie
   const own = await call('GET', '/sessions', { actor: { id: kid.id, role: 'member' } });
   assert.equal(own.status, 200, 'ohne user_id gilt der eigene Nutzer');
   assert.ok(own.body.data.every((r) => r.user_id === kid.id));
-  const other = freshKid();
-  const foreign = await call('GET', `/sessions?user_id=${other.id}`, { actor: { id: kid.id, role: 'member' } });
+  // Eltern ohne user_id: der ganze Haushalt (Familienkarte der Medienzeit-Seite).
+  const otherKid = freshKid();
+  await call('PUT', `/quotas/${otherKid.id}`, { body: { daily_minutes: 60 } });
+  await call('POST', '/sessions', { body: { user_id: otherKid.id, minutes: 15 } });
+  const all = await call('GET', '/sessions');
+  assert.equal(all.status, 200, 'Eltern ohne user_id lesen den ganzen Haushalt');
+  assert.ok(all.body.data.some((r) => r.user_id === kid.id));
+  assert.ok(all.body.data.some((r) => r.user_id === otherKid.id));
+  const foreign = await call('GET', `/sessions?user_id=${otherKid.id}`, { actor: { id: kid.id, role: 'member' } });
   assert.equal(foreign.status, 403);
   assert.equal(foreign.body.reason, 'media_time_forbidden');
 });

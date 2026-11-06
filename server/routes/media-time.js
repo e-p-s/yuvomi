@@ -1123,26 +1123,25 @@ router.get('/sessions', (req, res) => {
     if (requested !== null && (!Number.isInteger(requested) || requested <= 0)) {
       return res.status(400).json({ error: 'user_id must be an integer.', code: 400, reason: 'media_time_bad_request' });
     }
-    if (requested == null) {
-      return res.status(400).json({
-        error: 'user_id is required when reading another household member.', code: 400, reason: 'media_time_bad_request',
-      });
-    }
-    if (requested !== actor && !isParentOrAdmin(req)) {
+    if (requested !== null && requested !== actor && !isParentOrAdmin(req)) {
       return res.status(403).json({
         error: 'Only parents can read another child.', code: 403, reason: 'media_time_forbidden',
       });
     }
-    const target = d.prepare('SELECT id FROM users WHERE id = ?').get(requested);
-    if (!target) return res.status(404).json({ error: 'User not found.', code: 404 });
+    if (requested !== null) {
+      const target = d.prepare('SELECT id FROM users WHERE id = ?').get(requested);
+      if (!target) return res.status(404).json({ error: 'User not found.', code: 404 });
+    }
+    // Eltern ohne user_id: der ganze Haushalt an diesem Tag - die Familienkarte
+    // auf der Medienzeit-Seite braucht genau das (Vertrag des Frontends).
     const rows = d.prepare(`
       SELECT s.id, s.session_key, s.user_id, s.device_id, dev.name AS device_name,
              s.app_label, s.used_minutes, s.started_at, s.ended_at, s.source
         FROM media_time_sessions s
         LEFT JOIN media_time_devices dev ON dev.id = s.device_id
-       WHERE s.user_id = ? AND s.minute_key = ? AND s.classification = 'charged'
+       WHERE ${requested === null ? '' : 's.user_id = ? AND '}s.minute_key = ? AND s.classification = 'charged'
        ORDER BY s.started_at DESC
-    `).all(requested, day);
+    `).all(...(requested === null ? [day] : [requested, day]));
     return res.json({
       data: rows.map((r) => ({ ...r, editable: r.source === 'manual' })),
     });

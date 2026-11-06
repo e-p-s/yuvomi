@@ -152,10 +152,14 @@ const ROUTES = [
   { path: '/rewards/consequences', page: '/pages/rewards.js', requiresAuth: true, module: 'rewards', titleKey: 'nav.rewardsConsequences' },
   // Medienzeit: eine Seite mit Unterpfaden - wie der Verlauf der Belohnungen
   // eigene Adresse, dieselbe Seite, dasselbe Modul.
-  { path: '/media-time', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
-  { path: '/media-time/devices', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
-  { path: '/media-time/rules', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
-  { path: '/media-time/exchange', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', titleKey: 'nav.mediaTime' },
+  // style: explizit, weil das Modul 'media_time' heisst (Unterstrichlung wie die
+  // Server-Schluessel), die Blatt-Datei aber media-time.css (Querbalken). Ohne
+  // diese Angabe baute der Router '/styles/media_time.css' - 404 - und die
+  // Medienzeit-Seite renderte jahrelang ohne ihr eigenes Stylesheet.
+  { path: '/media-time', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', style: '/styles/media-time.css', titleKey: 'nav.mediaTime' },
+  { path: '/media-time/devices', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', style: '/styles/media-time.css', titleKey: 'nav.mediaTime' },
+  { path: '/media-time/rules', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', style: '/styles/media-time.css', titleKey: 'nav.mediaTime' },
+  { path: '/media-time/exchange', page: '/pages/media-time.js', requiresAuth: true, module: 'media_time', style: '/styles/media-time.css', titleKey: 'nav.mediaTime' },
 ];
 
 // Settings ist eine Sektion mit einer Wurzel und je einer exakten Route pro
@@ -757,10 +761,10 @@ function getBuildRevision() {
 
 function setBuildRevision(revision) {
   const next = String(revision || '').trim();
+  // Nur eine echte Antwort loescht: die ungehaelterte (unauthentisierte)
+  // /version-Antwort nennt den Bau nicht und darf ihn nicht wegloeschen.
   if (next) {
     localStorage.setItem(APP_BUILD_REVISION_STORAGE_KEY, next);
-  } else {
-    localStorage.removeItem(APP_BUILD_REVISION_STORAGE_KEY);
   }
   syncSidebarBuild();
 }
@@ -1303,6 +1307,18 @@ function sidebarAccountEl({ isDisplayShell = false } = {}) {
   buildRow.setAttribute('aria-live', 'polite');
   menu.append(buildRow);
   syncSidebarBuild(wrap);
+  // Nach einer Anmeldung kann der Boot die unauthentisierte /version-Antwort
+  // weitergereicht haben (Start-Handoff) - die nennt den Bau nicht. Ein
+  // Nachziehen macht die Zeile selbstheilend.
+  if (!getBuildRevision()) {
+    api.get('/version')
+      .then((v) => { if (v?.build_revision) setBuildRevision(v.build_revision); })
+      .catch(() => {});
+  } else {
+    // Bewusst asynchron: der Browser liefert ein popover=auto-Menue erst NACH
+    // diesem Sync — ein synchroner Aufruf fiele ins Leere zurueck.
+    queueMicrotask(() => syncSidebarBuild(wrap));
+  }
   // FUER EIN DISPLAY GIBT ES KEIN ABMELDEN (#1208). Ein Tablett meldet sich
   // nicht ab, es wird widerrufen - und `POST /auth/logout` beantwortet der
   // Server ihm mit 403. Der Eintrag haette eine Abmeldung versprochen, die nie
