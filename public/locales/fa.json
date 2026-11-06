@@ -7133,6 +7133,8 @@
         "barNoQuota": "Für heute ist noch kein Kontingent gesetzt.",
         "detailTitle": "Woher die Minuten kommen",
         "detailHint": "Alles zusammen ergibt deinen Verbrauch. Ausnahmen sind Apps, die nichts kosten (z.B. Schul-Apps); Pflichtzeit ist Zeit für Schulsachen und zählt nicht gegen dich.",
+        "cardHide": "Details ausblenden",
+        "cardShow": "Details anzeigen",
         "exchangeHintChild": "Du hast {{points}} Punkte. {{points}} Punkte bringen {{minutes}} Min extra.",
         "exchangeCtaChild": "Zeit kaufen",
         "setupStep1": "Bildschirmzeit einschalten",

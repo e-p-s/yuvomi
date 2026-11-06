@@ -582,3 +582,59 @@ button.mt-budget-chip:hover {
   color: var(--color-text-primary);
 }
 
+/* ============================================================
+   Eingeklappte Kindkarte (Nutzer 06.11.: "Kinder einklappbar")
+   ------------------------------------------------------------
+   Der Kopf traegt Name, Restzeit und Status-Chip - eingeklappt wird
+   nie alles versteckt. Der Body ist die einzige Flaeche, die der
+   Klapp-Zustand betrifft; display:none an der Klasse (kein
+   hidden-Attribut), damit der Kopf der einzige Besitzer des Zustands
+   bleibt und kein Kaskaden-Guard ruehren muss.
+   ============================================================ */
+
+.mt-child-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.mt-child-card--collapsed .mt-child-card__body {
+  display: none;
+}
+
+.mt-card__tail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Restzeit im Kopf: sie zeigt nur im eingeklappten Zustand - offen traegt
+   sie schon die Hero-Zahl, doppelte Zahlen waeren Rauschen. */
+.mt-child-card__rest {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.mt-child-card:not(.mt-child-card--collapsed) .mt-child-card__rest {
+  display: none;
+}
+
+/* Der Klapp-Knopf: die Chevron nennt den Zustand (abwaerts offen, nach
+   rechts eingeklappt); die Drehung laeuft auf der geteilten Kurve. */
+.mt-child-card__toggle svg {
+  transition: transform var(--duration-md) var(--ease-out);
+}
+
+.mt-child-card--collapsed .mt-child-card__toggle svg {
+  transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-child-card__toggle svg {
+    transition: none;
+  }
+}
+

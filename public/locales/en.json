@@ -7133,6 +7133,8 @@
         "barNoQuota": "No quota set for today yet.",
         "detailTitle": "Where the minutes come from",
         "detailHint": "All of it adds up to your usage. Exceptions are apps that cost nothing (e.g. school apps); duty time is school time and never counts against you.",
+        "cardHide": "Hide details",
+        "cardShow": "Show details",
         "exchangeHintChild": "You have {{points}} points. {{points}} points bring {{minutes}} extra minutes.",
         "exchangeCtaChild": "Buy time",
         "setupStep1": "Turn screen time on",

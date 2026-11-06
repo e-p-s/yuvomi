@@ -824,6 +824,25 @@ function todayCards() {
   return [];
 }
 
+/* Der Ein-/Ausklapp-Zustand einer Kindkarte (Nutzer 06.11.: "Kinder einklappbar").
+ * Pro Kind in localStorage unter 'yuvomi-media-time-card-collapsed-<id>': der
+ * Klick gilt dem Kind, nicht der Ansicht, und ueberlebt Neuladen und Reiter.
+ * Default eingeklappt, sobald der Haushalt mehr als ein Kind traegt - der
+ * Parent sieht dann beide Restzeiten ohne zu scrollen, weil der Kopf der Karte
+ * Name, Restzeit und Status traegt. Bei einem einzigen Kind steht nichts im
+ * Weg, also bleibt die Karte offen (der Aufrufer reicht multiCard nur bei
+ * mehr als einer Karte durch). */
+const CARD_COLLAPSE_PREFIX = 'yuvomi-media-time-card-collapsed-';
+
+function cardCollapsed(uid) {
+  try {
+    const raw = localStorage.getItem(CARD_COLLAPSE_PREFIX + uid);
+    if (raw === '1') return true;
+    if (raw === '0') return false;
+  } catch { /* privater Modus: es gilt allein der Default */ }
+  return true;
+}
+
 /* Icon nach Geraeteart (media_time_devices.platform); unbekannt bleibt das
  * allgemeine Geraetesignal. */
 function platformIcon(platform) {
@@ -898,8 +917,11 @@ function deviceUsageHtml(card) {
 
 /* Die eine Kindkarte: Restzeit als Hero, Klartext-Satz, Balken (nutzt/Total),
  * Budget-Chip (Manager aendert ihn hier), Geraetezone, Check-in-Block, und das
- * Fachwort (Tracker, Family-Link) eingeklappt unter dem gewohnten Satz. */
-function childCardHtml(card) {
+ * Fachwort (Tracker, Family-Link) eingeklappt unter dem gewohnten Satz.
+ * Bei mehr als einer Karte (multiCard) ist der Body zu- und aufklappbar; der
+ * Kopf traegt dann stets Name, Restzeit und Status-Chip - eingeklappt wird
+ * nie alles versteckt. */
+function childCardHtml(card, multiCard = false) {
   const data = card.data;
   const uid = card.userId ?? 'self';
   const titleId = `mt-child-${uid}-title`;
@@ -999,9 +1021,31 @@ function childCardHtml(card) {
         <i data-lucide="coins" aria-hidden="true"></i>${esc(state.canManage ? t('mediaTime.exchangeCta') : t('mediaTime.exchangeCtaChild'))}
       </button></div>
     </div>` : '';
+  /* Der aufklappbare Kopf (multiCard): Name + Restzeit + Status bleiben stehen,
+   * der Knopf (button, aria-expanded) ist die einzige Bedienung. Die Restzeit
+   * im Kopf zeigt die CSS-Regel nur im eingeklappten Zustand - offen traegt
+   * sie schon die Hero-Zahl. */
+  const collapsed = multiCard && cardCollapsed(uid);
+  const bodyId = `mt-child-${uid}-body`;
+  const toggleBtn = multiCard ? `
+            <button class="btn btn--ghost btn--sm mt-child-card__toggle" type="button"
+                    data-action="mt-toggle-card" data-card-uid="${esc(String(uid))}"
+                    aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="${bodyId}"
+                    aria-label="${esc(t(collapsed ? 'mediaTime.cardShow' : 'mediaTime.cardHide'))}">
+              <i data-lucide="chevron-down" class="icon-sm" aria-hidden="true"></i>
+            </button>` : '';
+  const headOpen = multiCard ? `
+        <div class="mt-card__head">
+          <h2 class="mt-card__title" id="${titleId}">${card.displayName ? esc(card.displayName) : esc(t('mediaTime.todayTitleChild'))}</h2>
+          <span class="mt-card__tail">
+            <span class="mt-child-card__rest">${esc(minutesLabel(remaining))}</span>
+            <span class="${chip.cls}">${esc(chip.label)}</span>${toggleBtn}
+          </span>
+        </div>` : head;
   return `
-    <section class="mt-section mt-card mt-child-card" aria-labelledby="${titleId}">
-      ${head}
+    <section class="mt-section mt-card mt-child-card${multiCard && collapsed ? ' mt-child-card--collapsed' : ''}" aria-labelledby="${titleId}">
+      ${headOpen}
+      <div class="mt-child-card__body" id="${bodyId}">
       <p class="mt-hero" aria-hidden="true"><span class="mt-hero__num">${esc(fmtNum(remaining))}</span><span class="mt-hero__unit">${esc(t('mediaTime.heroFreeUnit'))}</span></p>
       <p class="mt-hero__sentence mt-hero__sentence--${barState}">${esc(sentence)}</p>
       <div class="mt-progress__track" role="progressbar"
@@ -1029,6 +1073,7 @@ function childCardHtml(card) {
         </div>
       </details>
       ${notesBlock}
+      </div>
     </section>`;
 }
 
@@ -1094,7 +1139,10 @@ function bookingRowHtml(s) {
 
 function renderToday(el) {
   const cards = todayCards();
-  const cardBlocks = cards.map(childCardHtml).join('');
+  // Ab zwei Karten traegt jede einen Klapp-Knopf (siehe cardCollapsed): der
+  // Parent sieht alle Kopfe auf einen Blick und oeffnet, was ihn interessiert.
+  const multiCard = cards.length > 1;
+  const cardBlocks = cards.map((card) => childCardHtml(card, multiCard)).join('');
   const emptyBlock = cards.length ? '' : emptyStateHTML({
     icon: 'hourglass',
     title: t('mediaTime.emptyTodayTitle'),
@@ -1107,6 +1155,19 @@ function renderToday(el) {
       ${setupStepsHtml()}
     </div>`);
   installPopoverMenus(el);
+  el.querySelectorAll('[data-action="mt-toggle-card"]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.mt-child-card');
+      const body = card?.querySelector('.mt-child-card__body');
+      if (!card || !body) return;
+      const collapse = btn.getAttribute('aria-expanded') !== 'false';
+      card.classList.toggle('mt-child-card--collapsed', collapse);
+      btn.setAttribute('aria-expanded', String(!collapse));
+      btn.setAttribute('aria-label', t(collapse ? 'mediaTime.cardShow' : 'mediaTime.cardHide'));
+      try {
+        localStorage.setItem(CARD_COLLAPSE_PREFIX + btn.dataset.cardUid, collapse ? '1' : '0');
+      } catch { /* privater Modus: der Zustand gilt nur fuer diese Ansicht */ }
+    }));
   el.querySelector('[data-action="mt-booking-add"]')
     ?.addEventListener('click', () => openBookingModal());
   el.querySelector('.mt-booking-add')
