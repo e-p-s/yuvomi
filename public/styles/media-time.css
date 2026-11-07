@@ -197,6 +197,19 @@
   color: var(--color-text-secondary);
 }
 
+/* Countdown-Ziffern (Nutzer 07.11.): tabulare Ziffern gegen Springen, denn die
+ * Zahl veraendert sich im Sekundentakt. Die Farbe traegt weiterhin der
+ * Status-Chip - die Zahl selbst bleibt zurueckhaltend (Treuhaender, nicht
+ * Sperre): live hell, stehend gedimmt, nie rot. */
+.mt-countdown {
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+.mt-child-card__rest .mt-countdown--live {
+  color: var(--color-text-primary);
+}
+
 .mt-hero__sentence {
   margin: 0 0 var(--space-3);
   font-size: var(--text-sm);

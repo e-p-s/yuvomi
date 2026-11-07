@@ -160,6 +160,25 @@ test('PUT /settings - Schalter speichert, Nicht-Boolean 400', async () => {
   assert.equal(bad.status, 400);
 });
 
+test('GET/PUT /settings - media_time_countdown_mode: Default beides, drei Werte, Unbekanntes 400, Kind 403', async () => {
+  const fresh = await call('GET', '/settings');
+  assert.equal(fresh.body.data.media_time_countdown_mode, 'beides', 'ohne Konfig-Zeile gilt der Default');
+  for (const mode of ['ticker', 'balken', 'beides']) {
+    const ok = await call('PUT', '/settings', { body: { media_time_countdown_mode: mode } });
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.data.media_time_countdown_mode, mode, 'die PUT-Antwort zeigt gleich den neuen Stand');
+    const read = await call('GET', '/settings');
+    assert.equal(read.body.data.media_time_countdown_mode, mode);
+  }
+  const bad = await call('PUT', '/settings', { body: { media_time_countdown_mode: 'digital' } });
+  assert.equal(bad.status, 400);
+  assert.equal(bad.body.reason, 'media_time_bad_request');
+  const after = await call('GET', '/settings');
+  assert.equal(after.body.data.media_time_countdown_mode, 'beides', 'ein abgelehnter Schreibsatz aendert nichts');
+  const forbidden = await call('PUT', '/settings', { actor: kidB, body: { media_time_countdown_mode: 'ticker' } });
+  assert.equal(forbidden.status, 403, 'die Anzeige stellt das Elternteil ein');
+});
+
 test('GET /today - familylink-Block ohne Zuordnung: mapped false, keine Null-Zeit', async () => {
   const dayKey = svc.mediaTimeDayKey(db);
   const res = await call('GET', `/today?user_id=${kidB.id}`, { actor: DAD });

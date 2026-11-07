@@ -9214,7 +9214,7 @@ textarea::placeholder {
 :is(.modal-panel__body, .form-advanced__body, .form-stack, .form-pair, .modal-grid,
     .rrule-row, .reminder-fields, .reminder-section,
     .subscription-form__identity-fields, .subscription-form__billing-grid,
-    .shopping-import-meals-form) > .form-group,
+    .shopping-import-meals-form, .mt-section) > .form-group,
 :is(.modal-panel__body, .form-advanced__body, .form-stack, .birthday-modal__identity) > * > .form-group:last-child {
   margin-bottom: 0;
 }

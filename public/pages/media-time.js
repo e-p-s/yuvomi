@@ -55,6 +55,27 @@ const PURCHASE_MAX = 100;
 /* Das Inventar zeigt hoechstens diese Zahl Pakete; die Route liefert mehr. */
 const INVENTORY_MAX_ROWS = 50;
 
+/* Alters-Vorlagen fuer das Tagesbudget (Grundstein, Datensatz folgt): `id` ist
+ * der stabile Schluessel, `minutes` der Basiswert, der Label-Schluessel ist
+ * mediaTime.ageTemplate.<id>. 'standard' traegt den Basiswert 90 Minuten und
+ * ist Vorlage wie Default. Wenn der echte Katalog kommt, werden nur Zahlen
+ * und Namen gefuellt - die Dialogseite bleibt, wie sie ist. */
+/* Alters-Vorlagen fuer den Budget-Dialog. Minutenwerte: BARMER-Redaktion nach
+ * BZgA-Richtwerten (10-12: 60, 13-14: 90, ab 15: 120; abgerufen 2026-11-06,
+ * barmer.de/gesundheit-verstehen/sport/e-sport/medienzeit-fuer-kinder-wie-viel-
+ * gaming-ist-erlaubt--1135190); die untersten Stufen nach den etablierten
+ * schau-hin!/BZgA-Richtwerten (3-6: 20, 6-9: 30). Es sind empfohlene
+ * Obergrenzen, keine Regeln - deshalb Vorlagen, die man antippen kann, statt
+ * gesetzter Werte. Der Standard bleibt der Familienwert: 90 Minuten. */
+const AGE_TEMPLATES = [
+  { id: 'standard', minutes: 90 },
+  { id: 'weiter15', minutes: 120 },
+  { id: 'weiter13', minutes: 90 },
+  { id: 'weiter10', minutes: 60 },
+  { id: 'grundschule', minutes: 30 },
+  { id: 'vorschule', minutes: 20 },
+];
+
 let state = {
   tab: 'today',
   /** Aktives Kind (Picker); null = die eigene Person (kein Picker). */
@@ -64,6 +85,9 @@ let state = {
   /** false = keine Eltern-/Adminrechte; bis der 403 antwortet, gilt true. */
   canManage: true,
   today: null,
+  /* Zeitpunkt des /today-Abzugs im Einzelkarten-Modus (ms) - der Anker des
+   * Countdowns; die Familienkarten tragen ihren Anker pro Karte (fetchedAt). */
+  todayFetchedAt: null,
   /* Familienstand des 'heute'-Reiters (Redesign 06.11.): eine Karte je Kind.
    * Eintrag: { userId, displayName, data (/today), checkins, dayNotes }.
    * null = Einzelkarten-Modus (Kind ohne Managerrechte, oder Haushalt ohne
@@ -234,7 +258,9 @@ async function loadChildCard(userId) {
       .then((r) => r.data?.items ?? [])
       .catch((err) => ((err?.status ?? err?.response?.status) === 403 ? [] : null)),
   ]);
-  return { userId, displayName: childNameFor(userId), data: today, checkins, dayNotes };
+  // Der Abzug ist der Anker des Countdowns (siehe countdownHtml): die Minuten
+  // des Servers gelten ab HIER, nicht ab der Bildschirmausgabe.
+  return { userId, displayName: childNameFor(userId), data: today, checkins, dayNotes, fetchedAt: Date.now() };
 }
 
 /* Die Buchungen des Tages. Die Route antwortet pro Kind (GET /sessions mit
@@ -282,6 +308,7 @@ async function loadToday() {
         loadDayNotes(),
       ]);
       state.today = today.data ?? null;
+      state.todayFetchedAt = Date.now();
     })());
   }
   await Promise.all(tasks);
@@ -782,6 +809,132 @@ function startTicker() {
   }, 30_000);
 }
 
+/* ------------------------------------------------------------------ */
+/* Countdown der Restzeit (Nutzer 07.11.: "Medienzeit als Countdown")   */
+/* ------------------------------------------------------------------ */
+
+/* DIE REGEL, die ueber der Zahl steht: Minuten sind die Wahrheit des Servers,
+ * Sekunden nur ihre Lebendigkeit. Der Anker ist der Abzug des /today
+ * (fetchedAt); die Anzeige rechnet remaining_min * 60 - (now - fetchedAt).
+ * Sie TICKT nur, solange der Tag wirklich verbraucht wird: ein offenes
+ * Check-in, oder ein Geraet, das der Server als aktiv meldet (der Kontract
+ * kennt dafuer noch kein festes Feld - geprueft werden die Kandidaten, ein
+ * fehlendes gilt als inaktiv, damit die Seite nie einen Takt erfindet).
+ * Sonst steht die Zahl still (MM:SS mit :00): ein Countdown, der im
+ * Stillstand runterlaeuft, luegt, und die Treuhaender-Regel verbietet die
+ * Luege wie die Panik. Deshalb auch kein Alarm und kein Rot an der Zahl:
+ * die Farb-Botschaft traegt der Status-Chip, die Zahl endet ruhig bei 00:00. */
+
+/** Sekundenstand eines Countdowns: live = gegen den Anker gerechnet, sonst stehend. */
+function countdownSec(el) {
+  const base = Number(el.dataset.countdownSec);
+  if (!Number.isFinite(base)) return null;
+  if (el.dataset.countdownLive !== '1') return Math.max(0, base);
+  const at = Number(el.dataset.countdownAt) || Date.now();
+  return Math.max(0, base - (Date.now() - at) / 1000);
+}
+
+/** H:MM:SS ab einer Stunde, sonst MM:SS - die Kuerze, die trotzdem atmet. */
+function countdownFormat(totalSec) {
+  const s = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${m}:${sec}` : `${m}:${sec}`;
+}
+
+/* Ver-braucht der Tag gerade Zeit? Das offene Check-in ist das sichere Signal
+ * (dieselbe Quelle wie der Laufbalken-Ticker); die Geraetezeilen des /today
+ * sind der Kandidat, sobald der Server einen Aktivstatus liefert. */
+function cardIsLive(card) {
+  const data = card.data;
+  if (!data?.enabled || data.quiet_active) return false;
+  if (Math.max(0, Number(data.remaining_min || 0)) <= 0) return false;
+  const open = (Array.isArray(card.checkins) ? card.checkins : []).some((c) => !c.ended_at);
+  if (open) return true;
+  return (Array.isArray(data.devices) ? data.devices : [])
+    .some((d) => d.active === true || d.running === true || d.status === 'active');
+}
+
+/* Die Ziffern des Countdowns als Attributpaar: die gleiche Zahl steht beim
+ * Draw richtig im Text, der Takt (pumpCountdowns) fuehrt sie nur weiter. */
+function countdownHtml(remainingMin, card, extraClass = '') {
+  const live = cardIsLive(card);
+  const face = countdownFormat(Math.max(0, remainingMin) * 60);
+  const attrs = `data-countdown data-countdown-sec="${Math.max(0, remainingMin) * 60}"`
+    + ` data-countdown-at="${card.fetchedAt || Date.now()}" data-countdown-live="${live ? '1' : '0'}"`;
+  return `<span class="mt-countdown${live ? ' mt-countdown--live' : ''}${extraClass ? ` ${extraClass}` : ''}" ${attrs} aria-hidden="true">${face}</span>`;
+}
+
+/* EIN Takt fuer die ganze Seite (dasselbe Muster wie startTicker): der Timer
+ * raeumt sich selbst ein, wenn die Seite nicht mehr steht oder der Reiter
+ * wechselt, und er steht still, waehrend die Karte verborgen ist - die
+ * Rechenarbeit holt er sich ueber den Anker zurueck, nicht ueber Nachtickerei. */
+let _countdownTimer = null;
+
+function stopCountdown() {
+  if (_countdownTimer) {
+    clearInterval(_countdownTimer);
+    _countdownTimer = null;
+  }
+}
+
+/* Der Anzeigemodus des Countdowns (Einstellungen, Regeln-Anzeigegruppe):
+ * 'ticker' = nur die Ziffern, 'balken' = nur der Balken, 'beides' = Default.
+ * Gelesen aus der bestehenden settings-Antwort (GET /media-time/settings
+ * beantwortet sie jedem Angemeldeten); fehlt sie, gilt der Server-Default. */
+function countdownMode() {
+  const m = state.settings?.media_time_countdown_mode;
+  return (m === 'ticker' || m === 'balken') ? m : 'beides';
+}
+
+/* Der Takt fuer Ziffern UND Balken: beide rechnen gegen denselben Anker
+ * (data-countdown-sec/-at), der Balken sinkt anteilig zurueck. Stehende
+ * Karten werden nie angefasst - dieselbe Regel wie beim Ticker. */
+function pumpCountdowns() {
+  if (!_container?.isConnected || !content() || state.tab !== 'today') {
+    stopCountdown();
+    return;
+  }
+  const faces = _container.querySelectorAll('[data-countdown],[data-countdown-bar]');
+  if (!faces.length) {
+    stopCountdown();
+    return;
+  }
+  faces.forEach((el) => {
+    if (el.dataset.countdownLive !== '1') return; // stehende Zahlen bleiben, wie sie sind
+    const sec = countdownSec(el);
+    if (sec == null) return;
+    if (el.hasAttribute('data-countdown-bar')) {
+      const quotaMin = Number(el.dataset.countdownQuota) || 0;
+      if (quotaMin > 0) {
+        el.style.setProperty('--mt-progress', String(Math.max(0, Math.min(1, sec / (quotaMin * 60)))));
+      }
+    } else {
+      el.textContent = countdownFormat(sec);
+    }
+  });
+}
+
+function startCountdown() {
+  if (_countdownTimer || document.hidden) return;
+  if (!_container?.isConnected || state.tab !== 'today') return;
+  if (!_container.querySelector('[data-countdown],[data-countdown-bar]')) return;
+  pumpCountdowns();
+  if (_countdownTimer) return; // pumpCountdowns hat bei Bedarf selbst geraeumt
+  _countdownTimer = setInterval(pumpCountdowns, 1000);
+}
+
+/* Verborgenheit ist kein Stillstand der Zeit, nur des Takts: beim
+ * Zurueckkehren rechnet der naechste Takt gegen den Anker nach. */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    stopCountdown();
+  } else if (_container?.isConnected && state.tab === 'today') {
+    startCountdown();
+  }
+});
+
 /* Family-Link-Istzeit auf der Tageskarte (Spec 287). Ohne Zuordnung steht
  * hier nichts; ohne Collector-Sitzion steht der Hinweis, NIE eine Null.
  * Die Minuten zaehlen bereits im Balken (dayUsage-Ersatz) - dieser Block ist
@@ -819,6 +972,7 @@ function todayCards() {
       data: state.today,
       checkins: state.checkins,
       dayNotes: state.dayNotes,
+      fetchedAt: state.todayFetchedAt,
     }];
   }
   return [];
@@ -941,12 +1095,23 @@ function childCardHtml(card, multiCard = false) {
   const quota = Number(data.quota_min || 0);
   const remaining = Math.max(0, Number(data.remaining_min || 0));
   const used = Math.max(0, quota - remaining);
-  /* Der Balken fuellt sich mit der Nutzung (nutzt/Total). Die Toende folgen dem
-   * Chip-Muster: ok = Akzent, nearing = Warnung, exceeded = Alarm. */
+  /* Der Balken zaehlt rueckwaerts (Nutzer 07.11.): der gefuellte Anteil IST die
+   * Restzeit - er sinkt mit der Nutzung und, wenn ein Geraet laeuft, mit dem
+   * Takt (dieselbe Tick-Regel wie der Zähler: stillstehende Karten stillstehen).
+   * Der Anzeigemodus entscheidet, was davon sichtbar ist: Ziffern, Balken oder
+   * beides (Default); die Zahl im Kopf folgt dem Ziffern-Modus. */
+  const mode = countdownMode();
+  const showFace = mode !== 'balken';
+  const showBar = mode !== 'ticker';
+  const live = cardIsLive(card);
+  /* Die Toende folgen dem Chip-Muster: ok = Akzent, nearing = Warnung, exceeded = Alarm. */
   const barState = data.quiet_active ? 'quiet'
     : (data.state === 'exceeded' ? 'exceeded'
       : (data.state === 'nearing' ? 'nearing' : (quota > 0 ? 'ok' : 'none')));
-  const ratio = quota > 0 ? Math.max(0, Math.min(1, used / quota)) : 0;
+  const ratio = quota > 0 ? Math.max(0, Math.min(1, remaining / quota)) : 0;
+  const barTick = (showBar && live && quota > 0)
+    ? ` data-countdown-bar data-countdown-sec="${remaining * 60}" data-countdown-at="${card.fetchedAt || Date.now()}" data-countdown-live="1" data-countdown-quota="${quota}"`
+    : '';
   const progressLabel = t('mediaTime.remainingOfQuota', {
     remaining: fmtNum(remaining),
     quota: fmtNum(quota),
@@ -1038,7 +1203,9 @@ function childCardHtml(card, multiCard = false) {
         <div class="mt-card__head">
           <h2 class="mt-card__title" id="${titleId}">${card.displayName ? esc(card.displayName) : esc(t('mediaTime.todayTitleChild'))}</h2>
           <span class="mt-card__tail">
-            <span class="mt-child-card__rest">${esc(minutesLabel(remaining))}</span>
+            <span class="mt-child-card__rest">${showFace ? `
+              <span class="sr-only">${esc(t('mediaTime.remainingOfQuota', { remaining: fmtNum(remaining), quota: fmtNum(quota) }))}</span>${countdownHtml(remaining, card)}` : ''}
+            </span>
             <span class="${chip.cls}">${esc(chip.label)}</span>${toggleBtn}
           </span>
         </div>` : head;
@@ -1046,13 +1213,13 @@ function childCardHtml(card, multiCard = false) {
     <section class="mt-section mt-card mt-child-card${multiCard && collapsed ? ' mt-child-card--collapsed' : ''}" aria-labelledby="${titleId}">
       ${headOpen}
       <div class="mt-child-card__body" id="${bodyId}">
-      <p class="mt-hero" aria-hidden="true"><span class="mt-hero__num">${esc(fmtNum(remaining))}</span><span class="mt-hero__unit">${esc(t('mediaTime.heroFreeUnit'))}</span></p>
+      ${showFace ? `<p class="mt-hero" aria-hidden="true"><span class="mt-hero__num">${countdownHtml(remaining, card)}</span><span class="mt-hero__unit">${esc(t('mediaTime.heroCountdownUnit'))}</span></p>` : ''}
       <p class="mt-hero__sentence mt-hero__sentence--${barState}">${esc(sentence)}</p>
-      <div class="mt-progress__track" role="progressbar"
+      ${showBar ? `<div class="mt-progress__track" role="progressbar"
            aria-label="${esc(t('mediaTime.progressLabel'))}"
-           aria-valuenow="${fmtNum(used)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
-           aria-valuetext="${esc(progressLabel)}"><div class="mt-progress__fill mt-progress__fill--${barState}" style="--mt-progress:${ratio}"></div></div>
-      <p class="mt-progress__label" aria-hidden="true">${esc(progressLabel)}</p>
+           aria-valuenow="${fmtNum(remaining)}" aria-valuemin="0" aria-valuemax="${fmtNum(quota)}"
+           aria-valuetext="${esc(progressLabel)}"><div class="mt-progress__fill mt-progress__fill--${barState}" style="--mt-progress:${ratio}"${barTick}></div></div>
+      <p class="mt-progress__label" aria-hidden="true">${esc(progressLabel)}</p>` : ''}
       <p class="mt-budget-line">${budgetChip}${hardCap}</p>
       ${quotaLine}
       ${deviceUsageHtml(card)}
@@ -1192,6 +1359,8 @@ function renderToday(el) {
   el.querySelectorAll('[data-booking-delete]').forEach((btn) =>
     btn.addEventListener('click', () => deleteBooking(
       (state.sessions || []).find((s) => s.id === Number(btn.dataset.bookingDelete)))));
+  // Der Takt lebt, solange diese Ansicht steht (siehe pumpCountdowns).
+  startCountdown();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1418,6 +1587,14 @@ function openBudgetModal(childId) {
     content: `
       <form id="mt-budget-form" novalidate>
         <div class="form-group">
+          <span class="label">${esc(t('mediaTime.budgetTemplatesLabel'))}</span>
+          <div class="mt-row-actions">
+            ${AGE_TEMPLATES.map((tpl) => `<button class="btn btn--secondary btn--sm" type="button" data-budget-template="${Number(tpl.minutes)}">
+              <i data-lucide="hourglass" aria-hidden="true"></i>${esc(t(`mediaTime.ageTemplate.${tpl.id}`))} · ${esc(minutesLabel(tpl.minutes))}
+            </button>`).join('')}
+          </div>
+        </div>
+        <div class="form-group">
           <span class="label">${esc(t('mediaTime.budgetPresetsLabel'))}</span>
           <div class="mt-row-actions">
             ${presets.map((p) => `<button class="btn btn--secondary btn--sm" type="button" data-budget-preset="${p}">${esc(minutesLabel(p))}</button>`).join('')}
@@ -1469,6 +1646,13 @@ function openBudgetModal(childId) {
       btn.addEventListener('click', () => {
         const input = panel.querySelector('#mt-budget-minutes');
         if (input) input.value = btn.dataset.budgetPreset;
+      });
+    });
+    // Die Vorlage fuellt nur die Zahl - bestaetigt wird sie wie jede freie Eingabe.
+    panel?.querySelectorAll('[data-budget-template]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = panel.querySelector('#mt-budget-minutes');
+        if (input) input.value = btn.dataset.budgetTemplate;
       });
     });
   }, 0);
@@ -2022,6 +2206,18 @@ function renderRules(el) {
         ${groupHeading('mt-fl-title', 5, 'mediaTime.groupGoogle')}
         <p class="mt-section__note">${esc(t('mediaTime.flIntro'))}</p>
         <div id="mt-fl-host"></div>
+      </section>
+      <section class="mt-section" aria-labelledby="mt-display-title">
+        ${groupHeading('mt-display-title', 6, 'mediaTime.groupDisplay')}
+        <div class="form-group mt-hardcap-row">
+          <label class="label" for="mt-countdown-mode">${esc(t('mediaTime.countdownModeLabel'))}</label>
+          <select class="input" id="mt-countdown-mode">
+            <option value="beides">${esc(t('mediaTime.countdownModeBoth'))}</option>
+            <option value="ticker">${esc(t('mediaTime.countdownModeTicker'))}</option>
+            <option value="balken">${esc(t('mediaTime.countdownModeBar'))}</option>
+          </select>
+          <p class="form-hint">${esc(t('mediaTime.countdownModeHint'))}</p>
+        </div>
       </section>` : ''}
     </div>`);
   wireRules(el);
@@ -2089,6 +2285,33 @@ function wireRules(el) {
   /* (d) Google Family Link (Eltern): Schalter, Status, Abruf, Zuordnung. */
   const flHost = el.querySelector('#mt-fl-host');
   if (flHost) renderFlHost(flHost);
+
+  /* (e) Countdown-Anzeige (Eltern, PUT ist requireManager): Auswahl speichert
+   * sofort wie beim enforcement-Feld; die Antwort haelt den Nachweis, ein
+   * Fehler holt die Auswahl zurueck. Die Heute-Seite liest denselben Schluessel
+   * aus ihrer settings-Antwort - kein Neuladen noetig, der Reiterwechsel wirkt. */
+  const modeSel = el.querySelector('#mt-countdown-mode');
+  if (modeSel) {
+    const current = () => {
+      const m = state.settings?.media_time_countdown_mode;
+      return (m === 'ticker' || m === 'balken') ? m : 'beides';
+    };
+    modeSel.value = current();
+    modeSel.addEventListener('change', async (ev) => {
+      const next = ev.target.value;
+      try {
+        const res = await api.put('/media-time/settings', { media_time_countdown_mode: next });
+        state.settings = {
+          ...state.settings,
+          media_time_countdown_mode: res?.data?.media_time_countdown_mode ?? next,
+        };
+        toast(t('mediaTime.countdownModeSaved'));
+      } catch (err) {
+        ev.target.value = current();
+        toast(mediaTimeErrorSentence(err), 'danger');
+      }
+    });
+  }
 }
 
 function flStatusText(s) {

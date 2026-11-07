@@ -36,6 +36,7 @@ import {
   parseExchangeRate,
   mediaTimeHardCap,
   mediaTimeEnforcement,
+  mediaTimeCountdownMode,
   hashDeviceToken,
   deviceByTokenHash,
   activeExceptionRules,
@@ -883,6 +884,7 @@ router.get('/settings', (req, res) => {
         exchange: rate ? { points: rate.points, minutes: rate.minutes } : null,
         hard_cap: mediaTimeHardCap(d),
         enforcement: mediaTimeEnforcement(d),
+        media_time_countdown_mode: mediaTimeCountdownMode(d),
         familylink_ingest_enabled: d.prepare(
           "SELECT value FROM sync_config WHERE key = 'familylink_ingest_enabled'"
         ).get()?.value === '1',
@@ -1263,7 +1265,7 @@ router.put('/settings', requireManager, (req, res) => {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value,
         updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
     `).run(key, value);
-    const { exchange, hard_cap, enforcement, familylink_ingest_enabled } = req.body ?? {};
+    const { exchange, hard_cap, enforcement, familylink_ingest_enabled, media_time_countdown_mode } = req.body ?? {};
     if (familylink_ingest_enabled !== undefined) {
       if (familylink_ingest_enabled !== true && familylink_ingest_enabled !== false) {
         return res.status(400).json({
@@ -1319,6 +1321,18 @@ router.put('/settings', requireManager, (req, res) => {
       }
       cfgSet('media_time_enforcement', enforcement);
     }
+    // Anzeigemodus des Countdowns (reine Anzeige, keine Tagesregel): drei
+    // benannte Werte, alles andere ist ein Bad Request - nie ein stiller Default.
+    if (media_time_countdown_mode !== undefined) {
+      if (media_time_countdown_mode !== 'ticker' && media_time_countdown_mode !== 'balken'
+        && media_time_countdown_mode !== 'beides') {
+        return res.status(400).json({
+          error: 'media_time_countdown_mode must be ticker, balken or beides',
+          code: 400, reason: 'media_time_bad_request',
+        });
+      }
+      cfgSet('media_time_countdown_mode', media_time_countdown_mode);
+    }
     const rate = mediaTimeExchangeRate(d);
     return res.json({
       data: {
@@ -1326,6 +1340,7 @@ router.put('/settings', requireManager, (req, res) => {
         exchange: rate ? { points: rate.points, minutes: rate.minutes } : null,
         hard_cap: mediaTimeHardCap(d),
         enforcement: mediaTimeEnforcement(d),
+        media_time_countdown_mode: mediaTimeCountdownMode(d),
       },
     });
   } catch (err) {

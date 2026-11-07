@@ -64,6 +64,17 @@ export const MEDIA_TIME_HARD_CAP_KEY = 'media_time_hard_cap';
 // (Nutzer 04.11.: "sind die 30min weg soll es nicht weiter gehen duerfen,
 // beim PC koennte man ein logout initieren").
 export const MEDIA_TIME_ENFORCEMENT_KEY = 'media_time_enforcement';
+// Anzeigemodus des Restzeit-Countdowns auf der Heute-Seite (Nutzer 07.11.):
+// 'ticker' (nur Ziffern), 'balken' (nur rueckwaerts fuellender Balken),
+// 'beides' (Default) - reine Anzeige, nie eine Regel des Tages.
+export const MEDIA_TIME_COUNTDOWN_MODE_KEY = 'media_time_countdown_mode';
+const COUNTDOWN_MODES = new Set(['ticker', 'balken', 'beides']);
+
+/** Der Anzeigemodus des Countdowns: 'ticker', 'balken' oder 'beides' (Default). */
+export function mediaTimeCountdownMode(d) {
+  const row = d.prepare('SELECT value FROM sync_config WHERE key = ?').get(MEDIA_TIME_COUNTDOWN_MODE_KEY);
+  return row && COUNTDOWN_MODES.has(row.value) ? row.value : 'beides';
+}
 
 /** Der Haushalts-Enforcement-Modus: 'count' oder 'lock'. */
 export function mediaTimeEnforcement(d) {
