@@ -591,10 +591,107 @@ def _switch_to_prompt(ws, masks=()):
     return "none"
 
 
+def _load_media():
+    """familyhub_media.py aus demselben Verzeichnis (Template-Pfade/Parser)."""
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.abspath(cap.__file__)), "familyhub_media.py")
+    spec = importlib.util.spec_from_file_location("famhub_media", path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _capture_usage_async():
+    threading.Thread(target=_capture_usage, daemon=True).start()
+
+
+def _capture_usage():
+    """Nach Login-Erfolg: die exakten appsAndUsage-URLs pro Kind abhoeren (A2).
+    Googles API antwortet nur auf URLs, die ein echter Seitenbesuch erzeugt hat
+    (Umformung = 404, verifiziert 07.11.) — die Vorlage muss im eingelogten
+    Browser entstehen, genau jetzt. Laeuft im Hintergrund und ist still:
+    ohne Fang gilt weiter der Tageswerte-Pfad."""
+    try:
+        med = _load_media()
+        t = cap.page_target()
+        if t is None:
+            return
+        ws = cap.WS(t["webSocketDebuggerUrl"])
+        ws.call("Page.enable")
+        sid = {c["name"]: c["value"] for c in cap.get_all_cookies(ws)
+               if c["domain"] == ".google.com"}.get("SAPISID")
+        if not sid:
+            _dbg("Usage-Fang: kein SAPISID — uebersprungen")
+            return
+        mtpl = json.load(open(med.tpl_path("members")))
+        kids = [k for k in med.members(mtpl, sid) if k["supervised"]]
+        for k in kids:
+            uid = k["userId"]
+            if os.path.exists(med.tpl_path("appsandusage_" + uid)):
+                _dbg(f"Usage-Fang {uid}: Vorlage vorhanden")
+                continue
+            got = _capture_usage_uid(ws, med, uid)
+            _dbg(f"Usage-Fang {uid}: {'ok' if got else 'leer'}")
+    except Exception as e:
+        _dbg(f"Usage-Fang fehlgeschlagen: {type(e).__name__}")
+
+
+def _capture_usage_uid(ws, med, uid):
+    """Member-Seite ansteuern (und notfalls im Menue 'Screen time' klicken)
+    und die usage-URL fangen; Rueckgabe: URL oder None."""
+    ws.call("Fetch.enable", {"patterns": [
+        {"urlPattern": "*kidsmanagement*", "requestStage": "Request"}]})
+    try:
+        ws.call("Page.navigate", {"url": f"https://familylink.google.com/member/{uid}/screenTime"})
+        got = _drain_usage(ws, med, uid, 20)
+        if got is None:
+            c = cap.ev(ws, JS_OPTION_CENTER % json.dumps("screen ?time"))
+            if isinstance(c, dict) and "x" in c:
+                _click_xy(ws, c["x"], c["y"])
+                got = _drain_usage(ws, med, uid, 20)
+        return got
+    finally:
+        try:
+            ws.call("Fetch.disable")
+        except Exception:
+            pass
+
+
+def _drain_usage(ws, med, uid, seconds):
+    """Faengt den kidsmanagement-Request mit 'usage' im Pfad; speichert die
+    Vorlage pro Kind (+ generisch, letztes Kind gewinnt — media.py nutzt sie)."""
+    t0 = time.time()
+    ws.s.settimeout(seconds)
+    while time.time() - t0 < seconds:
+        try:
+            m = ws._recv()
+        except Exception:
+            return None
+        if m.get("method") != "Fetch.requestPaused":
+            continue
+        p = m["params"]
+        req = p["request"]
+        ws.call("Fetch.continueRequest", {"requestId": p["requestId"]})
+        u = req["url"]
+        pfad = u.split("kidsmanagement")[-1].split("?")[0].lower()
+        if "usage" in pfad and req.get("headers", {}).get("Cookie"):
+            tpl = {"url": u, "headers": req["headers"], "uid": uid,
+                   "saved": time.strftime("%Y-%m-%dT%H:%M:%S")}
+            for name in (f"appsandusage_{uid}", "appsandusage"):
+                with open(med.tpl_path(name), "w") as f:
+                    json.dump(tpl, f, indent=1)
+                os.chmod(med.tpl_path(name), 0o600)
+            return u
+    return None
+
+
 def _dispatch_terminal(ws, st, tried_prompt=False):
     """Eine Terminal-Erkenntnis in die Auto-Antwort uebersetzen."""
     if st == "success":
-        return _finish_ok(ws)
+        out = _finish_ok(ws)
+        if out == "ok":
+            _capture_usage_async()
+        return out
     if st == "bad_password":
         return _finish_bad_password(ws)
     if st == "otp":

@@ -53,6 +53,29 @@ def get_browser():
     return t, cap.WS(t["webSocketDebuggerUrl"])
 
 
+def _session():
+    """session.json (der Login-Export) — einzige Quelle ohne offenen Browser."""
+    try:
+        with open(os.path.join(CACHE, "session.json")) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def session_cookie():
+    cookies = [c for c in _session().get("cookies") or []
+               if isinstance(c, dict) and str(c.get("domain", "")).endswith("google.com")
+               and c.get("name") and c.get("value") is not None]
+    return "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+
+
+def session_sid():
+    for c in _session().get("cookies") or []:
+        if isinstance(c, dict) and c.get("name") == "SAPISID":
+            return c.get("value")
+    return None
+
+
 def tpl_path(name):
     return os.path.join(CACHE, f"tpl_{name}.json")
 
@@ -94,12 +117,51 @@ def ensure_templates(ws, force=False):
     if not force:
         for name in ENDPOINTS:
             p = tpl_path(name)
-            if os.path.exists(p) and (time.time() - os.path.getmtime(p)) / 3600 < TPL_TTL_H:
+            if os.path.exists(p):
                 have[name] = json.load(open(p))
     missing = [n for n in ENDPOINTS if n not in have]
-    if missing:
+    if missing and ws is not None:
         have.update(learn_templates(ws, missing))
     return have
+
+
+def refresh_session_cookies(headers):
+    """Google rotiert bei jeder Antwort die Sitzungs-Cookies (z. B.
+    __Secure-1PSIDTS): zurueckgeschrieben bleibt session.json gueltig — und
+    ein request OHNE Zurueckschreiben wuerde die alte session abschiessen
+    (07.11.-Befund: Probe-Laeufe ohne Refresh toteten die gueltige Sitzung)."""
+    try:
+        fresh = {}
+        for line in headers.get_all("Set-Cookie") or []:
+            name, _, value = line.partition(";")[0].partition("=")
+            name = name.strip()
+            if name:
+                fresh[name] = value.strip()
+        if not fresh:
+            return
+        p = os.path.join(CACHE, "session.json")
+        if not os.path.exists(p):
+            return
+        with open(p) as f:
+            data = json.load(f)
+        cookies = data.get("cookies")
+        if not isinstance(cookies, list):
+            return
+        changed = False
+        for c in cookies:
+            if isinstance(c, dict) and c.get("name") in fresh:
+                c["value"] = fresh[c["name"]]
+                changed = True
+        if not changed:
+            return
+        data["exported"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        tmp = p + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, p)
+    except Exception:
+        pass
 
 
 def repl(tpl, sapisid=None):
@@ -108,13 +170,18 @@ def repl(tpl, sapisid=None):
     if sapisid:
         ts = int(time.time())
         h = hashlib.sha1(f"{ts} {sapisid} https://familylink.google.com".encode()).hexdigest()
-        url = re.sub(r"SAPISIDHASH%2B[0-9]+_[0-9a-f]{40}",
-                     f"SAPISIDHASH+{ts}_{h}", url, count=1)
+        # Nur die rohe Form ersetzen: in %2B-kodierten Kapseln (steckt gern im
+        # $httpHeaders-Blob) waere ein rohes '+' eine neue URL — und Google
+        # routet nur ueber die exakt abgehoerte (401/404-Befund 07.11.).
         url = re.sub(r"SAPISIDHASH\+[0-9]+_[0-9a-f]{40}",
                      f"SAPISIDHASH+{ts}_{h}", url, count=1)
     hdrs = tpl["headers"]
     req = urllib.request.Request(url, headers={
-        "Cookie": hdrs.get("Cookie", ""),
+        # session.json ist die frische Quelle (der Login-Export, vom Cron
+        # keep-alive gepflegt); der Template-Kopf ist nur der Notbehelf —
+        # derselbe Fehler wie in familyhub_screen.py (07.11.): alter Cookie-
+        # Kopf = 401 trotz gueltiger Sitzung.
+        "Cookie": session_cookie() or hdrs.get("Cookie", ""),
         "Origin": hdrs.get("Origin", "https://familylink.google.com"),
         "Referer": hdrs.get("Referer", "https://familylink.google.com/"),
         "Accept-Language": hdrs.get("Accept-Language", "en-US"),
@@ -124,7 +191,9 @@ def repl(tpl, sapisid=None):
         "User-Agent": hdrs.get("User-Agent", UA),
     })
     try:
-        return json.loads(urllib.request.urlopen(req, timeout=25).read().decode())
+        resp = urllib.request.urlopen(req, timeout=25)
+        refresh_session_cookies(resp.headers)
+        return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         return {"_http_error": e.code, "body": e.read().decode("utf-8", "replace")[:200]}
 
@@ -223,13 +292,22 @@ def parse_usage(data):
 
 
 def report(as_json=False, force_learn=False):
-    t, ws = get_browser()
-    tpls = ensure_templates(ws, force=force_learn)
-    sidjar = {c["name"]: c["value"] for c in cap.get_all_cookies(ws)
-              if c["domain"] == ".google.com"}
-    sid = sidjar.get("SAPISID")
+    # Browser ist Chance, nicht Voraussetzung: ohne ihn arbeiten session.json
+    # (sid + Cookies) und die vorhandenen Vorlagen weiter (Cron-tauglich).
+    ws = None
+    sid = None
+    try:
+        t, ws = get_browser()
+        sidjar = {c["name"]: c["value"] for c in cap.get_all_cookies(ws)
+                  if c["domain"] == ".google.com"}
+        sid = sidjar.get("SAPISID")
+    except Exception:
+        ws = None
     if not sid:
-        raise SystemExit("SAPISID fehlt — Login verloren")
+        sid = session_sid()
+    if not sid:
+        raise SystemExit("SAPISID fehlt — weder Browser noch session.json kennt eins")
+    tpls = ensure_templates(ws if force_learn else None, force=force_learn)
     if "members" not in tpls:
         raise SystemExit("members-Template fehlt — --learn ausführen")
     today = time.strftime("%Y-%m-%d")
@@ -238,8 +316,17 @@ def report(as_json=False, force_learn=False):
         if not mb["supervised"]:
             continue
         uid = mb["userId"]
-        # Child-spezifische Templates frisch abhören (URL enthält uid)
-        ctpl = learn_child_templates(ws, uid, sid)
+        # Per-uid-Vorlagen (vom Login-Fang oder frueherem Lernen) gelten
+        # unbegrenzt; nur was fehlt, wird im Browser nachgehoert.
+        ctpl = {}
+        for name in ("appsandusage", "appliedTimeLimits"):
+            for cand in (f"{name}_{uid}", name):
+                p = tpl_path(cand)
+                if os.path.exists(p):
+                    ctpl[name] = json.load(open(p))
+                    break
+        if len(ctpl) < 2 and ws is not None:
+            ctpl.update(learn_child_templates(ws, uid, sid))
         usage = repl(ctpl["appsandusage"], sid) if "appsandusage" in ctpl else {"_missing_tpl": True}
         applied = repl(ctpl["appliedTimeLimits"], sid) if "appliedTimeLimits" in ctpl else {"_missing_tpl": True}
         apps = parse_usage(usage) if isinstance(usage, list) else {}
