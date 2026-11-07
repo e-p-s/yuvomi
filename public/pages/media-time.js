@@ -2583,7 +2583,7 @@ function wireFlAuth(form, host) {
       }
       return;
     }
-    const answer = res?.data?.status;
+    const answer = res?.data?.state;
     if (answer === 'ok') {
       /* Ruhige Zeile sogleich, die Staffel 0/3/8 s bringt den Nachweis. */
       state.settings = {
