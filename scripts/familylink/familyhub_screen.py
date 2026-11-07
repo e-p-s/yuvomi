@@ -80,13 +80,29 @@ def get_browser():
     return cap.WS(t["webSocketDebuggerUrl"])
 
 
+def session_cookie():
+    """Cookie-Zeile aus session.json — der FRISCHEN Datei. Bis 07.11. sandte
+    repl die im Template festgeschriebenen Cookie-Kopfe (Stand des letzten
+    Mithorens): nach erneutem Login weiterhin 401, obwohl session.json gueltig
+    war. Die Keep-alives des Crons schreiben ebenfalls nur hierhin zurueck."""
+    try:
+        with open(SESSION_FILE) as f:
+            cookies = json.load(f).get("cookies") or []
+    except Exception:
+        return ""
+    parts = [f"{c['name']}={c['value']}" for c in cookies
+             if isinstance(c, dict) and c.get("name") and c.get("value") is not None
+             and str(c.get("domain", "")).endswith("google.com")]
+    return "; ".join(parts)
+
+
 def repl(url, headers, sid):
     if sid:
         ts = int(time.time())
         h = hashlib.sha1(f"{ts} {sid} https://familylink.google.com".encode()).hexdigest()
         url = re.sub(r"SAPISIDHASH\+[0-9]+_[0-9a-f]{40}", f"SAPISIDHASH+{ts}_{h}", url, count=1)
     req = urllib.request.Request(url, headers={
-        "Cookie": headers.get("Cookie", ""),
+        "Cookie": session_cookie() or headers.get("Cookie", ""),
         "Origin": "https://familylink.google.com",
         "Referer": "https://familylink.google.com/",
         "User-Agent": headers.get("User-Agent", UA)})
@@ -211,6 +227,7 @@ def main():
                (not want_uid or k["userId"] == want_uid)]
     for k in targets:
         tpl = None
+        stale = None
         # uid-spezifisches Template bevorzugen (tpl_appliedTimeLimits_<uid>.json),
         # sonst generisches Template; Pfad-Umbau auf Ziel-uid ist zulässig (verifiziert).
         per_uid = os.path.join(CACHE, f"tpl_appliedTimeLimits_{k['userId']}.json")
@@ -218,15 +235,22 @@ def main():
                     ([TPL] if os.path.exists(TPL) else []):
             j = json.load(open(cand))
             fresh = (time.time() - os.path.getmtime(cand)) < 6 * 3600
-            if not fresh:
-                continue
             if j.get("uid") == k["userId"]:
-                tpl = j
+                built = j
             else:
-                tpl = dict(j)
-                tpl["url"] = re.sub(r"/people/\d+/", f"/people/{k['userId']}/", j["url"])
-                tpl["uid"] = k["userId"]
-            break
+                built = dict(j)
+                built["url"] = re.sub(r"/people/\d+/", f"/people/{k['userId']}/", j["url"])
+                built["uid"] = k["userId"]
+            if fresh:
+                tpl = built
+                break
+            stale = stale or built
+        if tpl is None and stale is not None:
+            # Alter URL-Kern ist egal: repl erneuert sid-Hash und Cookies bei
+            # jedem Request — ein altes Template funktioniert, solange die
+            # Struktur stimmt (07.11.: 6h-Regel liess sonst unnötig neu
+            # abhören und der Cron-Lauf hing 90s pro Kind).
+            tpl = stale
         if tpl is None:
             tpl = learn_uid_template(ws, k["userId"])
             if tpl:
