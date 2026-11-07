@@ -97,6 +97,13 @@ let state = {
    * Uebergangszeit der Hintergrunddienst nicht da) - die Flaechen sagen dann
    * nichts, statt "keine Buchungen" zu behaupten. */
   sessions: null,
+  /* App-Zeiten des Tages (GET /familylink/usage?kind=apps, A2):
+   * null  = keine Antwort (Netzfehler, Route noch nicht da) - die Flaeche
+   *         sagt dann nichts, wie bei den Buchungen;
+   * false = 403, die Auskunft "Abschnitt existiert nicht" - ebenfalls still;
+   * { day, items } = die Antwort; eine leere items-Liste ist eine echte
+   *         Auskunft und zeigt den ruhigen Leerzustand. */
+  appUsage: null,
   /* Alle Kontingent-Zeilen (GET /quotas): Kind-zeilen ohne device_id,
    * Geraete-limits mit device_id (Kontract der Backend-Lane). */
   quotaRows: null,
@@ -288,10 +295,29 @@ async function loadSessions() {
     .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')));
 }
 
+/* Die App-Zeiten des Tages (A2): welche Apps am Android-Geraet liefen. Die
+ * Route beantwortet nur Eltern/Admin - ein 403 ist die Auskunft "gibt es
+ * nicht", der Abschnitt bleibt dann komplett aus, ohne Fehlerbild (derselbe
+ * Grundsatz wie beim Kind-Picker). Jede andere failing Antwort laesst null:
+ * die Flaeche sagt nichts, statt "keine Apps" zu behaupten. Die leere
+ * items-Liste hingegen ist eine echte Auskunft - sie zeigt den ruhigen
+ * Leerzustand. Der Tag ist immer der heutige; ein Picker ist nicht noetig. */
+async function loadAppUsage() {
+  if (!state.canManage) { state.appUsage = false; return; }
+  const day = encodeURIComponent(localDayKey());
+  try {
+    const res = await api.get(`/media-time/familylink/usage?kind=apps&day=${day}`);
+    const data = res?.data ?? null;
+    state.appUsage = data && Array.isArray(data.items) ? data : null;
+  } catch (err) {
+    state.appUsage = (err?.status ?? err?.response?.status) === 403 ? false : null;
+  }
+}
+
 async function loadToday() {
   if (state.canManage) await ensureChildren();
   else state.canManage = false;
-  const tasks = [loadSettingsLite(), ensureDevicesLite(), loadSessions()];
+  const tasks = [loadSettingsLite(), ensureDevicesLite(), loadSessions(), loadAppUsage()];
   if (state.canManage && state.children?.length) {
     // Familienansicht: jedes Kind mit eigener Tageskarte, nebeneinander gestapelt.
     tasks.push((async () => {
@@ -1325,6 +1351,78 @@ function bookingRowHtml(s) {
     </li>`;
 }
 
+/* ------------------------------------------------------------------ */
+/* App-Zeiten des Tages (A2: Family-Link-Nutzung je App und Kind)      */
+/* ------------------------------------------------------------------ */
+
+/* Der Anzeigename eines Kinds fuer die Gruppen-Ueberschrift: der Name aus dem
+ * vorhandenen Kinder-Kontext; eine unbekannte Kennung bleibt generisch - die
+ * Seite erfindet keine Namen, und google_uid/pkg zeigen nie als Person. */
+function appGroupTitle(userId) {
+  if (userId == null) return t('mediaTime.appsOtherGroup');
+  const child = (state.children || []).find((c) => c.id === userId);
+  return child?.display_name || t('mediaTime.appsChildGroup');
+}
+
+/* Eine Kind-Gruppe: Ueberschrift + die Apps als Zeilen mit Minutenbalken. Die
+ * relative Breite geht gegen die groesste App DER Gruppe - der Vergleich ist
+ * "was lief hier am laengsten", nicht quer durch den Haushalt. */
+function appGroupHtml(userId, items) {
+  const max = Math.max(0, ...items.map((it) => Number(it.minutes) || 0));
+  const rows = items.map((it) => {
+    const mins = Math.max(0, Number(it.minutes) || 0);
+    const share = max > 0 ? Math.min(1, mins / max) : 0;
+    /* Name zeigen, fehlt der Paketname als Fallback - die Kennung selbst ist
+     * Auskunft genug fuer die Eltern, ein Titel fuer niemanden sonst. */
+    const name = String(it.name || it.pkg || '').trim() || t('mediaTime.appsUnnamed');
+    return `
+      <li class="list-row mt-usage-row">
+        <div class="list-row__main">
+          <p class="list-row__name"><i class="mt-usage-row__icon" data-lucide="app-window" aria-hidden="true"></i>${esc(name)}</p>
+          <span class="mt-share" aria-hidden="true"><span class="mt-share__fill" style="--mt-progress:${share.toFixed(3)}"></span></span>
+        </div>
+        <span class="list-row__end">${esc(minutesLabel(Math.round(mins)))}</span>
+      </li>`;
+  }).join('');
+  return `
+    <div class="mt-usage mt-apps-group">
+      <h3 class="mt-group-title">${esc(appGroupTitle(userId))}</h3>
+      <ul class="row-carrier">${rows}</ul>
+    </div>`;
+}
+
+/* Der Abschnitt: Gruppen pro Kind in Familienreihenfolge (unbekannte Kennungen
+ * danach, aufsteigend), KINDER OHNE ZUORDNUNG (yuvomi_user_id null) zuletzt
+ * unter "Sonstige". Kein Fehlerbanner, kein Tag-Picker - heute reicht. */
+function appsSectionHtml() {
+  const usage = state.appUsage;
+  if (!usage) return ''; // false = 403 (abschnittslos), null = keine Auskunft.
+  const head = `
+    <section class="mt-section" aria-labelledby="mt-apps-title">
+      <h2 class="mt-section__title u-section-title" id="mt-apps-title">${esc(t('mediaTime.appsTitle'))}</h2>
+      <p class="mt-section__note">${esc(t('mediaTime.appsIntro'))}</p>`;
+  if (!usage.items.length) {
+    return `${head}${emptyStateHTML({
+      icon: 'smartphone',
+      title: t('mediaTime.appsEmptyTitle'),
+      description: t('mediaTime.appsEmptyBody'),
+    })}</section>`;
+  }
+  const groups = new Map();
+  for (const it of usage.items) {
+    const uid = Number.isInteger(it.yuvomi_user_id) ? it.yuvomi_user_id : null;
+    if (!groups.has(uid)) groups.set(uid, []);
+    groups.get(uid).push(it); // der Server sortiert minutes DESC - Reihenfolge bleibt
+  }
+  const order = [];
+  for (const c of (state.children || [])) if (groups.has(c.id)) order.push(c.id);
+  for (const uid of [...groups.keys()].filter((u) => u != null).sort((a, b) => a - b)) {
+    if (!order.includes(uid)) order.push(uid);
+  }
+  if (groups.has(null)) order.push(null);
+  return head + order.map((uid) => appGroupHtml(uid, groups.get(uid))).join('') + '</section>';
+}
+
 function renderToday(el) {
   const cards = todayCards();
   // Ab zwei Karten traegt jede einen Klapp-Knopf (siehe cardCollapsed): der
@@ -1340,6 +1438,7 @@ function renderToday(el) {
     <div class="media-time-content__inner">
       ${cardBlocks}${emptyBlock}
       ${bookingsSectionHtml()}
+      ${appsSectionHtml()}
       ${setupStepsHtml()}
     </div>`);
   installPopoverMenus(el);

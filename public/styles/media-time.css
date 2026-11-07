@@ -523,6 +523,13 @@ button.mt-budget-chip:hover {
   gap: var(--space-2);
 }
 
+/* App-Zonen (A2): mehrere Kind-Gruppen unter einem Abschnittstitel - die
+ * Gruppe bleibt dieselbe Grammatik (Titel + Zeilen), nur der Abstand zwischen
+ * zwei Gruppen ist eine Stufe grosser, damit die Eltern die Kinder trennen. */
+.mt-apps-group + .mt-apps-group {
+  margin-top: var(--space-4);
+}
+
 .mt-usage-row__icon {
   display: inline-block;
   width: 1.05em;
