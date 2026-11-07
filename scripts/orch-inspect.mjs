@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3-multiple-ciphers';
+import Database from '../server/utils/sqlite-driver.js';
 const file = process.argv[2];
 const env = Object.fromEntries(fs.readFileSync(path.join(import.meta.dirname, '..', '.env'), 'utf8')
   .split('\n').filter((l) => /^[A-Z_]+=./.test(l)).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));

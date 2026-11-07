@@ -5,7 +5,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3-multiple-ciphers';
+import Database from '../server/utils/sqlite-driver.js';
 import { hashPassword } from '../server/utils/password.js';
 
 const file = process.argv[2];

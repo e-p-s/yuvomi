@@ -35,7 +35,7 @@
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import Database from 'better-sqlite3-multiple-ciphers';
+import Database from '../server/utils/sqlite-driver.js';
 import { resolveDbPath } from '../server/utils/db-path.js';
 
 const WRITE = process.argv.includes('--write');
