@@ -345,9 +345,17 @@ JS_CLICK_WIDE = """
 })(%s)
 """
 
+# Sichtbare Knopf-/Link-Texte (diagnostisch + als Grundlage des Prompt-Klicks).
+JS_BUTTONS = """
+(() => [...document.querySelectorAll('button, [role="button"], a')]
+  .filter(b => b.offsetWidth || b.offsetHeight || b.getClientRects().length)
+  .map(b => ((b.textContent.trim() || b.ariaLabel || '').slice(0, 60)))
+  .filter(t => t).slice(0, 12))()
+"""
+
 # Google-Texte der Weg-Umschaltung (deutsch/englisch, ohne Umlaute gemischt).
 RE_TRY_OTHER = "anderen weg|anderer weg|try another way|anderweitig"
-RE_PROMPT_OPTION = "eingabeaufforderung|aufforderung an ihr|prompt"
+RE_PROMPT_OPTION = "prompt|aufforderung|eingabeaufforderung"
 
 JS_FIELD_CENTER = """
 ((sel) => {
@@ -528,19 +536,36 @@ def _switch_to_prompt(ws, masks=()):
     Nachwarten; nach dem ersten Klick zaehlt 'otp' nicht als Ende (die
     Optionsseite nennt Bestaetigungswege), erst nach dem zweiten gibt der
     gefundene Zustand zurueck. Misslingt der Schalter, kommt 'none'."""
-    steps = ((RE_TRY_OTHER, "Weg wechseln", ("prompt", "success", "bad_password", "challenge")),
-             (RE_PROMPT_OPTION, "Handy-Prompt", ("prompt",) + TERMINALS))
-    for pat, label, wanted in steps:
-        try:
-            r = cap.ev(ws, JS_CLICK_WIDE % json.dumps(pat))
-        except Exception:
-            return "none"
-        _dbg(f"Prompt-Schalter ({label}): {r}")
-        if not (isinstance(r, str) and r.startswith("clicked")):
-            return "none"
-        st = _wait_for(ws, wanted, 4, masks)
-        if st == "prompt" or (st in TERMINALS and st != "otp") or (steps[-1][0] == pat and st in TERMINALS):
-            return st
+    # Schritt 1: "Anderen Weg versuchen" (Link auf der Code-Seite).
+    try:
+        r = cap.ev(ws, JS_CLICK_WIDE % json.dumps(RE_TRY_OTHER))
+    except Exception:
+        return "none"
+    _dbg(f"Prompt-Schalter (Weg wechseln): {r}")
+    if not (isinstance(r, str) and r.startswith("clicked")):
+        return "none"
+    st = _wait_for(ws, ("prompt", "success", "bad_password", "challenge"), 6, masks)
+    if st in ("prompt", "success", "bad_password", "challenge"):
+        return st
+    # Schritt 2: Die Auswahlseite ist eine SPA — die Knopfleiste erscheint
+    # erst nach einigen Sekunden (17:33-Befund: Klick nach 4s = no-match,
+    # Seite noch "Loading"). Also auf Knöpfe warten und sie protokollieren.
+    pat = re.compile(RE_PROMPT_OPTION, re.I)
+    seen = []
+    for _ in range(12):
+        btns = cap.ev(ws, JS_BUTTONS)
+        btns = [str(b) for b in btns] if isinstance(btns, list) else []
+        if btns != seen:
+            seen = btns
+            _dbg("Auswahlseiten-Knöpfe: " + " | ".join(_mask(b, masks) for b in btns))
+        hit = next((b for b in btns if pat.search(b)), None)
+        if hit:
+            r = cap.ev(ws, cap.JS_CLICK % json.dumps(pat.pattern))
+            _dbg(f"Prompt-Schalter (Handy-Prompt): {r} (Text: {_mask(hit, masks)})")
+            st = _wait_for(ws, ("prompt",) + TERMINALS, 15, masks)
+            return st if (st == "prompt" or st in TERMINALS) else "none"
+        time.sleep(1.0)
+    _dbg_always("Kein Handy-Prompt unter den Google-Wegen — Code-Eingabe bleibt.")
     return "none"
 
 
