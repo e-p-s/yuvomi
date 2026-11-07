@@ -18,10 +18,12 @@
 
 import crypto from 'node:crypto';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
-import { familylinkStatus, familylinkUsage, runFamilylinkIngest } from '../services/familylink.js';
+import { familylinkStatus, familylinkUsage, runFamilylinkIngest, FAMILYLINK_STATUS_KEYS } from '../services/familylink.js';
+import { startFamilylinkLoginSession } from '../services/familylink-login.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
@@ -889,6 +891,15 @@ router.get('/settings', (req, res) => {
           "SELECT value FROM sync_config WHERE key = 'familylink_ingest_enabled'"
         ).get()?.value === '1',
         familylink_status: familylinkStatus(d),
+        // Zeitmarken fuer die UI: wann der Status zuletzt gesetzt wurde und
+        // wann die letzte echte Tageszeile einkam - null, bevor etwas gelaufen
+        // ist (die UI behauptet dann nichts).
+        familylink_status_at: d.prepare(
+          'SELECT value FROM sync_config WHERE key = ?'
+        ).get(FAMILYLINK_STATUS_KEYS.at)?.value ?? null,
+        familylink_last_report_at: d.prepare(
+          'SELECT MAX(fetched_at) AS at FROM familylink_daily'
+        ).get()?.at ?? null,
         retention_days: RAW_RETENTION_DAYS,
       },
     });
@@ -1755,6 +1766,42 @@ router.post('/familylink/ingest', requireManager, async (req, res) => {
   } catch (err) {
     log.error('POST /familylink/ingest error:', err);
     return res.status(500).json({ error: 'Failed to run family link ingest.', code: 500 });
+  }
+});
+
+/* Fernlogin (Eltern): der Sammler-Host hat keine Google-Sitzung mehr - die
+ * Eltern-UI oeffnet eine Viewer-Sitzung auf dem Collector
+ * (scripts/familylink/familylink_login_proxy.py), tippt dort, und der Collector
+ * faengt die frischen Cookies selbst ab (session.json, 0600) und meldet 'ok'.
+ * Konfiguration ueber env: FAMILYLINK_COLLECTOR_BASE und
+ * FAMILYLINK_LOGIN_SECRET (gleicher Inhalt wie ~/.familyhub/login_secret auf
+ * dem Sammler); beides fehlt -> 503, Collector nicht erreichbar -> 502.
+ * Rate-Limit wie die uebrigen sensiblen Endpunkte (Muster gravatarLimiter):
+ * je Mitglied gezaehlt, damit der Haushalt sich nicht gegenseitig sperrt. */
+const loginSessionLimiter = rateLimit({
+  windowMs: 10 * 60_000,
+  max: 10,
+  keyGenerator: (req) => `user:${req.authUserId ?? 'anon'}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many family link login sessions. Please wait a few minutes.', code: 429, reason: 'media_time_login_session_rate_limited' },
+});
+router.post('/familylink/login-session', requireManager, loginSessionLimiter, async (req, res) => {
+  try {
+    const r = await startFamilylinkLoginSession();
+    if (!r.ok) {
+      return res.status(r.status).json({
+        error: r.reason === 'media_time_familylink_not_configured'
+          ? 'Family link remote login is not configured on this server.'
+          : 'The family link collector could not be reached.',
+        code: r.status,
+        reason: r.reason,
+      });
+    }
+    return res.json({ data: { viewer_url: r.viewer_url, expires_at: r.expires_at } });
+  } catch (err) {
+    log.error('POST /familylink/login-session error:', err);
+    return res.status(500).json({ error: 'Failed to start family link login session.', code: 500 });
   }
 });
 

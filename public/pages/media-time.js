@@ -108,6 +108,9 @@ let state = {
   settings: null,
   exceptions: null,
   purchases: null,
+  /* Aufklapp-Zustand der Collector-Schritte; null = Standard des Zustands
+   * (offen nur bei abgelaufener Anmeldung, wenn die Seite geoeffnet wird). */
+  flStepsOpen: null,
 };
 
 /* Die Adresse entscheidet den Reiter (Neuladen, Zurueck, Link). */
@@ -441,7 +444,23 @@ function tabButton(tab, label) {
  * keine Primaktion, die einen Knopf verdient haette. */
 let fab = null;
 
+/* Der Regeln-Reiter ist Elternraum: Nicht-Verwalter sehen ihn nicht. Die
+ * Shell-Renderung kennt den Rechtsstand beim ersten Aufruf noch nicht (er
+ * ergibt sich erst aus der Antwort), also zieht diese Nachsteuerung den
+ * Knopf nach, sobald die Auskunft da ist - der Deep-Link-Schutz in
+ * renderCurrentTab (forbiddenPanel/403-Pfad) bleibt davon unberuehrt. */
+function syncRulesTabVisibility() {
+  const btn = _tabsEl?.querySelector('[data-tab-id="rules"]');
+  if (!btn) return;
+  btn.hidden = !state.canManage;
+  btn.setAttribute('aria-hidden', state.canManage ? 'false' : 'true');
+  if (!state.canManage && btn.getAttribute('tabindex') === '0') {
+    _tabsEl.querySelector('[data-tab-id="today"]')?.setAttribute('tabindex', '0');
+  }
+}
+
 function updateMediaTimeFab() {
+  syncRulesTabVisibility();
   if (!fab) return;
   const keepNoun = () => fab.dataset?.dockLabel || t('newLabel.mediaTime');
   if (!state.canManage) {
@@ -469,6 +488,7 @@ function updateMediaTimeFab() {
 
 let _container = null;
 let _tabs = null;
+let _tabsEl = null;
 
 function renderShell(container) {
   container.replaceChildren();
@@ -480,13 +500,14 @@ function renderShell(container) {
         <nav class="media-time-tabs page-toolbar__bar" role="tablist" aria-label="${esc(t('nav.mediaTime'))}">
           ${tabButton('today', t('mediaTime.tabToday'))}
           ${tabButton('devices', t('mediaTime.tabDevices'))}
-          ${tabButton('rules', t('mediaTime.tabRules'))}
+          ${state.canManage ? tabButton('rules', t('mediaTime.tabRules')) : ''}
           ${tabButton('exchange', t('mediaTime.tabExchange'))}
         </nav>
       </header>
       <div class="media-time-content" id="media-time-content"></div>
     </div>`);
 
+  _tabsEl = container.querySelector('.media-time-tabs');
   _tabs = wireTablist(container.querySelector('.media-time-tabs'), {
     activeId: state.tab,
     activeClass: 'sub-tab--active',
@@ -936,7 +957,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* Family-Link-Istzeit auf der Tageskarte (Spec 291). Ohne Zuordnung steht
- * hier nichts; ohne Collector-Sitzion steht der Hinweis, NIE eine Null.
+ * hier nichts; ohne Collector-Sitzung steht der Hinweis, NIE eine Null.
  * Die Minuten zaehlen bereits im Balken (dayUsage-Ersatz) - dieser Block ist
  * die Auskunft ueber die Quelle, nicht das Konto. */
 function familylinkDetailsHtml(fl) {
@@ -2314,10 +2335,226 @@ function wireRules(el) {
   }
 }
 
-function flStatusText(s) {
-  if (s?.familylink_status === 'ok') return t('mediaTime.flStatusOk');
-  if (s?.familylink_status === 'login_noetig') return t('mediaTime.flLoginParent');
-  return t('mediaTime.flStatusNone');
+/* ------------------------------------------------------------------ */
+/* Collector-Status der Gruppe 5 (Google Family Link)                  */
+/* ------------------------------------------------------------------ */
+
+/* Drei klare Zustaende, dazwischen wird nichts geraten:
+ * 'setup'   - familylink_status ist null: der Collector ist nie gelaufen.
+ * 'expired' - login_noetig, oder kein Report seit FL_STALE_H Stunden (auch
+ *             keiner je: das ist dieselbe Luicke, nur grosser).
+ * 'ok'      - Status ok und letzter Report frischer als FL_FRESH_H Stunden.
+ * Ein 'ok' mit Report zwischen den Fenstern bleibt die ruhige Zeile - sie
+ * nennt die Zeit selbst, da steht keine Behauptung, die nicht stimmt. */
+const FL_FRESH_HOURS = 6;
+const FL_STALE_HOURS = 24;
+
+/* Die drei Befehle stehen fest - nur der Begleittext ist uebersetzt. */
+const FL_STEPS = [
+  { label: 'mediaTime.flStep1Text', cmd: 'ssh sammler' },
+  { label: 'mediaTime.flStep2Text', cmd: 'python3 ~/yuvomi/scripts/familylink/familyhub_capture2.py' },
+  { label: 'mediaTime.flStep3Text', cmd: 'bash ~/yuvomi/scripts/familylink/familylink_push.sh' },
+];
+
+function flCollectorState(s) {
+  if (s?.familylink_status == null) return 'setup';
+  const at = Date.parse(s.familylink_last_report_at || '');
+  const hours = Number.isFinite(at) ? (Date.now() - at) / 3600000 : Infinity;
+  if (s.familylink_status === 'ok' && hours < FL_FRESH_HOURS) return 'ok';
+  if (s.familylink_status === 'login_noetig' || hours >= FL_STALE_HOURS) return 'expired';
+  return 'ok';
+}
+
+/* "vor 12 Minuten", "vor 3 Stunden", "gerade eben" - die Einheit steht
+ * immer im Wort, nie ein nacktes "12 min". */
+function flAgoText(iso) {
+  const at = Date.parse(iso || '');
+  if (!Number.isFinite(at)) return t('mediaTime.flAgoNever');
+  const mins = Math.max(0, Math.round((Date.now() - at) / 60000));
+  if (mins < 1) return t('mediaTime.flAgoNow');
+  if (mins < 60) return t('mediaTime.flAgoMin', { count: mins });
+  return t('mediaTime.flAgoHour', { count: Math.round(mins / 60) });
+}
+
+/* Fernlogin aus der App: der Sammler stellt dafuer eine zeitlich begrenzte
+ * Viewer-Seite bereit. Entschiedenheit statt Raterei: die CSP der App rahmt
+ * nur gleiche Herkunft ein (helmet frame-src 'self' in server/index.js) -
+ * eine Sammler-Seite ist fremde Herkunft und im LAN HTTP, ein iframe in der
+ * App kann sie also nie laden. Der Weg ist das neue Fenster; blockt der
+ * Browser es, zeigt das Modal den Link von Hand. */
+const FL_LOGIN_ERRORS = {
+  media_time_familylink_not_configured: 'mediaTime.flLoginNotConfigured',
+  media_time_familylink_collector_unreachable: 'mediaTime.flLoginUnreachable',
+  media_time_login_session_rate_limited: 'mediaTime.flLoginRateLimited',
+};
+
+/* Der Merker laeuft mit, bis das Fenster zu ist oder die Viewer-Zeit ablauft;
+ * ein zweiter Anmeldeverschnitt loescht den vorigen Merker. */
+let _flLoginWatch = null;
+
+/* Nach dem Schliessen: gestaffelt 0/3/8 s nachfragen, ob der Sammler 'ok'
+ * meldet - der Block springt dann von selbst auf die ruhige Zeile. Kein
+ * Dauer-Poll: drei Nachfragen, dann ruht die Seite. */
+function reloadFlStatusAfterLogin(host) {
+  [0, 3000, 8000].forEach((ms) => {
+    setTimeout(async () => {
+      if (!host.isConnected) return;
+      try {
+        const res = await api.get('/media-time/settings');
+        if (res?.data) state.settings = { ...state.settings, ...res.data };
+      } catch { /* ohne Antwort gilt der letzte Stand */ }
+      renderFlStatus(host);
+    }, ms);
+  });
+}
+
+function watchFlLoginClose(win, expiresAt, host) {
+  if (_flLoginWatch) clearInterval(_flLoginWatch);
+  _flLoginWatch = setInterval(() => {
+    if (win.closed) {
+      clearInterval(_flLoginWatch);
+      _flLoginWatch = null;
+      reloadFlStatusAfterLogin(host);
+    } else if (Number.isFinite(expiresAt) && Date.now() > expiresAt) {
+      /* Die Viewer-Seite ist abgelaufen, das Fenster aber noch zu: keine
+       * Auskunft erfinden - der Merker endet hier. */
+      clearInterval(_flLoginWatch);
+      _flLoginWatch = null;
+    }
+  }, 1000);
+}
+
+/* Link statt Fenster: wenn der Popup-Blocker das Fenster verhindert, liegt
+ * der Link im Modal (Titel: flLoginOverlayTitle) - dieselbe Adresse, von
+ * Hand aufgerufen; Titel und Knopfwort tragen den Text, ein eigener Satz
+ * waert zu viel. Nur http(s) laedt der Link. */
+function openFlLoginLinkModal(viewerUrl) {
+  openModal({
+    title: t('mediaTime.flLoginOverlayTitle'),
+    content: `
+      <div class="modal-panel__footer modal-panel__footer--plain">
+        <button type="button" class="btn btn--secondary" data-action="close-modal">${esc(t('common.close'))}</button>
+        <a class="btn btn--primary" href="${esc(viewerUrl)}" target="_blank" rel="noopener noreferrer">${esc(t('mediaTime.flLoginCta'))}</a>
+      </div>`,
+  });
+}
+
+async function startFlLogin(host, btn) {
+  btn.disabled = true;
+  try {
+    const res = await api.post('/media-time/familylink/login-session', {});
+    const viewerUrl = String(res?.data?.viewer_url || '');
+    const expiresAt = Date.parse(res?.data?.expires_at || '');
+    if (!/^https?:\/\//i.test(viewerUrl)) {
+      /* Antwort ohne Adresse ist keine Auskunft - eher Toast als Raten. */
+      toast(t('mediaTime.errorGeneric'), 'danger');
+      return;
+    }
+    const win = window.open(viewerUrl, 'yuvomi-fl-login', 'width=480,height=760');
+    if (!win) {
+      openFlLoginLinkModal(viewerUrl);
+    } else {
+      toast(t('mediaTime.flLoginOpening'));
+      watchFlLoginClose(win, expiresAt, host);
+    }
+  } catch (err) {
+    const reasonKey = FL_LOGIN_ERRORS[err?.data?.reason];
+    toast(reasonKey ? t(reasonKey) : mediaTimeErrorSentence(err), 'danger');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* Der Block haengt an der settings-Antwort: 'ok' ist eine ruhige Zeile,
+ * 'expired' und 'setup' fuehren denselben Weg - zuerst der Fernlogin-Knopf,
+ * darunter die Schrittfolge als Kompass; der Knopf ist ein
+ * <button aria-expanded>, die Schritte wohnen in der region darunter. */
+function flStatusBlockHtml(s) {
+  const kind = flCollectorState(s);
+  if (kind === 'ok') {
+    const mins = Math.max(0, Math.round((Date.now() - Date.parse(s.familylink_last_report_at || '')) / 60000));
+    const line = mins < 1
+      ? t('mediaTime.flRunningJustNow')
+      : t('mediaTime.flRunningFresh', { ago: flAgoText(s.familylink_last_report_at) });
+    return `
+      <p class="mt-fl-status__line">
+        <i class="mt-fl-status__icon" data-lucide="check-circle-2" aria-hidden="true"></i>
+        <span>${esc(line)}</span>
+      </p>`;
+  }
+  const open = state.flStepsOpen ?? (kind === 'expired');
+  const heading = kind === 'expired' ? t('mediaTime.flExpiredTitle') : t('mediaTime.flSetupTitle');
+  /* familylink_status_at ist der Nachweis, dass der Status selbst frisch
+   * geprueft wurde - als stille Zeile unter der auffaelligen. */
+  const checked = s.familylink_status_at
+    ? `<p class="mt-fl-status__checked">${esc(t('mediaTime.flChecked', { ago: flAgoText(s.familylink_status_at) }))}</p>`
+    : '';
+  const items = FL_STEPS.map((step, i) => `
+    <li class="mt-fl-step">
+      <span class="mt-fl-step__head">
+        <span class="mt-groupnum" aria-hidden="true">${i + 1}</span>
+        <span>${esc(t(step.label))}</span>
+      </span>
+      <span class="mt-fl-step__cmd">
+        <code>${esc(step.cmd)}</code>
+        <button class="btn btn--ghost btn--sm" type="button" data-fl-copy="${esc(step.cmd)}"
+                aria-label="${esc(t('mediaTime.flStepCopy', { cmd: step.cmd }))}">
+          <i data-lucide="copy" aria-hidden="true"></i>
+        </button>
+      </span>
+    </li>`).join('');
+  return `
+    <p class="mt-fl-status__line mt-fl-status__line--warn">
+      <i class="mt-fl-status__icon" data-lucide="triangle-alert" aria-hidden="true"></i>
+      <span>${esc(heading)}</span>
+    </p>
+    ${checked}
+    <div class="mt-fl-login">
+      <button class="btn btn--primary btn--sm" type="button" data-action="mt-fl-login">
+        <i data-lucide="log-in" aria-hidden="true"></i>${esc(t('mediaTime.flLoginCta'))}
+      </button>
+    </div>
+    <button class="btn btn--ghost btn--sm mt-fl-toggle" type="button" id="mt-fl-steps-btn"
+            aria-expanded="${open ? 'true' : 'false'}" aria-controls="mt-fl-steps-body">
+      <i data-lucide="chevron-down" class="icon-sm" aria-hidden="true"></i>${esc(t('mediaTime.flStepsToggle'))}
+    </button>
+    <div id="mt-fl-steps-body"${open ? '' : ' hidden'} role="region" aria-labelledby="mt-fl-steps-btn">
+      <p class="form-hint">${esc(t('mediaTime.flWhyCollector'))}</p>
+      <ol class="mt-fl-steps">${items}</ol>
+    </div>`;
+}
+
+/* Einsetzen und verdrahten: dasselbe Copy-Muster wie beim Geräte-Token
+ * (Clipboard, Toast als Nachweis), derselbe Toggle-Knopf-Stil wie die
+ * Kinderkarten. */
+function renderFlStatus(host) {
+  const box = host.querySelector('#mt-fl-status');
+  if (!box) return;
+  box.replaceChildren();
+  box.insertAdjacentHTML('beforeend', flStatusBlockHtml(state.settings || {}));
+  icons(box);
+  box.querySelector('#mt-fl-steps-btn')?.addEventListener('click', (ev) => {
+    const btn = ev.currentTarget;
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    box.querySelector('#mt-fl-steps-body').hidden = !open;
+    state.flStepsOpen = open;
+  });
+  box.querySelector('[data-action="mt-fl-login"]')?.addEventListener('click', (ev) => {
+    startFlLogin(host, ev.currentTarget);
+  });
+  box.querySelectorAll('[data-fl-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const cmd = String(btn.dataset.flCopy || '');
+      if (!cmd) return;
+      try {
+        await navigator.clipboard.writeText(cmd);
+        toast(t('mediaTime.flStepCopied'));
+      } catch {
+        toast(t('mediaTime.flStepCopyFailed'), 'warning');
+      }
+    });
+  });
 }
 
 function renderFlHost(host) {
@@ -2331,13 +2568,14 @@ function renderFlHost(host) {
       </span>
     </label>
     <p class="form-hint">${esc(t('mediaTime.flSwitchHint'))}</p>
-    <p class="mt-section__note" id="mt-fl-status">${esc(flStatusText(s))}</p>
+    <div id="mt-fl-status"></div>
     <div class="mt-row-actions">
       <button class="btn btn--secondary btn--sm" type="button" data-action="mt-fl-fetch">
         <i data-lucide="refresh-cw" aria-hidden="true"></i>${esc(t('mediaTime.flFetch'))}
       </button>
     </div>
     <div id="mt-fl-map"></div>`);
+  renderFlStatus(host);
   host.querySelector('#mt-fl-enabled')?.addEventListener('change', async (ev) => {
     try {
       await api.put('/media-time/settings', { familylink_ingest_enabled: ev.target.checked });
@@ -2355,8 +2593,7 @@ function renderFlHost(host) {
       const res = await api.post('/media-time/familylink/ingest', {});
       const status = res?.data?.status;
       state.settings = { ...state.settings, familylink_status: status };
-      const st = host.querySelector('#mt-fl-status');
-      if (st) st.textContent = flStatusText(state.settings);
+      renderFlStatus(host);
       toast(status === 'ok'
         ? t('mediaTime.flFetchOk', { written: fmtNum(res?.data?.written ?? 0) })
         : t('mediaTime.flFetchLogin'));

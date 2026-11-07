@@ -536,12 +536,15 @@ export function mediaTimePaths() {
     },
     '/api/v1/media-time/familylink/report': {
       post: op({
-        summary: 'Push a family link report from the collector host (x-familylink-token, same ingest as the local run)',
+        summary: 'Push a family link report or a bare status from the collector host (x-familylink-token, same ingest as the local run)',
         tag: 'MediaTime',
         stateChanging: true,
         requestBody: jsonBody('#/components/schemas/MediaTimeFamilylinkReportInput'),
         description: 'Der Collector-Host (einziger Rechner mit Google-Sitzung) schickt seinen --json-Report hierher.\n'
-          + 'Falscher Token 401, kaputter Koerper 400 - geschrieben wird nie etwas Halbes und nie eine Null.',
+          + 'Falscher Token 401, kaputter Koerper 400 - geschrieben wird nie etwas Halbes und nie eine Null (Spec-Regel).\n'
+          + 'Nimmt zusaetzlich einen reinen Status-Report an ({ "status": "login_noetig" } oder { "status": "ok" } ohne\n'
+          + 'children): der Collector meldet so seine abgelaufene Sitzung, bevor der Python-Teil scheitert - derselbe\n'
+          + 'setStatus-Pfad wie der lokale Takt, Antwort 200 { data: { status } }; ein unbekannter Status-Wert ist 400.',
         responses: {
           200: {
             description: 'Accepted (written = rows stored, errors = skipped rows)',
@@ -583,6 +586,32 @@ export function mediaTimePaths() {
           401: { $ref: '#/components/responses/Unauthorized' },
           403: { $ref: '#/components/responses/Forbidden' },
           500: { $ref: '#/components/responses/InternalServerError' },
+        },
+      }),
+    },
+    '/api/v1/media-time/familylink/login-session': {
+      post: op({
+        summary: 'Start a remote family link login session on the collector (parents/admin) - returns the one-shot viewer URL',
+        tag: 'MediaTime',
+        stateChanging: true,
+        description: 'Fernlogin fuer den Sammler-Host (einziger Rechner mit Chromium-Profil): die Eltern-UI oeffnet die\n'
+          + 'zurueckgegebene Viewer-Seite des Collectors (scripts/familylink/familylink_login_proxy.py), tippt dort die\n'
+          + 'Anmeldung, und der Collector faengt die frischen Cookies selbst ab (session.json, 0600) und meldet danach\n'
+          + 'status ok. Ein Doppelstart storniert die alte Sitzung am Collector (best effort) - es lebt nie eine zweite.\n'
+          + 'Die Sitzung laeuft nach 10 Minuten aus (harte Collector-Grenze 15); die Viewer-URL traegt das Einmal-Token,\n'
+          + 'das Login-Geheimnis selbst verlaesst den Server nie. Konfiguration ueber env (FAMILYLINK_COLLECTOR_BASE,\n'
+          + 'FAMILYLINK_LOGIN_SECRET) - beides Deploy-Sache, nie hartkodiert.',
+        responses: {
+          200: {
+            description: 'Session started (viewer_url is one-shot, valid until expires_at)',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkLoginSessionResponse' } } },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          429: { description: 'More than 10 session starts in 10 minutes for this account (`media_time_login_session_rate_limited`)' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+          502: { description: 'The collector did not accept the session start - unreachable or non-2xx (`media_time_familylink_collector_unreachable`)' },
+          503: { description: 'FAMILYLINK_COLLECTOR_BASE or FAMILYLINK_LOGIN_SECRET is unset (`media_time_familylink_not_configured`)' },
         },
       }),
     },
@@ -631,6 +660,12 @@ const CASE_REASONS = {
   },
   '/api/v1/media-time/familylink/report': {
     post: REASON_BAD + ' (400, Report-Koerper wird von der Ingest-Funktion abgelehnt), `media_time_unauthenticated` (401, x-familylink-token fehlt oder passt nicht)',
+  },
+  '/api/v1/media-time/familylink/login-session': {
+    post: '`media_time_familylink_not_configured` (503, FAMILYLINK_COLLECTOR_BASE oder FAMILYLINK_LOGIN_SECRET fehlt), '
+      + '`media_time_familylink_collector_unreachable` (502, der Collector nimmt den Sitzungsstart nicht an), '
+      + '`media_time_login_session_rate_limited` (429, mehr als zehn Starts in zehn Minuten je Mitglied), '
+      + '`media_time_forbidden` (403, nicht Elternteil oder Admin)',
   },
   '/api/v1/media-time/familylink/mapping': {
     get: REASON_BAD + ', `media_time_unauthenticated` (401, no session), `media_time_forbidden` (403, reading another child without being a parent)',

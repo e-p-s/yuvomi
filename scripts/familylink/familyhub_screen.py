@@ -28,10 +28,50 @@ _spec.loader.exec_module(cap)
 CACHE = os.path.expanduser("~/.familyhub")
 TPL = os.path.join(CACHE, "tpl_appliedTimeLimits.json")
 TPL_MEMBERS = os.path.join(CACHE, "tpl_members.json")
+# Dieselbe Datei, die familyhub_capture2.py beim Login schreibt (0600).
+SESSION_FILE = os.path.join(CACHE, "session.json")
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
 
 WEEKDAYS = {1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa", 7: "So"}
+
+
+def refresh_session_cookies(headers):
+    """Keep-alive: schreibt die von Google zurueckgegebenen Set-Cookie-Werte in
+    die vorhandene Session-Datei (~/.familyhub/session.json) zurueck — nur
+    Cookie-Namen, die dort schon standen, gleiche Datei, Rechte 0600. Damit
+    verlaengert der 5-Minuten-Cron (familylink_push.sh) bei jedem erfolgreichen
+    Lauf zugleich die Sitzungsfrist, bevor der 401-Fall ueberhaupt eintritt.
+    Laeuft still: ein kaputter Keep-alive darf den Report nicht kosten."""
+    try:
+        fresh = {}
+        for line in headers.get_all("Set-Cookie") or []:
+            name, _, value = line.partition(";")[0].partition("=")
+            name = name.strip()
+            if name:
+                fresh[name] = value.strip()
+        if not fresh or not os.path.exists(SESSION_FILE):
+            return
+        with open(SESSION_FILE) as f:
+            data = json.load(f)
+        cookies = data.get("cookies")
+        if not isinstance(cookies, list):
+            return
+        changed = False
+        for c in cookies:
+            if isinstance(c, dict) and c.get("name") in fresh:
+                c["value"] = fresh[c["name"]]
+                changed = True
+        if not changed:
+            return
+        data["exported"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        tmp = SESSION_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, SESSION_FILE)
+    except Exception:
+        pass
 
 
 def get_browser():
@@ -50,7 +90,13 @@ def repl(url, headers, sid):
         "Origin": "https://familylink.google.com",
         "Referer": "https://familylink.google.com/",
         "User-Agent": headers.get("User-Agent", UA)})
-    return json.loads(urllib.request.urlopen(req, timeout=25).read().decode())
+    resp = urllib.request.urlopen(req, timeout=25)
+    data = json.loads(resp.read().decode())
+    # Sitzungs-Kee-alive: Google schiebt bei jeder Antwort frische Cookies mit
+    # (z. B. __Secure-1PSIDTS) - zurueckgeschrieben haelt der 5-Minuten-Cron
+    # die Sitzung offen, statt sie bis zum 401 auslaufen zu lassen.
+    refresh_session_cookies(resp.headers)
+    return data
 
 
 def learn_uid_template(ws, uid, timeout=90):

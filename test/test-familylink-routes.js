@@ -226,3 +226,148 @@ test('POST /familylink/token — Mitglied ohne Elternrolle 403', async () => {
   const res = await call('POST', '/familylink/token', { actor: member, body: {} });
   assert.equal(res.status, 403);
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Status-Report des Sammlers (abgelaufene Google-Sitzung) + Settings-Zeitmarken
+// ════════════════════════════════════════════════════════════════════════════
+
+async function freshReportToken() {
+  const t = await call('POST', '/familylink/token', { body: {} });
+  assert.equal(t.status, 200);
+  return t.body.data.token;
+}
+function postReport(tok, body) {
+  return fetch(`${baseUrl}/media-time/familylink/report`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(tok ? { 'x-familylink-token': tok } : {}) },
+    body: JSON.stringify(body),
+  });
+}
+const flSvc = await import('../server/services/familylink.js');
+const statusRow = () => db.prepare(
+  'SELECT value FROM sync_config WHERE key = ?').get(flSvc.FAMILYLINK_STATUS_KEYS.status)?.value ?? null;
+
+test('POST /familylink/report - reiner Status-Report: login_noetig setzt den Status, ok setzt ihn zurueck', async () => {
+  const token = await freshReportToken();
+  const dead = await postReport(token, { status: 'login_noetig' });
+  assert.equal(dead.status, 200);
+  assert.deepEqual((await dead.json()).data, { status: 'login_noetig' });
+  assert.equal(statusRow(), 'login_noetig', 'derselbe Statuspfad wie der lokale Lauf');
+  const back = await postReport(token, { status: 'ok' });
+  assert.equal(back.status, 200);
+  assert.equal((await back.json()).data.status, 'ok');
+  assert.equal(statusRow(), 'ok');
+  // Ein reiner Status-Report schreibt keine Tageszeile (Spec-Regel: nie eine Null).
+  const res = await postReport(token, { status: 'vielleicht' });
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).reason, 'media_time_bad_request');
+  assert.equal(statusRow(), 'ok', 'ein abgelehnter Statuswert aendert nichts');
+});
+
+test('POST /familylink/report - Status-Report ohne/passenden Token: 401 wie beim Report', async () => {
+  const token = await freshReportToken();
+  const noTok = await postReport(null, { status: 'login_noetig' });
+  assert.equal(noTok.status, 401);
+  const badTok = await postReport('flk_falsch', { status: 'login_noetig' });
+  assert.equal(badTok.status, 401);
+  assert.equal((await badTok.json()).reason, 'media_time_unauthenticated');
+  const ok = await postReport(token, { status: 'login_noetig' });
+  assert.equal(ok.status, 200, 'mit Token nimmt die Route auch den reinen Status');
+});
+
+test('GET /settings - familylink_status_at und familylink_last_report_at zeigen die Zeiten', async () => {
+  const token = await freshReportToken();
+  await postReport(token, { status: 'login_noetig' });
+  const settings = async () => (await call('GET', '/settings')).body.data;
+  const afterStatus = await settings();
+  assert.match(String(afterStatus.familylink_status_at),
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, 'die Statusmarke ist ein ISO-Moment');
+  const lastBefore = afterStatus.familylink_last_report_at;
+  await postReport(token, { status: 'ok' });
+  const afterOk = await settings();
+  assert.equal(afterOk.familylink_last_report_at, lastBefore,
+    'ein reiner Statuslauf bewegt familylink_last_report_at nicht (nur echte Zeilen tun das)');
+  await call('PUT', '/familylink/mapping', { body: { user_id: kidB.id, google_uid: '5001234567', devices: [] } });
+  const pushed = await postReport(token, {
+    date: '2026-11-06',
+    children: [{ userId: '5001234567', name: 'Verworfen', devices: [
+      { id: 'gd-ts', consumed_min: 5, allowed_min: 60, remaining_min: 55 },
+    ] }],
+  });
+  assert.equal(pushed.status, 200);
+  const afterPush = await settings();
+  const newest = db.prepare('SELECT MAX(fetched_at) AS at FROM familylink_daily').get().at;
+  assert.equal(afterPush.familylink_last_report_at, newest,
+    'familylink_last_report_at ist MAX(fetched_at) aus familylink_daily');
+  assert.equal(afterPush.familylink_status, 'ok', 'ein Report mit children setzt ok (bisheriger Weg)');
+  assert.ok(String(afterPush.familylink_status_at) >= String(afterStatus.familylink_status_at),
+    'die Statusmarke folgt der letzten Statussetzung');
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Fernlogin-Sitzung (POST /familylink/login-session) — Collector-Fetch mockt
+ // der exportierte Hook des Dienstes (Muster holidays.js __setFetchImpl)
+// ════════════════════════════════════════════════════════════════════════════
+
+const flLogin = await import('../server/services/familylink-login.js');
+
+test('POST /familylink/login-session - Konfiguration fehlt: 503 familylink_not_configured', async () => {
+  delete process.env.FAMILYLINK_COLLECTOR_BASE;
+  delete process.env.FAMILYLINK_LOGIN_SECRET;
+  const res = await call('POST', '/familylink/login-session', { body: {} });
+  assert.equal(res.status, 503);
+  assert.equal(res.body.reason, 'media_time_familylink_not_configured');
+});
+
+test('POST /familylink/login-session - Kind ohne Elternrolle: 403 vor jeder Collector-Anfrage', async () => {
+  process.env.FAMILYLINK_COLLECTOR_BASE = 'http://collector.invalid:9334/';
+  process.env.FAMILYLINK_LOGIN_SECRET = 'test-login-secret';
+  let touched = false;
+  flLogin.__setFetchImpl(async () => { touched = true; return { ok: true }; });
+  const res = await call('POST', '/familylink/login-session', { actor: kidB, body: {} });
+  assert.equal(res.status, 403);
+  assert.equal(res.body.reason, 'media_time_forbidden');
+  assert.equal(touched, false, 'die Absage fällt vor dem Collector-Ruf');
+});
+
+test('POST /familylink/login-session - Collector nicht erreichbar: 502 collector_unreachable', async () => {
+  flLogin.__resetLoginSession();
+  flLogin.__setFetchImpl(async () => { throw new Error('ECONNREFUSED'); });
+  const res = await call('POST', '/familylink/login-session', { body: {} });
+  assert.equal(res.status, 502);
+  assert.equal(res.body.reason, 'media_time_familylink_collector_unreachable');
+});
+
+test('POST /familylink/login-session - Erfolg: Viewer-URL + Ablauf, Doppelstart storniert die alte Sitzung', async () => {
+  const calls = [];
+  flLogin.__setFetchImpl(async (url, opts) => {
+    calls.push({ url, method: opts?.method, auth: opts?.headers?.authorization });
+    return { ok: true, status: 200 };
+  });
+  const first = await call('POST', '/familylink/login-session', { body: {} });
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  const data = first.body.data;
+  assert.match(data.viewer_url, /^http:\/\/collector\.invalid:9334\/login\/view\?t=[0-9a-f]{64}$/,
+    'Base ohne SchrägstrichRest, Token ist 32 Byte hex');
+  assert.match(String(data.expires_at), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  const ttlMin = (new Date(data.expires_at).getTime() - Date.now()) / 60_000;
+  assert.ok(ttlMin > 8 && ttlMin <= 10.5, `Ablauf liegt ~10 Minuten voraus (ist ${ttlMin.toFixed(1)})`);
+  assert.ok(!JSON.stringify(first.body).includes('test-login-secret'),
+    'das Collector-Geheimnis verlässt den Server nie in der Antwort');
+  assert.deepEqual(calls.map((c) => c.url), ['http://collector.invalid:9334/login/start'],
+    'erste Sitzung: kein Cancel vor dem Start');
+  assert.equal(calls[0].auth, 'Bearer test-login-secret');
+  // Doppelstart: die alte Sitzung wird storniert und durch eine neue ersetzt.
+  const second = await call('POST', '/familylink/login-session', { body: {} });
+  assert.equal(second.status, 200);
+  assert.notEqual(second.body.data.viewer_url, data.viewer_url, 'neues Token');
+  assert.deepEqual(calls.slice(1).map((c) => c.url), [
+    'http://collector.invalid:9334/login/cancel',
+    'http://collector.invalid:9334/login/start',
+  ], 'Cancel (best effort) vor dem neuen Start');
+  // Aufraeumen: Hook und Zustand zurueck, env wieder leer fuer folgende Suites.
+  flLogin.__setFetchImpl(null);
+  flLogin.__resetLoginSession();
+  delete process.env.FAMILYLINK_COLLECTOR_BASE;
+  delete process.env.FAMILYLINK_LOGIN_SECRET;
+});

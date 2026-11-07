@@ -651,3 +651,112 @@ button.mt-budget-chip:hover {
   }
 }
 
+
+/* ============================================================
+   Collector-Status der Familie-Link-Gruppe (Gruppe 5)
+   ------------------------------------------------------------
+   Ruhige Zeile bei frischem Report, auffaellige Zeile mit Schrittfolge
+   sonst; die Worte tragen die Aussage, die Farbe ist nur Betonung. */
+
+/* Statuszeile: Icon + Text auf einer Achse. */
+.mt-fl-status__line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Abgelaufene Anmeldung: Warn-Tinte wie die Fluesterzeile der Einzelkarte. */
+.mt-fl-status__line--warn {
+  color: var(--color-warning-ink);
+  font-weight: var(--font-weight-semibold);
+}
+
+.mt-fl-status__icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+/* Nachweis-Zeile ("Status zuletzt vor X geprueft") - leiser als die Zeile drueber. */
+.mt-fl-status__checked {
+  margin: 0;
+  font-size: var(--type-caption);
+  color: var(--color-text-secondary);
+}
+
+/* Fernlogin-CTA: die erste Handlung im Warnzustand, ueber dem Schritt-Toggle;
+ * der Knopf traegt den geteilten Fokusring der btn-Klassen selbst. */
+.mt-fl-login {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* Der Klapp-Knopf der Schrittfolge: Chevron zeigt nach unten (zu), dreht
+   offen nach oben - dieselbe Kurve wie beim Karten-Toggle. */
+.mt-fl-toggle svg {
+  transition: transform var(--duration-md) var(--ease-out);
+}
+
+.mt-fl-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-fl-toggle svg {
+    transition: none;
+  }
+}
+
+/* Schrittfolge: eine Zeile Text, darunter der Befehl; der Befehl bricht im
+   eigenen Kasten um, damit 360px-Seiten nicht seitlich scrollen. */
+.mt-fl-steps {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mt-fl-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mt-fl-step__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.mt-fl-step__cmd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-fill-well);
+}
+
+/* word-break nur hier, im Code-Snippet - der lange Pfad darf die Seite nicht
+   verbreitern. */
+.mt-fl-step__cmd code {
+  font-family: var(--font-mono);
+  font-size: var(--type-caption);
+  overflow-wrap: anywhere;
+}
+
+/* Der Kopier-Knopf bleibt rechts knapp stehn, der Befehl nimmt den Rest. */
+.mt-fl-step__cmd .btn {
+  flex: none;
+}

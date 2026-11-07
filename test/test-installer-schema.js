@@ -122,6 +122,12 @@ const INTENTIONALLY_NOT_IN_INSTALLER = {
   // zweite Wahrheit, die der Descriptor überschreibt.
   NODE_ENV: 'Vom Image gesetzt (production).',
   PORT: 'Container-interner Port, überall fest 3000. Der Host-Port ist OIKOS_HTTP_PORT.',
+  FAMILYLINK_COLLECTOR_BASE:
+    'Der Sammler-Rechner ist dem Installer unbekannt: die Adresse gehoert zum laufenden '
+    + 'Heimnetz und wird erst im Betrieb gesetzt (Deploy), nicht bei der Installation.',
+  FAMILYLINK_LOGIN_SECRET:
+    'Gemeinsames Geheimnis mit dem Sammler (~/.familyhub/login_secret, 0600). Es soll '
+    + 'nicht durch ein Installer-Formular und damit durch den Browser laufen.',
   DB_PATH: 'Vom Descriptor auf /data/yuvomi.db gesetzt.',
   BACKUP_DIR:
     'Die App liest diesen Namen selbst (backup-scheduler.js) und meint damit das Ziel IM '

@@ -4058,32 +4058,53 @@ export const schemas = {
             enforcement: mediaTimeProperties.enforcement,
             familylink_ingest_enabled: { type: 'boolean', description: 'True when the five-minute family link ingest runs on this household.' },
             familylink_status: { type: ['string', 'null'], enum: ['ok', 'login_noetig', null], description: 'Last collector outcome; null before the first run.' },
+            familylink_status_at: { type: ['string', 'null'], description: 'When the collector status was last set (ISO instant); null before the first run.' },
+            familylink_last_report_at: { type: ['string', 'null'], description: 'Newest fetched_at of a collected family link day row (the last real report); null when nothing was ever collected - a login_noetig status alone does not move it.' },
           },
         },
         MediaTimeFamilylinkReportInput: {
-          type: 'object',
-          required: ['date', 'children'],
-          description: 'Genau der Report, den scripts/familylink/familyhub_screen.py --json liefert (Push vom Collector-Host).',
-          properties: {
-            date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-            children: {
-              type: 'array',
-              items: {
-                type: 'object',
-                required: ['userId', 'devices'],
-                properties: {
-                  userId: { type: 'string', description: 'Pseudonyme Google-Kennung (Ziffernfolge).' },
-                  name: { type: 'string', description: 'Wird verworfen - Kind-Namen landen nicht in der Datenbank.' },
-                  downtime: { type: ['string', 'null'] },
-                  devices: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, consumed_min: { type: ['number', 'null'] }, allowed_min: { type: ['number', 'null'] }, remaining_min: { type: ['number', 'null'] } } } },
+          description: 'Zwei Formen, eine Route: der Report, den scripts/familylink/familyhub_screen.py --json liefert\n'
+            + '(Push vom Collector-Host), oder der reine Status-Report { status } ohne children, mit dem der Collector\n'
+            + 'seine abgelaufene Google-Sitzung meldet (derselbe setStatus-Pfad wie der lokale Takt).',
+          oneOf: [
+            {
+              type: 'object',
+              required: ['date', 'children'],
+              properties: {
+                date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+                children: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    required: ['userId', 'devices'],
+                    properties: {
+                      userId: { type: 'string', description: 'Pseudonyme Google-Kennung (Ziffernfolge).' },
+                      name: { type: 'string', description: 'Wird verworfen - Kind-Namen landen nicht in der Datenbank.' },
+                      downtime: { type: ['string', 'null'] },
+                      devices: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, consumed_min: { type: ['number', 'null'] }, allowed_min: { type: ['number', 'null'] }, remaining_min: { type: ['number', 'null'] } } } },
+                    },
+                  },
                 },
               },
             },
-          },
+            {
+              type: 'object',
+              required: ['status'],
+              properties: {
+                status: { type: 'string', enum: ['ok', 'login_noetig'], description: 'Nur der Status ohne children-Liste; ein unbekannter Wert ist 400.' },
+              },
+            },
+          ],
         },
         MediaTimeFamilylinkReportResponse: {
           type: 'object', required: ['data'],
-          properties: { data: { type: 'object', required: ['written', 'errors'], properties: { written: { type: 'integer', minimum: 0 }, errors: { type: 'integer', minimum: 0 } } } },
+          properties: { data: {
+            description: 'Report-Pfad: written/errors; Status-Pfad: das gesetzte status.',
+            oneOf: [
+              { type: 'object', required: ['written', 'errors'], properties: { written: { type: 'integer', minimum: 0 }, errors: { type: 'integer', minimum: 0 } } },
+              { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['ok', 'login_noetig'] } } },
+            ],
+          } },
         },
         MediaTimeFamilylinkTokenData: {
           type: 'object',
@@ -4092,6 +4113,18 @@ export const schemas = {
             token: { type: 'string', description: 'Klartext nur einmal in dieser Antwort; gespeichert ist ausschliesslich der Hash.' },
             note: { type: 'string' },
           },
+        },
+        MediaTimeFamilylinkLoginSessionData: {
+          type: 'object',
+          required: ['viewer_url', 'expires_at'],
+          properties: {
+            viewer_url: { type: 'string', description: 'Einmal-Viewer-Seite des Collectors (traegt das Sitzungs-Token); gueltig bis expires_at, danach 404 am Collector.' },
+            expires_at: { type: 'string', description: 'ISO-Moment des Ablaufs (10 Minuten nach Start, harte Collector-Grenze 15).' },
+          },
+        },
+        MediaTimeFamilylinkLoginSessionResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkLoginSessionData' } },
         },
         MediaTimeFamilylinkDay: {
           type: 'object',

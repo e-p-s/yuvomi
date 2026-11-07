@@ -31,6 +31,18 @@ familylinkReportRouter.post('/media-time/familylink/report', (req, res) => {
     if (!stored || !given || hashDeviceToken(given) !== stored) {
       return res.status(401).json({ error: 'Valid x-familylink-token required.', code: 401, reason: 'media_time_unauthenticated' });
     }
+    // Reiner Status-Report (Kein-Daten-Fall): der Collector meldet seine
+    // abgelaufene Google-Sitzung, ohne Report-Koerper - der Statuspfad des
+    // lokalen Laufs (setStatus) ist derselbe, deshalb keine eigene Route.
+    // Ein Report mit children faellt durch diesen Zweig durch (bisheriger Weg).
+    const body = req.body ?? {};
+    if (body.children === undefined && body.status !== undefined) {
+      if (body.status !== 'ok' && body.status !== 'login_noetig') {
+        return res.status(400).json({ error: 'Report not accepted.', code: 400, reason: 'media_time_bad_request' });
+      }
+      setStatus(d, body.status);
+      return res.json({ data: { status: body.status } });
+    }
     const r = ingestFamilylinkReport(d, req.body);
     // Ein angenommener Push ist ein erfolgreicher Lauf - derselbe Status,
     // den der lokale Takt setzt (UI zeigt "Letzter Abruf: okay").

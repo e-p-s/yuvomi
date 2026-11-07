@@ -134,6 +134,32 @@ test('runFamilylinkIngest - Erfolg schreibt und setzt Status ok', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// Status-Zeitmarke (GET /settings: familylink_status_at)
+// ════════════════════════════════════════════════════════════════════════════
+
+test('setStatus - die Zeitmarke STATUS_AT_KEY laeuft mit (UI-Zeitstempel)', () => {
+  const read = () => db.prepare('SELECT value FROM sync_config WHERE key = ?')
+    .get(fl.FAMILYLINK_STATUS_KEYS.at)?.value ?? null;
+  const before = read();
+  fl.setStatus(db, 'login_noetig');
+  const at = read();
+  assert.match(String(at), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
+    'die Zeitmarke ist ein ISO-Moment (Z) wie bei den uebrigen sync_config-Werten');
+  fl.setStatus(db, 'ok');
+  assert.ok(String(read()) >= String(at), 'ein zweiter Lauf bewegt die Marke vorwaerts');
+  assert.ok(before === null || /^\d{4}-\d{2}-\d{2}T/.test(String(before)),
+    'vorher war nichts oder ein gleicher Moment eingetragen');
+  // setStatus schreibt nur den Status - keine Tageszeile, also bleibt
+  // familylink_last_report_at (MAX(fetched_at)) die Marke der letzten echten
+  // Zeile: ein reiner Statuslauf kann sie nicht bewegen. Der Status endet auf
+  // 'ok', damit die Folge-Tests ihren bekannten Stand behalten.
+  const rows = dailyCount();
+  fl.setStatus(db, 'ok');
+  assert.equal(dailyCount(), rows, 'der Statuspfad schreibt keine Zeile');
+  assert.equal(fl.familylinkStatus(db), 'ok');
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // dayUsage: Google-Istzeit ersetzt die Session-Minuten des gemappten Gerets
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -201,4 +227,49 @@ test('dayUsage — Kind ohne eigenes Geraet: Google-Summe ist der Verbrauch', ()
   const u = svc.dayUsage(db, childId, day);
   assert.equal(u.charged_min, 35, 'zwei Geraete ohne Link: Summe zahlend');
   assert.equal(u.familylink_min, 35);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Alt-Schluessel mit echtem U+2026 (self-healing-Migration, kein Deploy-Schritt)
+// ════════════════════════════════════════════════════════════════════════════
+
+const LEGACY_S = 'familyli\u2026us';
+const LEGACY_A = 'famil\u2026_at';
+const cfgPut = (key, value) => db.prepare(
+  'INSERT INTO sync_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+).run(key, value);
+const cfgGet = (key) => db.prepare('SELECT value FROM sync_config WHERE key = ?').get(key)?.value;
+const cfgDel = (key) => db.prepare('DELETE FROM sync_config WHERE key = ?').run(key);
+
+test('migrateLegacyStatusKeys - Altschluessel wandert zum neuen Key, alt verschwindet (Idempotenz)', () => {
+  // So sah eine alte Datenbank aus: nur die U+2026-Zeilen, neue Keys fehlen.
+  cfgDel(fl.FAMILYLINK_STATUS_KEYS.status);
+  cfgDel(fl.FAMILYLINK_STATUS_KEYS.at);
+  cfgPut(LEGACY_S, 'login_noetig');
+  cfgPut(LEGACY_A, '2026-11-04T08:00:00Z');
+  assert.equal(fl.familylinkStatus(db), 'login_noetig',
+    'der erste Zugriff im Lesepfad hebt den Wert schon um');
+  assert.equal(cfgGet(fl.FAMILYLINK_STATUS_KEYS.status), 'login_noetig');
+  assert.equal(cfgGet(fl.FAMILYLINK_STATUS_KEYS.at), '2026-11-04T08:00:00Z',
+    'die Zeitmarke wandert mit (GET /settings zeigt den alten Moment)');
+  assert.equal(cfgGet(LEGACY_S), undefined, 'der Altschluessel ist weg');
+  assert.equal(cfgGet(LEGACY_A), undefined);
+  fl.migrateLegacyStatusKeys(db);
+  assert.equal(cfgGet(fl.FAMILYLINK_STATUS_KEYS.status), 'login_noetig',
+    'ein zweiter Lauf aendert nichts (Idempotenz)');
+});
+
+test('migrateLegacyStatusKeys - existieren beide, gewinnt der neue; der alte wird geloescht', () => {
+  cfgPut(fl.FAMILYLINK_STATUS_KEYS.status, 'ok');
+  cfgPut(LEGACY_S, 'login_noetig');
+  fl.migrateLegacyStatusKeys(db);
+  assert.equal(cfgGet(fl.FAMILYLINK_STATUS_KEYS.status), 'ok', 'der neue Schluessel gewinnt');
+  assert.equal(cfgGet(LEGACY_S), undefined, 'der Altschluessel wird trotzdem geloescht');
+  // Der Schreibpfad migriert ebenso: setStatus vor dem Schreiben raemt auf.
+  cfgPut(LEGACY_A, '2026-11-01T00:00:00Z');
+  fl.setStatus(db, 'login_noetig');
+  assert.equal(cfgGet(LEGACY_A), undefined, 'auch im Schreibpfad bleibt kein Altwert');
+  assert.match(String(cfgGet(fl.FAMILYLINK_STATUS_KEYS.at)), /^\d{4}-\d{2}-\d{2}T/,
+    'setStatus schreibt die eigene Marke, nicht den umgezogenen Altwert');
+  fl.setStatus(db, 'ok'); // bekannter Endstand fuer die Suite
 });

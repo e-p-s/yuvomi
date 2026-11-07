@@ -22,17 +22,45 @@
 import { spawn } from 'node:child_process';
 
 /** Der Status-Key und seine Zeitmarke (sync_config-Muster wie media_time_*). */
-const STATUS_KEY = 'familyli…us';
-const STATUS_AT_KEY = 'famil…_at';
+const STATUS_KEY = 'familylink_status';
+const STATUS_AT_KEY = 'familylink_status_at';
 export const FAMILYLINK_STATUS_KEYS = { status: STATUS_KEY, at: STATUS_AT_KEY };
+
+/**
+ * Die Altschluessel (self-healing-Migration, kein Deploy-Schritt): die erste
+ * Fassung enthielt versehentlich echte U+2026-Zeichen statt Unterstrichen.
+ * Beim ersten Zugriff (Lese- wie Schreibpfad) gilt: existiert ein Alt-Key und
+ * der neue noch nicht -> Wert umziehen, alt loeschen; existieren beide ->
+ * der neue gewinnt, alt loeschen. Idempotent: ohne Alt-Zeilen passiert nichts.
+ */
+const LEGACY_STATUS_KEY = 'familyli\u2026us';
+const LEGACY_STATUS_AT_KEY = 'famil\u2026_at';
+
+export function migrateLegacyStatusKeys(d) {
+  const legacy = d.prepare(
+    'SELECT key, value FROM sync_config WHERE key IN (?, ?)'
+  ).all(LEGACY_STATUS_KEY, LEGACY_STATUS_AT_KEY);
+  if (legacy.length === 0) return;
+  const getNew = d.prepare('SELECT 1 AS hit FROM sync_config WHERE key = ?');
+  const copy = d.prepare('INSERT INTO sync_config (key, value) VALUES (?, ?)');
+  const del = d.prepare('DELETE FROM sync_config WHERE key = ?');
+  for (const row of legacy) {
+    const target = row.key === LEGACY_STATUS_KEY ? STATUS_KEY : STATUS_AT_KEY;
+    // existieren beide: der neue gewinnt - nur der Alt-Key verschwindet.
+    if (!getNew.get(target)) copy.run(target, row.value);
+    del.run(row.key);
+  }
+}
 
 /** Der Sammelstatus: 'ok' | 'login_noetig' | null (nie gelaufen). */
 export function familylinkStatus(d) {
+  migrateLegacyStatusKeys(d);
   const row = d.prepare('SELECT value FROM sync_config WHERE key = ?').get(STATUS_KEY);
   return row ? row.value : null;
 }
 
 export function setStatus(d, value) {
+  migrateLegacyStatusKeys(d);
   d.prepare(`
     INSERT INTO sync_config (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -185,8 +213,7 @@ export function familylinkUsage(d, userId, day) {
   const child = d.prepare(
     'SELECT google_uid, display_name, enabled FROM familylink_children WHERE yuvomi_user_id = ?'
   ).get(userId);
-  const statusRow = d.prepare('SELECT value FROM sync_config WHERE key = ?').get(STATUS_KEY);
-  const status = statusRow ? statusRow.value : null;
+  const status = familylinkStatus(d);
   if (!child || child.enabled !== 1) {
     return { mapped: false, status, devices: [] };
   }
