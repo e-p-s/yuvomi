@@ -252,7 +252,8 @@ RE_OTP_TEXT = re.compile(
 # nach 12s aufzugeben waere uebereilt (Nutzervorgabe 07.11.: laenger warten).
 RE_DEVICE_CONFIRM = re.compile(
     r"bestaetigen sie|ist das ihr (geraet|tablet|handy)|confirm (this sign-in|it is you)"
-    r"|diese anfrage bestaetigen|check your phone|auf ihrem (handy|geraet|telefon)")
+    r"|diese anfrage bestaetigen|check your phone|auf ihrem (handy|geraet|telefon)"
+    r"|pruefen sie ihr (handy|telefon|geraet)|google sent a notification")
 
 # Zustands-Erkennung: diese vier Antworten beenden jeden Poll (Timeout -> challenge).
 TERMINALS = ("success", "otp", "bad_password", "challenge")
@@ -354,18 +355,18 @@ JS_OPTIONS = """
   .filter(t => t).slice(0, 14))()
 """
 
-# Klick auf den inneren jsaction-Knoten des ersten passenden Eintrags —
-# ein Klick aufs LI selbst verpufft bei Googles Aktions-Delegation gern.
-JS_CLICK_OPTION = """
+# Mitte des ersten sichtbaren Methoden-Eintrags — goegter Klick noetig:
+# ein DOM-click() auf der LI-Liste verpufft bei Googles jsaction-Delegation
+# (Live-Test 17:50: nur echte Maeuse-Events offnen die Prompt-Seite).
+JS_OPTION_CENTER = """
 ((txt) => {
   const re = new RegExp(txt, 'i');
   const vis = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
   const items = [...document.querySelectorAll('li, [role="listitem"], button, [role="button"], a')]
     .filter(el => vis(el) && re.test((el.textContent || '').trim()));
-  if (!items.length) return 'no-match';
-  const it = items[0];
-  (it.querySelector('[jsaction]') || it).click();
-  return 'clicked:' + (it.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 70);
+  if (!items.length) return null;
+  const r = items[0].getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 })(%s)
 """
 
@@ -576,10 +577,15 @@ def _switch_to_prompt(ws, masks=()):
             _dbg("Auswahlseiten-Knöpfe: " + " | ".join(_mask(b, masks) for b in btns))
         hit = next((b for b in btns if pat.search(b)), None)
         if hit:
-            r = cap.ev(ws, JS_CLICK_OPTION % json.dumps(RE_PROMPT_OPTION))
-            _dbg(f"Prompt-Schalter (Handy-Prompt): {r} (Text: {_mask(hit, masks)})")
-            st = _wait_for(ws, ("prompt",) + TERMINALS, 15, masks)
-            return st if (st == "prompt" or st in TERMINALS) else "none"
+            c = cap.ev(ws, JS_OPTION_CENTER % json.dumps(RE_PROMPT_OPTION))
+            if isinstance(c, dict) and "x" in c:
+                _click_xy(ws, c["x"], c["y"])
+                _dbg(f"Prompt-Schalter (Handy-Prompt): geklickt (Text: {_mask(hit, masks)})")
+            # 'otp' hier bewusst NICHT gewollt: die Auswahlseite nennt auch
+            # Codes und waere sonst sofort Terminal (17:43-Befund: Abbruch
+            # mitten im Uebergang, obwohl der Prompt laengst rausging).
+            st = _wait_for(ws, ("prompt", "success", "bad_password", "challenge"), 20, masks)
+            return st if st in ("prompt", "success", "bad_password", "challenge") else "none"
         time.sleep(1.0)
     _dbg_always("Kein Handy-Prompt unter den Google-Wegen — Code-Eingabe bleibt.")
     return "none"

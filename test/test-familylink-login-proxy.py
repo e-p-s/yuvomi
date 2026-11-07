@@ -106,6 +106,12 @@ check("prompt Geraetebestaetigung vor OTP-Text (warten, nicht Fenster)",
                                  "fields": [{"type": "tel"}]}) == "prompt")
 check("prompt Check-your-phone englisch",
       flp.classify_page(SIGNIN, {"text": "Check your phone to continue", "fields": []}) == "prompt")
+check("prompt Google-sent-a-notification (dp-Seite, Live-Befund 17:50)",
+      flp.classify_page("https://accounts.google.com/v3/signin/challenge/dp",
+                        {"text": "Check your phone Google sent a notification to your Galaxy S22",
+                         "fields": []}) == "prompt")
+check("prompt Pruefen Sie Ihr Handy (deutsch)",
+      flp.classify_page(SIGNIN, {"text": "Prüfen Sie Ihr Handy", "fields": []}) == "prompt")
 # Kontenauswahl: erst ab zwei Konten eine Entscheidung fuer den Menschen.
 check("challenge Kontenauswahl (2 Konten)",
       flp.classify_page("https://accounts.google.com/AccountChooser",
