@@ -101,9 +101,11 @@ check("challenge captcha",
                                  "fields": []}) == "challenge")
 check("challenge Roboter deutsch",
       flp.classify_page(SIGNIN, {"text": "Ich bin kein Roboter", "fields": []}) == "challenge")
-check("challenge Geraetebestaetigung vor OTP-Text",
+check("prompt Geraetebestaetigung vor OTP-Text (warten, nicht Fenster)",
       flp.classify_page(SIGNIN, {"text": "Bestätigen Sie, dass Sie sich anmelden möchten",
-                                 "fields": [{"type": "tel"}]}) == "challenge")
+                                 "fields": [{"type": "tel"}]}) == "prompt")
+check("prompt Check-your-phone englisch",
+      flp.classify_page(SIGNIN, {"text": "Check your phone to continue", "fields": []}) == "prompt")
 # Kontenauswahl: erst ab zwei Konten eine Entscheidung fuer den Menschen.
 check("challenge Kontenauswahl (2 Konten)",
       flp.classify_page("https://accounts.google.com/AccountChooser",

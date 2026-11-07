@@ -244,17 +244,20 @@ def _fold(s):
 RE_BAD_PASSWORD = re.compile(
     r"falsches passwort|wrong password|access denied|passwort falsch|passwort ist falsch")
 RE_CAPTCHA = re.compile(r"captcha|ich bin kein roboter|not a robot")
-# Geraetebestaetigung: Verb-Phrase ("Bestätigen Sie …"), nicht das Substantiv
-# "Bestätigung" der OTP-Seite — die Reihenfolge in classify_page haelt beides auseinander.
-RE_DEVICE_CONFIRM = re.compile(
-    r"bestaetigen sie|ist das ihr (geraet|tablet|handy)|confirm (this sign-in|it is you)"
-    r"|diese anfrage bestaetigen")
 RE_OTP_TEXT = re.compile(
     r"bestaetigung|two-step|two step|authenticator|sicherheitscode|bestaetigungscode"
     r"|verifizierungscode|verification code|confirmation code")
+# Geraetebestaetigung ("Ja, das bin ich" am Handy): KEIN Abbruch — ein Warten.
+# Google schickt die Anfrage von selbst; ein Klick am Handy braucht Zeit, und
+# nach 12s aufzugeben waere uebereilt (Nutzervorgabe 07.11.: laenger warten).
+RE_DEVICE_CONFIRM = re.compile(
+    r"bestaetigen sie|ist das ihr (geraet|tablet|handy)|confirm (this sign-in|it is you)"
+    r"|diese anfrage bestaetigen|check your phone|auf ihrem (handy|geraet|telefon)")
 
 # Zustands-Erkennung: diese vier Antworten beenden jeden Poll (Timeout -> challenge).
 TERMINALS = ("success", "otp", "bad_password", "challenge")
+# Geraetebestaetigung darf lange laufen: bis zu 150s auf den Klick am Handy.
+PROMPT_WAIT_SECONDS = 150
 
 
 def classify_page(url, dom):
@@ -262,7 +265,7 @@ def classify_page(url, dom):
 
     dom ist das Ergebnis von JS_AUTO_PROBE: {url, text, fields: [{type, aria}],
     accounts}. Akzeptiert der Einfachheit halber auch Felder als reine Typ-Strings.
-    Rueckgabe: success | bad_password | challenge | otp | password | email | unknown.
+    Rueckgabe: success | bad_password | challenge | otp | password | email | prompt | unknown.
     Reihenfolge: Erfolg, dann Fehlermeldungen (die Seite zeigt das Passwortfeld
     weiter, obwohl es schon verworfen ist), dann Kontenauswahl, dann Feldform."""
     u = _fold(url)
@@ -285,8 +288,11 @@ def classify_page(url, dom):
         return "success"
     if RE_BAD_PASSWORD.search(text):
         return "bad_password"
-    if RE_CAPTCHA.search(text) or RE_DEVICE_CONFIRM.search(text):
+    if RE_CAPTCHA.search(text):
         return "challenge"
+    if RE_DEVICE_CONFIRM.search(text):
+        # "Ja, das bin ich" am Handy — der Flow wartet darauf, kein Fenster.
+        return "prompt"
     # Kontenauswahl mit mehreren Konten: ein Klick waere eine Entscheidung fuer
     # ein bestimmtes Konto — die trifft der Mensch im Viewer-Fenster.
     if "chooser" in u and int(d.get("accounts") or 0) >= 2:
@@ -500,6 +506,15 @@ def _dispatch_terminal(ws, st):
     return "challenge"
 
 
+def _await_prompt(ws, st, masks=()):
+    """'prompt' = Google wartet auf den Klick am Handy ("Ja, das bin ich").
+    Kein Fenster, kein Abbruch: nachwarten bis PROMPT_WAIT_SECONDS."""
+    if st != "prompt":
+        return st
+    _dbg_always("Geruete-Bestaetigung offen — warte bis zu %ds auf den Klick am Handy" % PROMPT_WAIT_SECONDS)
+    return _wait_for(ws, TERMINALS, PROMPT_WAIT_SECONDS, masks)
+
+
 def _run_login_flow(email, password):
     global _pending
     _pending = None
@@ -509,7 +524,7 @@ def _run_login_flow(email, password):
     _dbg(f"Auto-Login startet (Konto {_mask(email, masks)})")
     ws = _attach_ws(navigate=SIGNIN_URL)
     try:
-        st = _wait_for(ws, ("email", "password", "otp", "success", "bad_password", "challenge"), 12, masks)
+        st = _await_prompt(ws, _wait_for(ws, ("email", "password", "otp", "prompt", "success", "bad_password", "challenge"), 12, masks), masks)
         if st == "timeout":
             # Haufigster Blindflug: das Profil ist bei Google noch angemeldet und
             # die Seite zeigt die Kontenauswahl. Ein Konto -> wir klicken es und
@@ -525,12 +540,12 @@ def _run_login_flow(email, password):
                 c = cap.ev(ws, JS_FIELD_CENTER % json.dumps("[data-email]"))
                 if isinstance(c, dict) and "x" in c:
                     _click_xy(ws, c["x"], c["y"])
-                    st = _wait_for(ws, ("email", "password", "otp", "success", "bad_password", "challenge"), 12, masks)
+                    st = _await_prompt(ws, _wait_for(ws, ("email", "password", "otp", "prompt", "success", "bad_password", "challenge"), 12, masks), masks)
         if st == "email":
             cap.ev(ws, cap.JS_FILL % ("null", json.dumps(email)))
             time.sleep(0.6)
             cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next"))
-            st = _wait_for(ws, ("password", "otp", "success", "bad_password", "challenge"), 12, masks)
+            st = _await_prompt(ws, _wait_for(ws, ("password", "otp", "prompt", "success", "bad_password", "challenge"), 12, masks), masks)
         if st not in ("password", "otp", "success", "bad_password", "challenge"):
             _dbg_always(f"unklarer Zustand nach Vorlauf ({st}) — Viewer uebernimmt")
             return _dispatch_terminal(ws, "challenge")  # timeout/unklar: manuell weiter
@@ -546,7 +561,7 @@ def _run_login_flow(email, password):
                 cap.ev(ws, cap.JS_FILL % (json.dumps('input[type="password"]'), json.dumps(password)))
             time.sleep(0.6)
             cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next|anmelden|einloggen"))
-            st = _wait_for(ws, TERMINALS, 12, masks)
+            st = _await_prompt(ws, _wait_for(ws, TERMINALS + ("prompt",), 12, masks), masks)
         return _dispatch_terminal(ws, st if st in TERMINALS else "challenge")
     finally:
         try:
@@ -573,7 +588,7 @@ def _run_code_flow(code):
         ws.call("Input.insertText", {"text": code})
         time.sleep(0.6)
         cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next"))
-        st = _wait_for(ws, TERMINALS, 12, masks)
+        st = _await_prompt(ws, _wait_for(ws, TERMINALS + ("prompt",), 12, masks), masks)
         if st == "success":
             return _finish_ok(ws)
         if st in ("bad_password", "challenge"):
