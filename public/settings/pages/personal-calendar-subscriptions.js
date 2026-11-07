@@ -336,7 +336,7 @@ function openIcsEditModal(container, sub, subs, user) {
           showToast(t('settings.ics.updatedToast'), 'success');
           closeModal({ force: true, context: modalContext });
         } catch (err) {
-          errEl.textContent = err.message || t('common.errorGeneric');
+          errEl.textContent = errorSentence(err);
           errEl.hidden = false;
           submitBtn.disabled = false;
         }
@@ -393,12 +393,17 @@ function bindIcsEvents(container, subs, user) {
       formWrapper.hidden = true;
       addBtn.hidden = false;
       if (res.syncError) {
-        showToast(`${t('settings.ics.status.syncError')}: ${res.syncError}`, 'danger');
+        // Das Abo steht, der erste Abruf ist gescheitert (#2566): der Fall des
+        // Servers in der Sprache der Seite, nie sein englischer Text.
+        const sentence = errorSentence({ data: { reason: res.syncReason, params: res.syncParams } });
+        showToast(`${t('settings.ics.status.syncError')}: ${sentence}`, 'danger');
       } else {
         showToast(t('settings.ics.addedToast'), 'success');
       }
     } catch (err) {
-      errorEl.textContent = err.message || t('common.errorGeneric');
+      // Der Fall des Servers (#1909): Name, Adresse, privates Netz, ein Feed,
+      // der nicht ausgeliefert hat.
+      errorEl.textContent = errorSentence(err);
       errorEl.hidden = false;
     } finally {
       submitBtn.disabled = false;
@@ -531,9 +536,9 @@ function bindCalendarImport(container, calendars = []) {
         }
       }
       // Ein Serverfehler beim Anlegen des Kalenders oder beim Import sagt den
-      // Satz der App (#1695), nie den des Servers. Die 400 des Imports nennen
-      // weiter ihre Ursache, bis dessen Scheibe kommt.
-      errorEl.textContent = (err?.status >= 500 && loadErrorSentence(err)) || err.message || t('common.errorGeneric');
+      // Satz der App (#1695), nie den des Servers; die 400 des Imports nennen
+      // ihre Ursache als Fall (#1909).
+      errorEl.textContent = (err?.status >= 500 && loadErrorSentence(err)) || errorSentence(err);
       errorEl.hidden = false;
     } finally {
       submitBtn.disabled = false;

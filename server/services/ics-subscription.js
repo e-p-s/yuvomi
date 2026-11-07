@@ -18,7 +18,7 @@ import { assignDefaultToEvent, settlePastInheritedReminders } from './sync-assig
 import { assigneeFields, readAllDefaultAssignees, readDefaultAssignees, writeDefaultAssignees } from './default-assignees.js';
 import { setEventAssignments } from '../routes/calendar/helpers.js';
 import { remindAtCompareKey } from '../utils/reminder-schedule.js';
-import { parseICS, expandRRULE, normalizeRecurrenceOverrides } from './ics-parser.js';
+import { parseICS, expandRRULE, normalizeRecurrenceOverrides, providerStatusOf } from './ics-parser.js';
 import { isBlockedAddress, readPrivateNetworkOptIn, createGuardedLookup, BlockedAddressError } from '../utils/ssrf.js';
 import { safeRequest } from '../utils/http.js';
 import { followInboundStartChange } from './calendar-occurrence-overrides.js';
@@ -29,7 +29,8 @@ const log = createLogger('ICS');
 
 const SYNC_WINDOW_PAST_MONTHS   = 6;
 const SYNC_WINDOW_FUTURE_MONTHS = 12;
-const MAX_RESPONSE_BYTES        = 10 * 1024 * 1024;
+const MAX_RESPONSE_MB           = 10;
+const MAX_RESPONSE_BYTES        = MAX_RESPONSE_MB * 1024 * 1024;
 const FETCH_TIMEOUT_MS          = 15_000;
 
 const ENV_ALLOW_PRIVATE_NETWORK = 'ICS_SUBSCRIPTION_ALLOW_PRIVATE_NETWORK';
@@ -46,14 +47,23 @@ function isPrivateNetworkAllowed() {
   return readPrivateNetworkOptIn(ENV_ALLOW_PRIVATE_NETWORK);
 }
 
+/**
+ * Ein Fehler beim Abruf eines Feeds, den die App benennen kann (#1909): der
+ * Text bleibt derselbe (er steht im Log), `code` nennt den Fall und `params`
+ * seine Zahl. Die Route macht daraus den `reason`.
+ */
+function icsFailure(message, code, params) {
+  return Object.assign(new Error(message), { code }, params ? { params } : {});
+}
+
 function normalizeUrl(raw) {
   const allowPrivate = isPrivateNetworkAllowed();
   const url = new URL(raw.replace(/^webcal:\/\//i, 'https://'));
   const allowed = allowPrivate ? ['https:', 'http:'] : ['https:'];
   if (!allowed.includes(url.protocol)) {
-    throw new Error(allowPrivate
+    throw icsFailure(allowPrivate
       ? 'Only http://, https:// and webcal:// URLs are allowed.'
-      : 'Only https:// and webcal:// URLs are allowed.');
+      : 'Only https:// and webcal:// URLs are allowed.', 'calendar_ics_url_scheme');
   }
   return url.href;
 }
@@ -105,15 +115,16 @@ async function fetchAndParse(urlRaw, etag, lastModified) {
   } finally { clearTimeout(timer); }
 
   if (res.status === 304) return { notModified: true };
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw icsFailure(`HTTP ${res.status}`, 'calendar_ics_http_status', { status: res.status });
 
+  const tooLarge = () => icsFailure(`ICS file exceeds the ${MAX_RESPONSE_MB} MB limit.`, 'calendar_ics_too_large', { limit_mb: MAX_RESPONSE_MB });
   const cl = parseInt(res.headers.get('content-length') || '0', 10);
-  if (cl > MAX_RESPONSE_BYTES) throw new Error('ICS file exceeds the 10 MB limit.');
+  if (cl > MAX_RESPONSE_BYTES) throw tooLarge();
 
   let body = '', received = 0;
   for await (const chunk of res.body) {
     received += chunk.length;
-    if (received > MAX_RESPONSE_BYTES) throw new Error('ICS file exceeds the 10 MB limit.');
+    if (received > MAX_RESPONSE_BYTES) throw tooLarge();
     body += chunk.toString();
   }
 
@@ -132,7 +143,13 @@ function syncWindow() {
   return { windowStart: past.toISOString().slice(0, 10), windowEnd: future.toISOString().slice(0, 10) };
 }
 
-async function syncOne(sub) {
+/**
+ * @param {object} sub - Zeile aus ics_subscriptions
+ * @param {{ rethrowFetch?: boolean }} [opts] - wer auf das Ergebnis wartet (Anlegen,
+ *   Aktualisieren-Knopf), bekommt den Abruffehler geworfen und kann ihn sagen
+ *   (#2566). Der Scheduler laesst ihn weg: dort liest niemand, er steht im Log.
+ */
+async function syncOne(sub, { rethrowFetch = false } = {}) {
   if (syncingNow.has(sub.id)) {
     log.info(`Subscription ${sub.id} is already syncing - skipped.`);
     return;
@@ -143,6 +160,7 @@ async function syncOne(sub) {
     try { result = await fetchAndParse(sub.url, sub.etag, sub.last_modified); }
     catch (err) {
       log.warn(`Subscription ${sub.id} (${sub.name}): fetch failed - ${err.message}`);
+      if (rethrowFetch) throw err;
       return;
     }
 
@@ -195,8 +213,16 @@ async function syncOne(sub) {
       INSERT INTO calendar_events
         (title, description, start_datetime, end_datetime, all_day, location,
          color, external_calendar_id, external_source, subscription_id, recurrence_rule, user_modified, created_by,
-         feed_original)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ics', ?, ?, 0, ?, ?)
+         feed_original, provider_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ics', ?, ?, 0, ?, ?, ?)
+    `);
+
+    // #2499: die Absage des Anbieters. Wie der Feed-Stand auch an lokal
+    // geaenderten Terminen: sie ist kein Nutzerfeld, und eine Wiederzusage
+    // (CONFIRMED oder kein STATUS) muss sie wieder aufheben.
+    const updateProviderStatus = db.get().prepare(`
+      UPDATE calendar_events SET provider_status = ?
+      WHERE id = ? AND provider_status IS NOT ?
     `);
 
     // D#2330: der Feed-Stand (Reset-Vorlage). Jeder Sync schreibt ihn, auch an
@@ -268,13 +294,16 @@ async function syncOne(sub) {
             const updated = updateEvent.run(...values, existing.id, ...values).changes;
             changedEvents += updated;
             updateFeedOriginal.run(feedOriginal, existing.id, feedOriginal);
+            const providerStatus = providerStatusOf(ev);
+            changedEvents += updateProviderStatus.run(providerStatus, existing.id, providerStatus).changes;
             // Im Feed verschoben (#1377): die Erinnerungen ziehen mit. Nur wenn
             // das UPDATE griff - eine lokal bearbeitete Zeile (user_modified)
             // behaelt ihren Start und damit auch ihre Erinnerungen.
             if (updated) followInboundStartChange(db.get(), existing.id, existing.start_datetime, ev.dtstart);
           } else {
             insertEvent.run(ev.summary, ev.description, ev.dtstart, ev.dtend,
-              ev.allDay ? 1 : 0, ev.location, color, ev.uid, sub.id, ev.rrule, createdBy, feedOriginal);
+              ev.allDay ? 1 : 0, ev.location, color, ev.uid, sub.id, ev.rrule, createdBy, feedOriginal,
+              providerStatusOf(ev));
             changedEvents++;
           }
         } catch (err) { log.error(`Upsert UID ${ev.uid}: ${err.message}`); }
@@ -311,17 +340,25 @@ async function syncOne(sub) {
  * schriebe er sein Ergebnis in die gerade eingespielte Datenbank (Codex-Befund
  * in #1431, siehe server/utils/restore-state.js).
  */
-function sync(subscriptionId) {
-  return runExternalJob(() => syncUntracked(subscriptionId));
+function sync(subscriptionId, opts = {}) {
+  return runExternalJob(() => syncUntracked(subscriptionId, opts));
 }
 
-async function syncUntracked(subscriptionId) {
+/**
+ * `rethrowFetch` nur mit einer Id (#2566): ein einzelnes Abo, auf das jemand
+ * wartet, wirft seinen Fehler; der Lauf ueber alle faengt ihn je Abo ab.
+ */
+async function syncUntracked(subscriptionId, { rethrowFetch = false } = {}) {
   const subs = subscriptionId
     ? db.get().prepare('SELECT * FROM ics_subscriptions WHERE id = ?').all(subscriptionId)
     : db.get().prepare('SELECT * FROM ics_subscriptions').all();
+  const rethrow = Boolean(subscriptionId) && rethrowFetch;
   for (const sub of subs) {
-    try { await syncOne(sub); }
-    catch (err) { log.error(`Subscription ${sub.id} sync failed: ${err.message}`); }
+    try { await syncOne(sub, { rethrowFetch: rethrow }); }
+    catch (err) {
+      log.error(`Subscription ${sub.id} sync failed: ${err.message}`);
+      if (rethrow) throw err;
+    }
   }
 }
 
@@ -500,6 +537,10 @@ async function importToLocal(userId, { ics, url, color, localCalendarId = null, 
   db.get().transaction(() => {
     for (const ev of rawEvents) {
       if (!ev.dtstart) { skipped++; continue; }
+      // Ein abgesagter Termin wird gar nicht erst uebernommen (#2499): ohne
+      // Sync gibt es keine Wiederzusage, die ihn spaeter zurueckholte, und die
+      // Kopie gehoert danach dem Nutzer - eine Absage darin waere tot.
+      if (providerStatusOf(ev) === 'CANCELLED') { skipped++; continue; }
       if (ev.uid && people.length) {
         const existing = existingAnyCalendar.get(userId, ev.uid);
         if (existing) {
@@ -562,8 +603,11 @@ async function create(userId, { name, url, color, shared, default_assignee_user_
     return id;
   })();
   const newSub = db.get().prepare('SELECT * FROM ics_subscriptions WHERE id = ?').get(subId);
+  // Das Abo steht; ein gescheiterter erster Abruf ist eine Warnung, kein
+  // Fehlschlag des Anlegens. `syncError` ist der Fehler selbst, die Route
+  // macht daraus Text und Fall (#2566).
   let syncError = null;
-  try { await syncOne(newSub); } catch (err) { syncError = err.message; }
+  try { await syncOne(newSub, { rethrowFetch: true }); } catch (err) { syncError = err; }
   return { sub: withAssignees(newSub), syncError };
 }
 

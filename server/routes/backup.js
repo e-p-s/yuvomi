@@ -100,6 +100,26 @@ const databaseKeyLimiter = rateLimit({
   message: { error: 'Too many requests for the database key. Please wait a few minutes.', code: 429 },
 });
 
+/**
+ * Schranke fuer den Download. Jeder Abruf baut eine volle Kopie der Datenbank
+ * in ein tmp-Verzeichnis - Platte und CPU, so oft man klickt. Ein ehrlicher
+ * Admin laedt ein paar Mal am Tag; zehn in der Stunde halten ein Skript mit
+ * einer gekaperten Sitzung davon ab, den Server damit zuzuschuetten. Je Konto
+ * und HINTER `requireAdmin`, aus denselben Gruenden wie oben (#2524).
+ *
+ * Bewusst in Kauf genommen: die Einstellungen laden per `<a href download>`,
+ * ein 429 endet dort als gescheiterter Download statt als Toast - wie schon
+ * ein 500. Ein fetch mit Blob hielte die ganze Datenbank im Browser.
+ */
+const databaseDownloadLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  max: 10,
+  keyGenerator: (req) => `user:${req.authUserId}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many backup downloads. Please wait before downloading again.', code: 429 },
+});
+
 router.get('/status', requireAdmin, (req, res) => {
   const schedulerStatus = getSchedulerStatus();
   res.json({
@@ -141,7 +161,7 @@ router.get('/database-key', requireAdmin, databaseKeyLimiter, (req, res) => {
   });
 });
 
-router.get('/database', requireAdmin, async (req, res) => {
+router.get('/database', requireAdmin, databaseDownloadLimiter, async (req, res) => {
   let tmpPath = null;
   try {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'yuvomi-backup-'));
@@ -160,7 +180,10 @@ router.get('/database', requireAdmin, async (req, res) => {
     if (tmpPath) {
       try { await fs.rm(path.dirname(tmpPath), { recursive: true, force: true }); } catch { /* best effort */ }
     }
-    res.status(500).json({ error: 'Database backup failed.', code: 500 });
+    // Das Backup hat die Integritaetspruefung nicht bestanden (#2520): fester
+    // Grund statt des Satzes, der Befund steht im Log.
+    const reason = err?.reason === 'backup_verify_failed' ? { reason: 'backup_verify_failed' } : {};
+    res.status(500).json({ error: 'Database backup failed.', code: 500, ...reason });
   }
 });
 
@@ -176,7 +199,7 @@ router.post(
     let backupKey = null;
     try {
       if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
-        return res.status(400).json({ error: 'Backup file is required.', code: 400 });
+        return res.status(400).json({ error: 'Backup file is required.', code: 400, reason: 'backup_file_empty' });
       }
       backupKey = backupKeyFromHeader(req);
 
@@ -338,7 +361,7 @@ router.post('/webdav/trigger', requireAdmin, async (req, res) => {
 
 router.use((err, req, res, next) => {
   if (err?.type === 'entity.too.large') {
-    return res.status(413).json({ error: `Backup file is too large. Maximum upload size is ${RESTORE_LIMIT}.`, code: 413 });
+    return res.status(413).json({ error: `Backup file is too large. Maximum upload size is ${RESTORE_LIMIT}.`, code: 413, reason: 'backup_file_too_large', params: { limit: String(RESTORE_LIMIT) } });
   }
   next(err);
 });

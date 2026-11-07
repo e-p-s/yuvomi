@@ -1,6 +1,6 @@
 # Übergabe: Family-Link-Collector → Yuvomi (Medienzeit-Istzeit)
 
-**Stand:** 2026-11-05 | **Geber:** Hermes CT122 (dieser Host) | **Status:** eingebaut (Migration 287, Routen + OpenAPI + Tests; Schalter in den Medienzeit-Regeln, Standard: aus)
+**Stand:** 2026-11-07 | **Geber:** Hermes CT122 (dieser Host) | **Status:** eingebaut (Migration 291, Routen + OpenAPI + Tests; Schalter in den Medienzeit-Regeln, Standard: aus)
 **Ziel:** Echte Nutzungszeiten aus Google Family Link in das Kern-Feature
 **Medienzeit** einspeisen (Anforderung A5 in `yuvomi-medienzeit`: „Anbindung
 Google Family Link API, nur abfragen, nie fernsperren").
@@ -37,7 +37,7 @@ Google Family Link API, nur abfragen, nie fernsperren").
 
 ## Einbau-Spec (Kern-Erweiterung, kein Drittanbieter-Modul)
 
-Medienzeit ist bereits Kern-Feature (Schema v286: `media_time_sessions`,
+Medienzeit ist bereits Kern-Feature (Schema v290: `media_time_sessions`,
 Sperre/Count, Pflichtzeit, Kontingent pro Gerät, Ein-/Ausbuchen). Der Collector
 liefert die **Istzeit**, die das manuelle Ausbuchen ablöst (opt-in pro Kind).
 

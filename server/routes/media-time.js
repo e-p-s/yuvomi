@@ -567,13 +567,13 @@ router.get('/today', (req, res) => {
         exempt_min: state.exempt_min,
         unknown_min: state.unknown_min,
         purchased_min: state.purchased_min,
-        // Eltern-Notiz (Migration 284): die Anpassung des Tages und die
+        // Eltern-Notiz (Migration 288): die Anpassung des Tages und die
         // Begruendung des neuesten Eintrags - das Kind sieht beides
         // (Transparenz: keine Kontingent-Aenderung ohne erklaerten Grund).
         adjusted_min: state.adjusted_min,
         reason: latestQuotaNoteReason(d, requested, state.day),
         // Pflichtzeit des Tages (Busticket, Schulmanager, Hausaufgaben):
-        // eigener Satz, zaehlt nie gegen das Kontingent (Migration 285).
+        // eigener Satz, zaehlt nie gegen das Kontingent (Migration 289).
         duty_min: state.duty_min,
         checked_in: state.checked_in,
         enforcement: state.enforcement,
@@ -596,7 +596,7 @@ router.get('/today', (req, res) => {
             device_name: r.device_name,
             minutes: Math.round(r.minutes),
           })),
-        // Family-Link-Istzeit (Spec 287): Status + Istzeit pro Geraet fuer die
+        // Family-Link-Istzeit (Spec 291): Status + Istzeit pro Geraet fuer die
         // Tageskarte. Status 'login_noetig' zeigt den Hinweis, nie eine Null.
         familylink: familylinkUsage(d, requested, state.day),
       },
@@ -622,7 +622,7 @@ router.get('/quotas', requireManager, (req, res) => {
         return res.json({ data: [{ user_id: requested, device_id: null, device_name: null, daily_minutes: 0, enabled: 1, quota_min: 0 }] });
       }
       // Die kindweite Basis plus die Geraet-Zeilen desselben Kindes
-      // (Migration 288: UNIQUE (user_id, device_id) WHERE device_id IS NOT NULL).
+      // (Migration 292: UNIQUE (user_id, device_id) WHERE device_id IS NOT NULL).
       const rows = d.prepare(`
         SELECT q.*, dev.name AS device_name
           FROM media_time_quotas q
@@ -677,7 +677,7 @@ router.put('/quotas/:userId', requireManager, (req, res) => {
     // device_id null = die kindweite Basis (bisheriges Verhalten); mit Wert
     // gilt die Zeile fuer genau dieses Geraet (Ueberschreibung, siehe
     // quotaRow). Die Konfliktziele sind die partiellen UNIQUE-Indexe aus
-    // Migration 288 - ihr WHERE muss dabeistehen, sonst erkennt SQLite sie
+    // Migration 292 - ihr WHERE muss dabeistehen, sonst erkennt SQLite sie
     // nicht als Konfliktziel (NULL und Wert duerfen koexistieren).
     let deviceId = null;
     if (body.device_id !== undefined && body.device_id !== null) {
@@ -718,7 +718,7 @@ router.put('/quotas/:userId', requireManager, (req, res) => {
 });
 
 // --------------------------------------------------------
-// Tagesanpassung des Kontingents (Migration 284): Eltern erhoehen oder
+// Tagesanpassung des Kontingents (Migration 288): Eltern erhoehen oder
 // senken den HEUTIGEN Tag eines Kindes - nie still, jede Anpassung traegt
 // eine Begruendung, und das Kind sieht sie (GET /today: adjusted_min +
 // reason). Ein Protokoll, kein Zustand: mehrere Eintraege pro Tag summieren,
@@ -1591,7 +1591,7 @@ router.get('/devices/:id/inventory', requireManager, (req, res) => {
 });
 
 /* ------------------------------------------------------------ Family-Link
- * Istzeit aus Google Family Link (Einbau-Spec HANDOVER.md, Migration 287).
+ * Istzeit aus Google Family Link (Einbau-Spec HANDOVER.md, Migration 291).
  * Nur abfragen, nie zurueckspielen (A5). Der Ingest-Lauf (Job oder Knopf)
  * schreibt bei 401/Fehler nur den Status 'login_noetig' - nie 0er-Snapshots. */
 router.get('/familylink/usage', (req, res) => {

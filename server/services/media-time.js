@@ -318,7 +318,7 @@ export function dayUsage(d, userId, dayKey) {
       FROM media_time_sessions
      WHERE user_id = ? AND minute_key = ? AND classification = 'duty'
   `).get(userId, dayKey);
-  /* Family-Link-Istzeit (Einbau-Spec 287): fuer ein Geraet, das auf einen
+  /* Family-Link-Istzeit (Einbau-Spec 291): fuer ein Geraet, das auf einen
    * Google-Eintrag gemappt ist und heute einen Tageswert hat, gilt der
    * Google-Verbrauch - die Agent-Sessions desselben Geraets werden ersetzt,
    * nicht dazugerechnet (kein Doppelzaehlen). Kein Tageswert (z.B.
@@ -558,7 +558,7 @@ export function latestQuotaNoteReason(d, userId, dayKey) {
 }
 
 export function quotaRow(d, userId, deviceId = null) {
-  // Migration 285 (A2, Nutzer 31.10.: "taegliches kontigent ggf pro geraet"):
+  // Migration 289 (A2, Nutzer 31.10.: "taegliches kontigent ggf pro geraet"):
   // eine Zeile mit device_id gilt fuer genau dieses Geraet und ueberschreibt
   // die kindweite Basis; ohne device_id (oder ohne Treffer) zaehlt die kindweite.
   if (deviceId != null) {
@@ -590,7 +590,7 @@ export function quotaState(d, userId, now = new Date(), deviceId = null) {
   // Cap (media_time_hard_cap, Default) bleibt max_daily_minutes trotzdem die
   // Obergrenze; bei kaufbarem Cap ('0') darf das Kontingent bis dorthin, oder
   // ohne Cap offen, wachsen.
-  // Eltern-Notiz (Migration 284): die Anpassungen des Tages (delta_minutes der
+  // Eltern-Notiz (Migration 288): die Anpassungen des Tages (delta_minutes der
   // media_time_quota_notes) wirken an exakt derselben Stelle wie der credit -
   // sie verschieben den Tag, sie sind kein Verbrauch. Ein Minus senkt das
   // Kontingent unter die Basis; die Basis-Zeile selbst bleibt unangetastet

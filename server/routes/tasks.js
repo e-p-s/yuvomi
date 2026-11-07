@@ -23,6 +23,7 @@ import { normalizeCategoryFilter, taskCategoryWhere, taskScopeNeedsToday, taskSc
 import { normalizeVisibility, visibilityWhere } from '../services/visibility.js';
 import {
   flushOutbound, markTodoOutbound, queueTodoDeletion, recurrenceFollowupTarget,
+  continuesForeignSeries, handOverForeignSeries, takeBackForeignSeries,
 } from '../services/caldav-todo-outbound.js';
 import { uniqueKey } from '../utils/category-slug.js';
 import { parseSyncTargetValue } from '../../public/utils/sync-target.js';
@@ -208,11 +209,13 @@ function countRebasableTasks(points) {
 // Hilfsfunktionen
 // --------------------------------------------------------
 
+// Primaerperson (`assigned_to`) zuerst, dann in Eintragungsreihenfolge: so
+// sagt es der API-Vertrag (#2569). Dieselbe Form steht in dashboard.js.
 const ASSIGNED_USERS_SQL = `(
   SELECT json_group_array(json_object(
     'id', u.id, 'display_name', u.display_name, 'color', u.avatar_color,
     'avatar_data', ${personAvatarUrlSql('u')}
-  ))
+  ) ORDER BY ta.user_id IS NOT t.assigned_to, ta.rowid)
   FROM task_assignments ta JOIN users u ON u.id = ta.user_id
   WHERE ta.task_id = t.id
 ) AS assigned_users_json`;
@@ -461,6 +464,31 @@ function mayEditTaskDefinition(task, req) {
 
 
 const LOCKED_ERROR = { error: 'This task is locked; only its creator and administrators can change it.', code: 403, reason: 'task_locked' };
+
+/**
+ * Abhaken einer Serie, deren Regel eine andere App fuehrt (#2506, #2515).
+ *
+ * iOS Erinnerungen und Tasks.org beenden eine Serie, sobald ihr Master
+ * COMPLETED traegt - sie selbst ruecken beim Abhaken nur das naechste
+ * Vorkommen nach. Eine Regel, die Yuvomi abbilden kann, liest der Inbound als
+ * Serie ein, und das Abhaken folgt dann der besitzenden App
+ * (`handOverForeignSeries`). Gesperrt bleibt nur, was Yuvomi nicht
+ * weiterfuehrt (`continuesForeignSeries`): eine Regel ausserhalb der
+ * Teilmenge, eine hier abgeschaltete Wiederholung, eine Serie ohne
+ * Faelligkeit. 409 statt 403: es fehlt kein Recht, die Aufgabe steht nur
+ * woanders unter Verwaltung. Gilt fuer jeden Uebergang nach 'done', auch am
+ * Wandtablett; alles andere (in Arbeit, Ablage, Bearbeiten) bleibt erlaubt.
+ */
+const FOREIGN_SERIES_ERROR = {
+  error: 'This task repeats in another app; tick it off there so the series continues.',
+  code: 409,
+  reason: 'task_foreign_series',
+};
+
+function completesForeignSeries(task, nextStatus) {
+  return nextStatus === 'done' && task.status !== 'done' && Boolean(task.external_rrule)
+    && !continuesForeignSeries(task);
+}
 
 /**
  * Aufgaben-IDs, deren Definition diese Person anfassen darf - fuer die
@@ -1017,7 +1045,7 @@ router.post('/reorder/reset', (req, res) => {
 router.put('/categories/:key', (req, res) => {
   try {
     const cat = db.get().prepare('SELECT * FROM task_categories WHERE key = ?').get(req.params.key);
-    if (!cat) return res.status(404).json({ error: 'Category not found.', code: 404 });
+    if (!cat) return res.status(404).json({ error: 'Category not found.', code: 404, reason: 'tasks_category_not_found' });
 
     const vName = v.str(req.body.name, 'name', { max: v.MAX_SHORT });
     if (vName.error) return res.status(400).json({ error: vName.error, code: 400 });
@@ -1040,7 +1068,7 @@ router.put('/categories/:key', (req, res) => {
 router.delete('/categories/:key', (req, res) => {
   try {
     const cat = db.get().prepare('SELECT * FROM task_categories WHERE key = ?').get(req.params.key);
-    if (!cat) return res.status(404).json({ error: 'Category not found.', code: 404 });
+    if (!cat) return res.status(404).json({ error: 'Category not found.', code: 404, reason: 'tasks_category_not_found' });
 
     const inUse = taskCategoryInUseCount(cat.key);
     if (inUse > 0) {
@@ -1482,12 +1510,23 @@ router.put('/:id', (req, res) => {
     const status = (req.body.status === undefined || archiveRequested)
       ? task.status
       : req.body.status;
+    // Gegen den Stand NACH dieser Anfrage: wer im selben Zug die Wiederholung
+    // abschaltet, fuehrt die Serie hier nicht mehr weiter.
+    if (completesForeignSeries({ ...task, is_recurring, recurrence_rule, due_date, due_time }, status)) {
+      return res.status(409).json(FOREIGN_SERIES_ERROR);
+    }
     if (reopensSettledVisit(db.get(), task.id, task.status, status) && !isAdminRequest(req)) {
       return res.status(403).json({ error: 'Permission denied.', code: 403 });
     }
 
-    const assignedBefore = db.get().prepare('SELECT user_id FROM task_assignments WHERE task_id = ?')
-      .all(task.id).map((r) => r.user_id);
+    // Primaerperson zuerst, dann in Eintragungsreihenfolge (#2569). Ohne
+    // ORDER BY liefert der Primaerschluessel (task_id, user_id) nach user_id,
+    // und ein PUT ohne `assigned_to` machte so die niedrigste ID zur
+    // Primaerperson. Nicht mitgeschickt heisst nicht angefasst, wie bei Terminen.
+    const assignedBefore = db.get().prepare(`
+      SELECT user_id FROM task_assignments WHERE task_id = ?
+      ORDER BY user_id IS NOT ?, rowid
+    `).all(task.id, task.assigned_to).map((r) => r.user_id);
     const userIds  = req.body.assigned_to !== undefined
       ? parseAssignedTo(req.body.assigned_to)
       : assignedBefore;
@@ -1848,12 +1887,20 @@ function nextDueDateAfter(req, taskId, prevStatus, status) {
  */
 function isFollowupSubtasksTouched(followup) {
   const originTaskId = followup.recurrence_origin_id;
+  // Mit dem Master einer fremden Serie weitergezogene Unteraufgaben und ihre
+  // Abbilder an der Vorgaengerin (#2506) sind kein Eingriff: sie stehen beim
+  // Zuruecknehmen fuer sich (returnMirroredSubtasks), was die andere App an
+  // ihnen geaendert hat, gehoert ihr.
+  const carried = originTaskId ? carriedMirroredSubtasks(originTaskId, followup.id) : [];
+  const skip = new Set(carried.flatMap((pair) => [pair.mirror_id, pair.copy_id]));
   const originSubtasks = originTaskId
     ? db.get().prepare('SELECT * FROM tasks WHERE parent_task_id = ?').all(originTaskId)
+      .filter((sub) => !skip.has(sub.id))
     : [];
   const currentSubtasks = db.get()
     .prepare('SELECT * FROM tasks WHERE parent_task_id = ?')
-    .all(followup.id);
+    .all(followup.id)
+    .filter((sub) => !skip.has(sub.id));
 
   if (currentSubtasks.length !== originSubtasks.length) return true;
 
@@ -1906,6 +1953,17 @@ function discardRecurrenceFollowup(taskId) {
 
   if (isFollowupSubtasksTouched(followup) || recurrenceFollowupOf(followup.id)) return 0;
 
+  // Haelt die Folgeinstanz den Master einer fremden Serie (#2506), geht er an
+  // die wieder geoeffnete Zeile zurueck, statt geloescht zu werden: er ist das
+  // Objekt der anderen App, nicht eins, das Yuvomi angelegt hat.
+  const origin = db.get().prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+  if (takeBackForeignSeries(origin, followup)) {
+    // Vor dem DELETE: die Folgeinstanz nimmt ihre Unteraufgaben mit (CASCADE).
+    returnMirroredSubtasks(origin.id, followup.id);
+    db.get().prepare('DELETE FROM tasks WHERE id = ?').run(followup.id);
+    return 1;
+  }
+
   // Vor dem DELETE vormerken, wie in DELETE /:id: danach sind UID und Objekt-URL
   // weg. Eine noch nicht hochgeladene Folgeinstanz ist kein Spiegel - auch nicht
   // mit geerbtem Ziel (#1515), das verschwindet mit der Zeile -, dann ist das ein
@@ -1913,6 +1971,61 @@ function discardRecurrenceFollowup(taskId) {
   const queued = queueTodoDeletion('tasks', followup) ? 1 : 0;
   db.get().prepare('DELETE FROM tasks WHERE id = ?').run(followup.id);
   return queued;
+}
+
+/**
+ * Eine gespiegelte Unteraufgabe geht mit dem Master einer fremden Serie an die
+ * Folgeinstanz (#2506, Review auf #2543). Ihr VTODO zeigt per RELATED-TO auf
+ * den Master, und den haelt ab jetzt die Folgeinstanz.
+ *
+ * Die erledigte Zeile behaelt ein Abbild: eine lokale Unteraufgabe mit Titel,
+ * Status und Zuweisung, die nie hochgeht (Unteraufgaben gehen nie als eigenes
+ * VTODO hinaus) und keine Punkte traegt - gutgeschrieben ist an der
+ * gespiegelten Zeile, die weiterzieht. `recurrence_origin_id` des Abbilds
+ * nennt die gespiegelte Zeile ("Kopie von Y", wie jede Teilaufgabenkopie), so
+ * findet das Zuruecknehmen beide wieder (`returnMirroredSubtasks`).
+ */
+function carryMirroredSubtask(sub, doneId, followupId) {
+  const d = db.get();
+  const copy = d.prepare(`
+    INSERT INTO tasks (title, description, category, priority, status,
+      start_date, due_date, due_time, assigned_to, created_by, parent_task_id,
+      is_recurring, recurrence_rule, points, visibility, locked, recurrence_origin_id,
+      recurrence_series_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 0, ?, ?, ?, ?)
+  `).run(
+    sub.title, sub.description, sub.category, sub.priority, sub.status,
+    sub.start_date, sub.due_date, sub.due_time, sub.assigned_to, sub.created_by, doneId,
+    sub.visibility, sub.locked ? 1 : 0, sub.id, seriesOfTask(d, sub),
+  );
+  // Der Status kommt mit; durch dieselbe Stelle wie jeder Schreiber (#1836).
+  // Eine Teilaufgabe steht nie im Verlauf, der Aufruf bucht hier also nichts.
+  syncTaskCompletion(d, Number(copy.lastInsertRowid), 'open', sub.status, null);
+  setAssignments(d, copy.lastInsertRowid, d.prepare('SELECT user_id FROM task_assignments WHERE task_id = ?')
+    .all(sub.id).map((r) => r.user_id));
+  setTags(d, copy.lastInsertRowid, loadTags(d, sub.id));
+  d.prepare('UPDATE tasks SET parent_task_id = ? WHERE id = ?').run(followupId, sub.id);
+}
+
+/**
+ * Die gespiegelten Unteraufgaben, die `carryMirroredSubtask` an die
+ * Folgeinstanz gegeben hat - je mit ihrem Abbild an der Vorgaengerin.
+ * @returns {{mirror: object, copy: object}[]}
+ */
+function carriedMirroredSubtasks(originId, followupId) {
+  return db.get().prepare(`
+    SELECT m.id AS mirror_id, c.id AS copy_id
+      FROM tasks m JOIN tasks c ON c.recurrence_origin_id = m.id AND c.parent_task_id = ?
+     WHERE m.parent_task_id = ? AND m.external_source = 'caldav'
+  `).all(originId, followupId);
+}
+
+/** Der Rueckweg dazu: gespiegelte zurueck an `originId`, Abbilder fort. */
+function returnMirroredSubtasks(originId, followupId) {
+  for (const { mirror_id: mirrorId, copy_id: copyId } of carriedMirroredSubtasks(originId, followupId)) {
+    db.get().prepare('UPDATE tasks SET parent_task_id = ? WHERE id = ?').run(originId, mirrorId);
+    db.get().prepare('DELETE FROM tasks WHERE id = ?').run(copyId);
+  }
 }
 
 /**
@@ -1943,7 +2056,9 @@ function shiftedStartDate(startDate, dueDate, nextDue) {
  * Server ein neuer Eintrag, keine Kopie der Vorgängerin - mit deren UID
  * überschriebe der Upload das eben erledigte Vorkommen. Das Sync-Ziel dagegen
  * erbt sie (#1515): eine in eine Erinnerungsliste geschickte Serie blieb sonst
- * ab dem zweiten Vorkommen lokal. Rückgabe: true, wenn die Folgeinstanz damit
+ * ab dem zweiten Vorkommen lokal. Die Ausnahme ist eine Serie, deren Regel
+ * eine andere App fuehrt (#2506): dort uebernimmt die Folgeinstanz den Master,
+ * und die erledigte Zeile geht als eigene Kopie hinauf (handOverForeignSeries). Rückgabe: true, wenn die Folgeinstanz damit
  * auf ihren Upload wartet und der Aufrufer den Sofortversuch anstoßen soll.
  *
  * Beide Aufrufer halten bereits eine Transaktion, die eigene läuft darin als
@@ -2022,6 +2137,9 @@ function spawnRecurrenceFollowup(task) {
     }
     return ids;
   })();
+  // #2542/#2543: eine fremde (CalDAV-)Serie wird beim Abhaken nie beendet, sie
+  // wird zurueckgegeben; das Merker haelt der Transaktionskorper unten.
+  let handedOver = false;
 
   db.get().transaction(() => {
     const newTask = db.get().prepare(`
@@ -2082,8 +2200,19 @@ function spawnRecurrenceFollowup(task) {
         .run(rotation.userId, rotation.position, newTask.lastInsertRowid);
     }
     setTags(db.get(), newTask.lastInsertRowid, existingTags);
+    // Eine fremde Serie (#2506): die Folgeinstanz uebernimmt den Master, die
+    // erledigte Zeile geht als eigene Kopie hinauf.
+    handedOver = handOverForeignSeries(task, Number(newTask.lastInsertRowid));
 
     for (const sub of existingSubtasks) {
+      // Eine gespiegelte Unteraufgabe einer fremden Serie haengt per RELATED-TO
+      // am Master (Review auf #2543). Sie geht mit ihm, statt kopiert zu werden:
+      // der naechste Abruf haengte sie ohnehin dorthin, und neben der Kopie
+      // stuende sie doppelt. Die erledigte Zeile behaelt ein lokales Abbild.
+      if (handedOver && sub.external_source === 'caldav') {
+        carryMirroredSubtask(sub, task.id, Number(newTask.lastInsertRowid));
+        continue;
+      }
       const subAssignments = db.get()
         .prepare('SELECT user_id FROM task_assignments WHERE task_id = ?')
         .all(sub.id).map((r) => r.user_id);
@@ -2116,7 +2245,7 @@ function spawnRecurrenceFollowup(task) {
       setTags(db.get(), newSub.lastInsertRowid, subTags);
     }
   })();
-  return !!syncTarget;
+  return !!syncTarget || handedOver;
 }
 
 // --------------------------------------------------------
@@ -2231,6 +2360,8 @@ router.patch('/:id/status', (req, res) => {
       const archivedAt = setArchived(req.params.id, true);
       return res.json({ data: { id: Number(req.params.id), status: prev.status, archived_at: archivedAt } });
     }
+
+    if (completesForeignSeries(prev, status)) return res.status(409).json(FOREIGN_SERIES_ERROR);
 
     if (reopensSettledVisit(db.get(), prev.id, prev.status, status) && !isAdminRequest(req)) {
       return res.status(403).json({ error: 'Permission denied.', code: 403 });
@@ -2787,7 +2918,7 @@ router.patch('/:id/comments/:commentId', (req, res) => {
 
 // --------------------------------------------------------
 // Aufgaben-Freigabe: Bestaetigung oder Ablehnung eines Check-ins, der als
-// `approval_status = 'pending'` angemeldet wurde (siehe Migration 278).
+// `approval_status = 'pending'` angemeldet wurde (siehe Migration 284; im Fork-Zweig vor dem Merge 280).
 // Berechtigung ist `isAdminRequest`, bewusst nie aus `family_role` abgeleitet
 // ("wer jemand ist, nicht was er darf" - docs/DECISIONS.md Eintrag 2).
 // Bestaetigen bucht jetzt ueber awardForCompletion - Netto- und Tagesdeckel

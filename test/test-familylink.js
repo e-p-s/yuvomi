@@ -1,6 +1,6 @@
 /**
  * Test: Family-Link-Istzeit (server/services/familylink.js)
- * Zweck: Einbau-Spec (HANDOVER.md, Migration 287) als Pruefstein - der Ingest
+ * Zweck: Einbau-Spec (HANDOVER.md, Migration 291) als Pruefstein - der Ingest
  *        schreibt nur zugeordnete Kinder, ein Fehlerlauf (401/kein JSON) setzt
  *        den Status login_noetig und schreibt NIE 0er-Snapshots, und die
  *        Google-Istzeit ersetzt in dayUsage die Session-Minuten des gemappten

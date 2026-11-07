@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ueber Mitternacht: 400). GET `/media-time/today` zeigt die Tagesnutzung pro
   Geraet (`data.devices`, Family-Link-Ersetzung inklusive), und
   PUT/GET `/media-time/quotas` pflegen Kontingentzeilen pro Geraet
-  (Migration 288: UNIQUE (user_id, device_id) plus partiell eindeutige
+  (Migration 292: UNIQUE (user_id, device_id) plus partiell eindeutige
   Basis-Zeile).
 
 - **Medienzeit: Family-Link-Push-Kanal.** Der Collector-Host (einziger Rechner
@@ -93,6 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Anna, Max - not Kevin, Kevin). The detail view names the next member up from the same calculation
   that hands out the next instance, and a task without rotation behaves exactly as before.
 - **Who made the task (opt-in).** Households can have the task detail view say who created a task. Administrators switch it on in the rewards settings, off by default; with it on, a task that carries a creator names that person under its title. A task without a creator - or a member the viewer cannot resolve - stays without the line, and a household that never touches the switch sees nothing at all.
+## [2.86.0] - 2026-11-07
+
+### Added
 - **Late completion decay (opt-in).** Households can have late completions pay less: administrators
   switch it on in the rewards settings, off by default. A task ticked off after its due day earns one
   point less for each day it is past due, and always at least one point - finishing still pays. What a
@@ -132,6 +135,159 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a card - children read it exactly like the prize shelf, parents manage it.
   Consequences are negative prizes in the ledger, so the shelf reads the same:
   title, cost, and a quiet "deaktiviert" note when a template is off.
+- **Kitchen search is now in the tab bar on phones (#2043).** Recipes and Pantry show a search
+  icon at the right end of the kitchen tab bar, keeping the second header row collapsed until you
+  tap it. Meals and Shopping clear the zone so nothing appears there.
+- **Administrators set night hours and screensaver options for each wall tablet.**
+  Settings > Wall tablets offers each tablet's night window, idle delay, clock and photo
+  fill. Online tablets pick up changes automatically; existing local choices stay in use
+  until an administrator saves, and personal browser preferences are preserved (#2436).
+- **Shopping: purchase price history** (part 1 of #1003). Ticking off or clearing a priced
+  shopping item records the purchase: item name, price paid in cents, the shop, and the date.
+  Purchases match by item name, case-insensitively, and remain after the item is cleared.
+  The item details sheet displays the last purchase for known items. CalDAV completion sync
+  does not record purchases immediately, but clearing checked items records them dated at the clean-up.
+
+### Fixed
+- **The container image starts with just a `/data` volume.** Started without `DB_PATH`, for
+  example with a plain `docker run -v yuvomi:/data`, the container stopped right away: the
+  database and the secrets generated on first start would have gone under `/app`, where the app
+  may not write. The image now defaults to `/data/yuvomi.db`. Setups that set `DB_PATH`
+  themselves, such as the compose files and the app catalogs, are unchanged.
+- **CardDAV accepts long app passwords and tokens** (#2575). Saving a CardDAV account refused
+  any password over 200 characters, and the password field cut longer input off without a word, so
+  app tokens such as JWTs could not be used. Passwords for CardDAV, CalDAV and Apple Calendar now
+  share one limit of 4096 characters and are kept exactly as typed, including spaces at the start
+  or end.
+- **Editing a task through the API keeps its primary assignee (#2569).** A `PUT /api/v1/tasks/:id`
+  that left out `assigned_to` made the person with the lowest user id the primary assignee. It now
+  stays who it was, as it already did for calendar events. `assigned_users` lists the primary
+  assignee first, as the API reference says, in task lists, details and the dashboard.
+- **The last settings and managers that showed server text speak your language** (#1909). Managing
+  the categories of budget, tasks, contacts and notes, or the storage locations of the pantry,
+  showed English server text when someone else had deleted the entry meanwhile, when a storage
+  location name was taken or when you tried to delete the last one; each case now has its own
+  sentence, and deleting an entry that is already gone simply counts as done. Connecting a DMS
+  explains an empty field, an address without http:// or https:// and an address that is
+  already connected. Load errors on the DMS, document storage, module install and calendar feed
+  pages, a failed app install on the device page and failed steps of a folder upload say what
+  happened in your language. API clients get the cases as `reason`.
+- **Chinese and Japanese questions end in the full-width question mark.** Confirmations such as
+  signing out other devices or replacing a link used the narrow "?", which ran straight into the next
+  sentence.
+- **A damaged backup is no longer handed out as a good one (#2520).** Every backup is now checked
+  for integrity right after it is written. One that fails is discarded: the download answers with
+  an error instead of the file, a scheduled backup is reported as failed and does not push the
+  oldest good backup out of rotation, and nothing is uploaded to WebDAV. Before, a damaged backup
+  only showed up when you tried to restore it.
+- **Mirrored Mealie recipes show their preparation steps as readable text (#2558).** A step with
+  an inserted image showed the raw `<img>` tag, and formatting or HTML entities appeared as
+  symbols. Steps now arrive as plain text with their lists and links; images in steps are left
+  out, because they live on the Mealie server. Recipes mirrored from Mealie or Tandoor also bring
+  their serving count, so the servings stepper starts from the right base (#2355). Already
+  mirrored recipes are corrected on the next sync.
+- **A new event in a synced calendar reaches CalDAV, iCloud and Google when you save it (#2565).**
+  Edits, moves and deletions were sent right away, but a newly created event waited for the next
+  sync run, up to `SYNC_INTERVAL_MINUTES` later, although the documentation promised an attempt on
+  save. Creating an event with a sync target, or giving an existing local event one, now tries the
+  upload immediately. If the server cannot be reached the event is still saved and the next sync
+  run uploads it, as before.
+- **A calendar subscription that does not deliver says so** (#2566). Adding a subscription whose
+  address answered with an error (not found, too large, a private address) reported "Subscription
+  added", and the refresh button reported "Subscription synced", while no event ever arrived. Adding
+  now warns that the first fetch failed and why, in your language, and the refresh button shows the
+  reason instead of success. Scheduled refreshes stay quiet. API clients get the case as
+  `syncReason` when adding and as `reason` with a `400` when syncing.
+- **Backup, system and API settings say what went wrong in your language** (#1909). Restoring an
+  empty file, a database that is not from Yuvomi or a backup from a newer version showed the
+  server's English text; it now says what to do next. Creating an API token with a past expiry
+  date or for a person who no longer exists or was deactivated, and load errors on the three
+  pages, are explained in your language too. API clients get the cases as `reason`.
+- **Date pickers start the week on the household week start** (#2533). With Sunday or Saturday
+  set as the week start in the calendar settings, the calendar sheet of every date field (events,
+  tasks, budget, health and the others) showed Monday-first weeks. Its weekday header and the
+  position of the first of the month now follow the setting, like the calendar views do. When
+  someone else in the household changes it, the pickers follow as soon as the calendar, the meal
+  plan or Schedule is opened, not only after the app restarts.
+- **Health: in the month view, the series names no longer cover the bars of the last days** (#2538).
+  "Systolic" and "Diastolic" stood left of the last bar, and "Pulse" above its last dot, hiding the
+  readings underneath when a month is full. A short line above the blood pressure chart now says
+  which end of a bar is which, and the pulse chart is named by its own unit axis.
+- **Calendar and contact sync settings say what went wrong in your language** (#1909).
+  Connecting a CalDAV or Apple account, subscribing to or importing a calendar feed and saving
+  a CardDAV account showed the server's English text for cases the app knows: the account is
+  already connected or has no calendars, the name or address is not valid, the address is on a
+  private network, or the feed answered with an error status or is too large. These now say so
+  in your language; what the remote server itself answers stays visible to administrators as
+  before. API clients get the case as `reason`.
+- **Wall tablet settings say what went wrong in your language** (#1909). When another
+  administrator had already deleted a wall tablet or one of its devices, the page showed the
+  server's English text. It now says in your language that the tablet or device no longer
+  exists and refreshes the list; deleting a tablet that is already gone simply counts as done.
+  API clients get the case as `reason`.
+- **Your account page says what went wrong in your language** (#1909). Linking or unlinking
+  SSO, turning on two-factor authentication and fetching a Gravatar showed the server's English
+  text for some errors. They now say in your language that the account is already linked or no
+  longer linked, that an account without a password cannot unlink, that SSO is no longer set up,
+  or that two-factor authentication is already on or its setup has expired. API clients get the
+  case as `reason`.
+- **Adding, editing and inviting family members say what went wrong in your language** (#1909).
+  The error line in these dialogs showed the server's English text. It now says in your language
+  that the username is invalid or already taken, that an account without a password needs an
+  email address that no other member has, or that at least one administrator (or the last one
+  linked to SSO) must stay, also when you demote yourself. A member another administrator removed
+  in the meantime closes the dialog and leaves the list. Errors while loading members, invitations,
+  two-factor status and roles and permissions are in your language too. API clients get the case
+  as `reason`.
+- **An event the provider cancels no longer reminds anyone** (#2499). When an ICS subscription,
+  a CalDAV calendar or iCloud marks an event as cancelled without deleting it, its reminders stay
+  silent, and the dashboard, the Today sheet, the wall tablet and the countdowns leave it out. The
+  calendar still shows it, struck through and marked "Cancelled", so nobody wonders where it
+  went. If the provider confirms it again, everything comes back. A cancelled single occurrence of
+  a series only affects that occurrence. A one-time ICS import skips cancelled events. Your own
+  calendar feed passes the cancellation on, and API clients find it in `provider_status`.
+- **Contacts synced from Nextcloud or another CardDAV server no longer merge into one** (#2513).
+  Cards with an empty phone or email field, or cards that share a landline or email address,
+  used to collapse into a single Yuvomi contact carrying the name of the last card. Each card now
+  stays its own contact; only a contact that no address book is linked to yet is matched by
+  phone or email. Empty phone and email entries are no longer saved, and ones saved earlier
+  disappear on the next sync. A contact that has already merged keeps its mixed data: delete it
+  in Yuvomi and sync again to get the separate contacts back.
+- **Repeating reminders from iOS Reminders or Tasks.org now repeat in Yuvomi, and ticking one off
+  keeps the series running there** (#2506, #2515). Daily, weekly, monthly and yearly reminders,
+  also every few days or weeks, every weekday, weekly on chosen weekdays, on the last day of the
+  month or until an end date, arrive as a Yuvomi series. Ticking one off in Yuvomi or on a wall tablet does what the
+  other app does: the reminder moves on to its next date there, and a completed copy keeps the
+  history. Undoing the tick moves it back. A rule Yuvomi cannot follow exactly (a fixed number of
+  times, a fixed day of the month such as the 15th, "every second Tuesday", a monthly reminder
+  due on the 29th to 31st, a series with skipped or extra dates) shows "Repeats in
+  another app" and is ticked off there; Yuvomi never sends a completion that would end such a
+  series. For API clients, ticking off one of those through `PATCH /api/v1/tasks/:id/status` or
+  `PUT /api/v1/tasks/:id` answers 409 with the reason `task_foreign_series`, and tasks carry the
+  other app's rule in `external_rrule`.
+- **The app added to the iPhone Home Screen reaches the bottom edge again** (refs #2417). On iOS 27
+  the installed app ended a status bar's height above the bottom of the screen, with an empty strip
+  below the tab bar. It now takes the full screen height; Yuvomi in a Safari tab is unchanged.
+
+### Security
+- **Database backup downloads are limited to ten per hour for each administrator** (#2524). Every
+  download builds a full copy of the database on the server, so a hijacked admin session could
+  keep it busy by requesting one after another. Further downloads in the same hour are refused;
+  other administrators are not affected, and members still get no download at all.
+
+### Changed
+- **The app stores and catalogs no longer ask for a session secret.** Since 2.85.0 a new
+  installation generates `SESSION_SECRET` and `DB_ENCRYPTION_KEY` on its first start, but four
+  deploy descriptors still demanded one: the Portainer stack stopped the deploy outright
+  (`${SESSION_SECRET:?...}`), the Portainer app template and the Unraid template labelled the
+  field "required", and the TrueNAS form refused to install without it. All four now offer both
+  secrets as optional fields with an empty default, and say that Yuvomi generates them and keeps
+  them in `.secrets/` next to the database; setting your own still wins. A Portainer stack, an
+  Unraid container and a TrueNAS app can therefore be installed without running `openssl` first,
+  which is what the 2.85.0 note already promised. Umbrel keeps `${APP_SEED}` for both: it asks
+  nobody for anything, and an existing database is encrypted with that value
+  (`deploy/umbrel/README.md` records the decision). The TrueNAS change needs a pull request
+  upstream before it reaches the catalog (`deploy/truenas/MAINTAINING.md`). (#2507)
 
 ## [2.85.0] - 2026-11-04
 

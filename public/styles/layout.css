@@ -60,6 +60,30 @@
   background-repeat: no-repeat;
 }
 
+/* VOM HOME-BILDSCHIRM GESTARTET FUELLT DIE APP DEN BILDSCHIRM (#2417). Auf
+ * iOS 27 meldet die installierte App mit viewport-fit=cover und
+ * black-translucent ein 100dvh, dem genau der obere Inset fehlt (812 statt
+ * 874 auf einem iPhone 17): Shell und Tab-Leiste endeten um die Hoehe der
+ * Statusleiste ueber dem Rand. lvh ist ohne Adressleiste die volle
+ * Fensterhoehe, und eine Adressleiste hat die installierte App nicht - der
+ * Safari-Tab (display-mode: browser) behaelt seine Kette oben.
+ * Steht HIER, hinter der Kette an .app-shell und hinter body in reset.css:
+ * gleiche Spezifitaet, die spaetere Regel gewinnt. In pwa.css (laedt vor
+ * layout.css) verloere sie. @supports, weil ein Browser ohne lvh die Zeile
+ * sonst verwirft (test:old-browser-fallbacks). */
+@media (display-mode: standalone) {
+  @supports (height: 100lvh) {
+    body,
+    .app-shell {
+      height: 100lvh;
+    }
+
+    .app-loading {
+      min-height: 100lvh;
+    }
+  }
+}
+
 /* Label-Farbe statt Akzent (R18): der Schriftzug steht direkt auf dem
  * Lichtfeld, und Violett auf violettem Licht faellt im Kern unter 3:1. Die
  * Tinte haelt ueberall auf dem Feld mindestens 8:1 (hell) - und DESIGN.md
@@ -11796,6 +11820,28 @@ button svg { pointer-events: none; }
   padding: var(--space-1);
   min-height: var(--target-base);
   min-width: var(--target-base);
+}
+
+/* DER SCHMALE ICON-KNOPF IN EINER VOLLEN LEISTE (#2043).
+ *
+ * `.btn--icon` setzt `min-width` und `min-height` auf --target-base, und in
+ * CSS gewinnt `min-width` gegen `max-width`: die Kuechen-Tab-Leiste wollte
+ * ihren Suchschalter mit `max-width: 24px` deckeln und bekam weiter die
+ * vollen 48px am Finger - die Leiste brauchte 398px von 375. Der Guard
+ * „die Groesse des Icon-Knopfs gehoert der Shell" sah das nicht, weil er
+ * `width`/`height`/`min-*` prueft und `max-*` keine Zielgroesse setzt.
+ *
+ * Die Antwort gehoert deshalb hierher und traegt einen eigenen Namen, wie
+ * `.btn--icon-sm` darueber. 24px ist der WCAG-2.5.8-Boden, NICHT der
+ * Komfortwert: diese Variante darf nur dort stehen, wo die Trefferflaeche
+ * ueber ein ::before wieder auf --target-base waechst. Heute ist das die
+ * Trailing-Zone der Kuechenleiste, die ab 640px ausgeblendet ist - darum
+ * braucht die Variante keine Breiten-Abfrage und macht die Viewport-Breite
+ * nicht erneut zum Kriterium. */
+.btn--icon.btn--icon-tight {
+  padding: 0;
+  min-width: var(--space-6);
+  min-height: var(--space-6);
 }
 
 /* Textarea: vertikale Größenänderung ist nutzbar */

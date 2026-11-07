@@ -1,5 +1,5 @@
 /**
- * Modul: Konsequenzen-Katalog (Migration 283, /rewards/consequences)
+ * Modul: Konsequenzen-Katalog (Migration 287, /rewards/consequences)
  * Zweck: Die Vorlagen hinter der Straf-Vergabe. Eltern haben ihre
  *        Standard-Faelle nicht jedes Mal frei zu tippen - ein Katalogeintrag
  *        fuellt Grund und Punkte in POST /penalty (catalog_consequence_id),

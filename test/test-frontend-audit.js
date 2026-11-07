@@ -3150,7 +3150,7 @@ test('die Display-Leiste filtert haushaltweit abgeschaltete Module', () => {
   // ein abgeschalteter Kalender in der Leiste und schickte beim Antippen auf
   // die Uebersicht zurueck, weil `navigate()` ihn ohnehin abweist.
   const source = read('../public/router.js');
-  const zweig = source.match(/access_scope === 'display'\)\s*\{[\s\S]*?\n  \}/);
+  const zweig = source.slice(source.indexOf('function navItems(')).match(/access_scope === 'display'\)\s*\{[\s\S]*?\n  \}/);
   assert.ok(zweig, 'der Display-Zweig in navItems() steht noch da');
   assert.match(zweig[0], /_disabledModules\.has\(/, 'er filtert die abgeschalteten Module');
   // Das Dashboard ist die Startseite und laesst sich nicht abschalten - es darf
@@ -17366,7 +17366,7 @@ test('die Nacht hat EINE Rechnung: theme-init.js und isWallNight fragen /night-h
   assert.ok(sw.includes("'/utils/night-hours.js',"));
 });
 
-test('the early screensaver delay in theme-init.js does not drift from utils/screensaver-idle.js (#885)', () => {
+test('the early screensaver delay in theme-init.js does not drift from utils/screensaver-idle.js (#885)', async () => {
   // Same seam as wall mode above: theme-init.js runs as a classic <script>
   // before any module and carries the key and the steps as literals. The
   // source of truth is utils/screensaver-idle.js.
@@ -17377,12 +17377,12 @@ test('the early screensaver delay in theme-init.js does not drift from utils/scr
   assert.equal(modKey, 'yuvomi-screensaver-idle', 'the key lives in screensaver-idle.js');
   assert.ok(init.includes(`'${modKey}'`), `theme-init.js reads the same key (${modKey})`);
 
-  const modSteps = mod.match(/export const SCREENSAVER_IDLE_STEPS = \[([^\]]+)\]/)?.[1];
-  assert.ok(modSteps, 'the steps live in screensaver-idle.js');
+  const { DISPLAY_IDLE_STEPS: modSteps } = await import('../public/utils/display-device-settings.js');
+  assert.match(mod, /export const SCREENSAVER_IDLE_STEPS = DISPLAY_IDLE_STEPS/, 'the device reader uses the shared display steps');
   const initSteps = init.match(/\[([\d,\s]+)\]\.indexOf\(Number\(idle\)\)/)?.[1];
   assert.ok(initSteps, 'theme-init.js checks the stored value against a list of steps');
   const list = (s) => s.split(',').map((n) => Number(n.trim()));
-  assert.deepEqual(list(initSteps), list(modSteps), 'the same steps as screensaver-idle.js');
+  assert.deepEqual(list(initSteps), modSteps, 'the same steps as screensaver-idle.js');
 
   // And the attribute: the one the component reads.
   assert.ok(init.includes("'data-screensaver-idle'"), 'theme-init.js sets the attribute');
@@ -22443,6 +22443,11 @@ function errorTextHelpers(code) {
   return names;
 }
 
+// Felder, in denen der Server den Text eines Fehlers als Wert mitschickt statt
+// als Fehler (#2566): `res.syncError` beim Anlegen eines Kalender-Abos zeigte
+// den englischen Satz im Toast, und der Leser oben sah nur `.message`.
+const ERROR_TEXT_FIELD = /(?:\?\.|\.)\s*(?:syncError|lastError|last_error)\b/;
+
 function rawToasts(source) {
   const code = withoutCommentsKeepingLines(source, { blankLiterals: true });
   const helpers = errorTextHelpers(code);
@@ -22451,7 +22456,7 @@ function rawToasts(source) {
     const open = hit.index + hit[0].length - 1;
     const args = code.slice(open, closingIndex(code, open) + 1);
     const viaHelper = [...helpers].some((name) => new RegExp(`(?<![\\w$.])${name.replaceAll('$', '\\$')}\\s*\\(`).test(args));
-    if (/(?:\?\.|\.)\s*message\b/.test(args) || countServerTextReads(args) > 0 || viaHelper) {
+    if (/(?:\?\.|\.)\s*message\b/.test(args) || ERROR_TEXT_FIELD.test(args) || countServerTextReads(args) > 0 || viaHelper) {
       raw.push(args.replace(/\s+/g, ' ').trim());
     }
   }
@@ -22467,32 +22472,11 @@ const ERROR_MESSAGE_OWNERS = new Set([
 ]);
 
 // Datei -> Zahl der Stellen, die den Fehlertext noch ausserhalb eines Toasts
-// lesen. Nur senken. Die meisten sind Fehlerzeilen in Formularen, an denen die
-// Pruefung des Servers die Ursache nennt: dort braucht der Server erst einen
-// `reason` (dieselbe Arbeit wie bei den Scheiben davor), ein blindes
+// lesen. Nur senken. Seit der letzten Scheibe von #1909 leer: jede Datei steht
+// auf 0, und eine neue Stelle ist rot. Eine Fehlerzeile, an der die Pruefung
+// des Servers die Ursache nennt, braucht dort einen `reason`; ein blindes
 // errorSentence nimmt dem Nutzer die Ursache.
-const ERROR_MESSAGE_OPEN = new Map([
-  ['components/category-manager.js', 1],
-  ['pages/login.js', 3],
-  ['settings/backup-key.js', 1],
-  ['settings/pages/admin-api.js', 2],
-  ['settings/pages/admin-backup.js', 2],
-  ['settings/pages/admin-displays.js', 7],
-  ['settings/pages/admin-family.js', 8],
-  ['settings/pages/admin-permissions.js', 1],
-  ['settings/pages/admin-system.js', 1],
-  ['settings/pages/documents-dms.js', 2],
-  ['settings/pages/documents-storage.js', 1],
-  ['settings/pages/modules-install.js', 1],
-  ['settings/pages/personal-account.js', 5],
-  ['settings/pages/personal-calendar-subscriptions.js', 3],
-  ['settings/pages/personal-device.js', 1],
-  ['settings/pages/personal-feeds.js', 1],
-  ['settings/pages/sync-calendar.js', 5],
-  ['settings/pages/sync-contacts.js', 1],
-  ['settings/pages/sync-reminders.js', 2],
-  ['utils/folder-upload.js', 2],
-]);
+const ERROR_MESSAGE_OPEN = new Map([]);
 
 // Datei -> Stellen, an denen der Admin den Text des Servers im Rahmen eines
 // uebersetzten Satzes sieht, und warum. Alle sprechen mit einem FREMDEN Dienst,
@@ -22503,9 +22487,9 @@ const ERROR_MESSAGE_OPEN = new Map([
 const TECHNICAL_DETAIL_SITES = new Map([
   ['settings/pages/admin-backup.js', [2, 'Verbindungstest und Handlauf des WebDAV-Backups: Antwort des fremden Servers']],
   ['settings/pages/documents-storage.js', [5, 'WebDAV/Google Drive: Verbindungstest, Speichern und Trennen pruefen gegen den fremden Speicher und bestehende Dokumente']],
-  ['settings/pages/sync-calendar.js', [4, 'Aktualisieren und Abgleich von CalDAV, Outlook, Apple: Antwort des fremden Servers']],
+  ['settings/pages/sync-calendar.js', [5, 'Aktualisieren und Abgleich von CalDAV, Outlook, Apple, dazu das Verbinden eines CalDAV- oder Apple-Kontos (connectErrorSentence, ausser den Faellen aus CASE_MESSAGES): Antwort des fremden Servers']],
   ['settings/pages/sync-contacts.js', [1, 'CardDAV-Abgleich und Aktualisieren: connection_failed traegt die Antwort des fremden Servers']],
-  ['settings/pages/sync-reminders.js', [1, 'Aktualisieren der Erinnerungslisten: Antwort des fremden Servers']],
+  ['settings/pages/sync-reminders.js', [2, 'Aktualisieren der Erinnerungslisten und ihr erster Abruf je Konto (fragt den CalDAV-Server selbst, getReminderLists): Antwort des fremden Servers']],
 ]);
 
 function countTechnicalDetailCalls(source) {
@@ -22540,6 +22524,10 @@ test('der Toast-Leser sieht den Fehlertext in jeder Form und keinen Satz der App
     ["const fail = (error) => showToast(error?.message || t('x'), 'danger');", 1],
     ["showToast(result.message);", 1],
     ["showToast(err.data?.error ?? t('x'));", 1],
+    // Fehlertext als Feld einer Antwort (#2566).
+    ["showToast(`${t('x')}: ${res.syncError}`, 'danger');", 1],
+    ["showToast(account?.lastError, 'danger');", 1],
+    ["showToast(drive.last_error);", 1],
     // Ueber eine Hilfsfunktion derselben Datei.
     ["function text(err) { return err?.message || t('x'); }\nshowToast(text(err), 'danger');", 1],
     ["const text = (err) => err.message;\nshowToast(text(err));", 1],
@@ -22555,6 +22543,8 @@ test('der Toast-Leser sieht den Fehlertext in jeder Form und keinen Satz der App
     ["function text(err) { return err.message; }\nshowToast(myText(err));", 0],
     ["function showToast(message, tone) { window.yuvomi?.showToast(message, tone); }", 0],
     ["showToast(message, 'danger');", 0],
+    ["showToast(`${t('x')}: ${sentence}`, 'danger');", 0],
+    ["showToast(t('settings.syncError'), 'danger');", 0],
   ]) {
     assert.equal(rawToasts(source).length, expected, source);
   }

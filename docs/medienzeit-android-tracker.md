@@ -200,7 +200,11 @@ Der Client kennt keine Ausnahme-Logik (Änderungen ohne App-Update, Kind kommt n
 
 ```sql
 -- Ergänzt media_time_sessions (Hauptkonzept §3) um Paket-Details;
--- Migration v281 (Hauptkonzept-Sessions als v280; v277=v285-Rotation, v278=Decay, v279=Strafen, v280=Freigabe im Fork-Prod-Zweig belegt), PRAGMA-guarded, keine Löschpfade.
+-- Migration v286 (Hauptkonzept-Sessions; Geraete+Kontingente v285, Check-in v290,
+  Family-Link-Tabellen v291). Nach dem Merge mit v2.86.0 gilt: die offiziellen
+  Migrationen 278-282 (Display-Einstellungen, external_rrule, Preis-Historie,
+  provider_status, Spaetabzug) stehen fur sich, die Fork-Migrationen laufen
+  283-292. PRAGMA-guarded, keine Loeschpfade.
 
 CREATE TABLE media_time_usage_sessions (
   id                INTEGER PRIMARY KEY,

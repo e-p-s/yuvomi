@@ -402,8 +402,10 @@ test('Gravatar: jeder Grund, den die Route nennen kann, hat seinen Satz, 429 lie
     assert.equal(typeof getTranslation(de, key), 'string', key);
   }
   assert.equal(gravatarErrorText({ status: 429, data: { error: 'Too many requests' } }), 'settings.gravatarErrorRateLimited');
-  assert.equal(gravatarErrorText({ status: 500, data: { reason: 'something_new' }, message: 'Server text' }), 'Server text');
-  assert.equal(gravatarErrorText(new Error('offline')), 'offline');
+  // Ein unbekannter Fall sagt den allgemeinen Satz, nie den Servertext (#1909).
+  assert.equal(gravatarErrorText({ status: 500, data: { reason: 'something_new' }, message: 'Server text' }), 'common.errorGeneric');
+  assert.equal(gravatarErrorText(new Error('offline')), 'common.errorGeneric');
+  assert.equal(gravatarErrorText({ status: 0, message: 'Failed to fetch' }), 'common.errorOfflineMutation');
   // Mit dem Host des gewaehlten Dienstes reist er als Parameter in den Satz.
   assert.equal(
     gravatarErrorText({ status: 502, data: { reason: 'gravatar_unreachable' } }, 'seccdn.libravatar.org'),
@@ -1218,6 +1220,7 @@ test('Feiertage: die Ebenen-Schalter speichern sofort, ein Fehler legt zurueck (
  * als Programm gemessen), und das Formular steht hier mit Grund. Ein neues
  * Formular mit Schalter muss sich fuer eine der beiden Antworten entscheiden. */
 const GUARDED_SWITCH_FORMS = new Map([
+  ['admin-displays.js#${prefix}-form', 'Complete per-tablet configuration: the first save replaces otherwise unknown local options; shared leaf dirty guard protects the pending form'],
   ['admin-api.js#api-token-form', 'Anlegen: der Schalter ist ein Merkmal des neuen Tokens'],
   ['admin-backup.js#backup-webdav-form', 'Aktivieren ohne Adresse und Zugang waere ein Sicherungsauftrag ins Leere'],
   ['admin-family.js#add-member-form', 'Anlegen eines Mitglieds'],

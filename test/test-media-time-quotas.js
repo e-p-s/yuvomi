@@ -1,6 +1,6 @@
 /**
  * Test: Medienzeit - Eltern-Notiz am Tageskontingent (PUT /quotas/:userId/day)
- * Zweck: Die Tagesanpassung mit Pflicht-Begruendung (Migration 284) ueber den
+ * Zweck: Die Tagesanpassung mit Pflicht-Begruendung (Migration 288) ueber den
  *        echten Router: Erhoehung (+) und Senkung (-) am HEUTIGEN Tag,
  *        /today zeigt adjusted_min + reason (das Kind sieht die Begruendung),
  *        mehrere Eintraege summieren, Validation (delta 0, fehlender Grund),

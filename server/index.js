@@ -1012,7 +1012,7 @@ const server = app.listen(PORT, BIND_ADDRESS, () => {
     runExternalJob(runSync).catch((e) => logSync.error('Sync tick failed:', e.message));
   };
 
-  /* Family-Link-Istzeit (Einbau-Spec 287): der Ingest-Takt holt alle fuenf
+  /* Family-Link-Istzeit (Einbau-Spec 291): der Ingest-Takt holt alle fuenf
    * Minuten den Collector-Report (nur auf dem Collector-Host mit Session
    * liefert er Zahlen; sonst setzt er den Status 'login_noetig', nie 0er-
    * Snapshots). Laeuft nur, wenn der Haushalt den Schalter in den Regeln

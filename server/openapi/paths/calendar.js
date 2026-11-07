@@ -138,14 +138,14 @@ export function calendarPaths() {
     '/api/v1/calendar/apple/mirrored-events': { delete: op({ summary: 'Delete locally mirrored Apple events', tag: 'Calendar', admin: true, stateChanging: true }) },
     '/api/v1/calendar/subscriptions': {
       get: op({ summary: 'List ICS subscriptions', tag: 'Calendar' }),
-      post: op({ summary: 'Create ICS subscription', tag: 'Calendar', stateChanging: true, requestBody: jsonBody(null), description: DEFAULT_ASSIGNEES_INPUT }),
+      post: op({ summary: 'Create ICS subscription', tag: 'Calendar', stateChanging: true, requestBody: jsonBody(null), description: DEFAULT_ASSIGNEES_INPUT + ' The subscription is created even when its first fetch fails: the answer is still `201`, with `syncError` (the error text for a named case, otherwise a fixed sentence), `syncReason` (the case, for example `calendar_ics_http_status`, or `null` when the app cannot name it) and, where a number matters, `syncParams` (#2566).' }),
     },
     '/api/v1/calendar/subscriptions/{id}': {
       patch: op({ summary: 'Update ICS subscription', tag: 'Calendar', params: [idParam()], stateChanging: true, requestBody: jsonBody(null), description: DEFAULT_ASSIGNEES_INPUT }),
       delete: op({ summary: 'Delete ICS subscription', tag: 'Calendar', params: [idParam()], stateChanging: true }),
     },
     '/api/v1/calendar/subscriptions/{id}/sync': {
-      post: op({ summary: 'Sync ICS subscription', tag: 'Calendar', params: [idParam()], stateChanging: true }),
+      post: op({ summary: 'Sync ICS subscription', tag: 'Calendar', params: [idParam()], stateChanging: true, description: 'A feed that does not deliver answers `400` with its `reason` (`calendar_ics_http_status`, `calendar_ics_too_large`, `calendar_ics_private_address`, ...) instead of `200` (#2566). Scheduled runs keep skipping such a feed silently.' }),
     },
     '/api/v1/calendar/import': {
       post: op({
@@ -539,15 +539,35 @@ const ASSIGNEE_REASONS = '`calendar_assignee_invalid` (400, not a list of user i
 const SUBSCRIPTION_GONE = '`calendar_subscription_not_found` (404)';
 const OUTLOOK_OVERRIDES = '`outlook_auto_sync_overrides` (409, series with linked exceptions cannot sync to Outlook)';
 
+// Kalender-Sync und Kalender-Abos (#1909): was die Seiten beim Verbinden und
+// Abonnieren selbst sagen. Jede andere Absage beim Verbinden ist die Antwort des
+// fremden Servers und kommt ohne `reason`, ihr Text in `error`.
+const ICS_URL = '`calendar_ics_url_invalid` (400, `url` is not an address), '
+  + '`calendar_ics_url_scheme` (400, only https:// and webcal:// - with ICS_SUBSCRIPTION_ALLOW_PRIVATE_NETWORK also http://)';
+const ICS_FETCH = '`calendar_ics_private_address` (400, the address resolves to a private network), '
+  + '`calendar_ics_http_status` (400, the feed answered with a status that is not a success; `params.status`), '
+  + '`calendar_ics_too_large` (400, the feed is larger than the limit; `params.limit_mb`)';
+const ICS_NAME = '`calendar_subscription_name_invalid` (400, `name` is empty or longer than 100 characters)';
+
 const CASE_REASONS = {
+  '/api/v1/calendar/caldav/accounts': {
+    post: '`caldav_account_exists` (409, an account with this URL and username is already connected), '
+      + '`caldav_no_calendars` (400, the server answered, but the account has no calendars); '
+      + 'any other failure of the CalDAV server answers 500 without `reason`, its text in `error`',
+  },
+  '/api/v1/calendar/apple/connect': {
+    post: '`apple_url_invalid` (400, `url` does not start with http(s)), '
+      + '`apple_no_calendars` (400, connected, but the account has no calendars); '
+      + 'any other failure of iCloud answers 400 without `reason`, its text in `error`',
+  },
   '/api/v1/calendar/calendars': { post: CALENDAR_WRITE_REQUIRED },
   '/api/v1/calendar/calendars/reorder': { patch: CALENDAR_WRITE_REQUIRED },
   '/api/v1/calendar/calendars/{id}': { put: CALENDAR_WRITE_REQUIRED, delete: CALENDAR_WRITE_REQUIRED },
   '/api/v1/calendar/sync-targets': { get: CALENDAR_WRITE_REQUIRED },
   '/api/v1/calendar/external-calendars': { patch: ASSIGNEE_REASONS },
-  '/api/v1/calendar/subscriptions': { post: ASSIGNEE_REASONS },
+  '/api/v1/calendar/subscriptions': { post: `${ASSIGNEE_REASONS}, ${ICS_NAME}, ${ICS_URL}, ${ICS_FETCH}` },
   '/api/v1/calendar/subscriptions/{id}': {
-    patch: `${ASSIGNEE_REASONS}, ${SUBSCRIPTION_GONE}`,
+    patch: `${ASSIGNEE_REASONS}, ${SUBSCRIPTION_GONE}, ${ICS_NAME}`,
     delete: SUBSCRIPTION_GONE,
   },
   '/api/v1/calendar/subscriptions/{id}/sync': { post: SUBSCRIPTION_GONE },
@@ -555,7 +575,7 @@ const CASE_REASONS = {
     put: `${OUTLOOK_OVERRIDES}, \`calendar_assignee_not_member\` (400, the owner is not a household member)`,
   },
   '/api/v1/calendar/outlook/accounts/{id}/calendars': { patch: OUTLOOK_OVERRIDES },
-  '/api/v1/calendar/import': { post: ASSIGNEE_REASONS },
+  '/api/v1/calendar/import': { post: `${ASSIGNEE_REASONS}, ${SELECTED_CALENDAR_GONE}, ${ICS_URL}, ${ICS_FETCH}` },
   '/api/v1/calendar/caldav/accounts/{id}/reminder-lists': {
     patch: `${ASSIGNEE_REASONS}, \`reminder_list_assignee_not_tasks\` (400, default assignees for a list mapped to shopping)`,
   },

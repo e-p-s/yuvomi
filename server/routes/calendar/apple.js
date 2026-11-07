@@ -7,6 +7,7 @@ import { integrationDetailsVisible } from '../../scopes.js';
 import express from 'express';
 import * as appleCalendar from '../../services/apple-calendar.js';
 import { requireAdmin } from '../../auth.js';
+import { secret } from '../../middleware/validate.js';
 
 const log = createLogger('Calendar');
 const router = express.Router();
@@ -60,7 +61,7 @@ router.post('/apple/sync', requireAdmin, async (req, res) => {
 router.post('/apple/connect', requireAdmin, async (req, res) => {
   const { url, username, password } = req.body;
   if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-    return res.status(400).json({ error: 'url must be a valid HTTP(S) URL.', code: 400 });
+    return res.status(400).json({ error: 'url must be a valid HTTP(S) URL.', code: 400, reason: 'apple_url_invalid' });
   }
   if (!username || typeof username !== 'string' || username.length > 254) {
     return res.status(400).json({ error: 'username is missing or invalid.', code: 400 });
@@ -68,6 +69,9 @@ router.post('/apple/connect', requireAdmin, async (req, res) => {
   if (!password || typeof password !== 'string' || password.length < 1) {
     return res.status(400).json({ error: 'password is missing.', code: 400 });
   }
+  // Dieselbe Grenze wie CardDAV und CalDAV, ungetrimmt (#2575).
+  const vPassword = secret(password, 'password');
+  if (vPassword.error) return res.status(400).json({ error: vPassword.error, code: 400 });
 
   try {
     // Zuerst temporär setzen, damit testConnection() sie findet
@@ -78,6 +82,12 @@ router.post('/apple/connect', requireAdmin, async (req, res) => {
     // Bei Fehler: gespeicherte Credentials wieder löschen
     appleCalendar.clearCredentials();
     log.error('', err);
+    // Verbunden, aber ohne Kalender, ist der eine Fall, den die App kennt
+    // (#1909); sonst steht hier die Antwort von iCloud, die die Seite dem
+    // Admin als Angabe zeigt.
+    if (err.code === 'apple_no_calendars') {
+      return res.status(400).json({ error: err.message.replace('[Apple] ', ''), code: 400, reason: 'apple_no_calendars' });
+    }
     res.status(400).json({ error: err.message.replace('[Apple] ', ''), code: 400 });
   }
 });

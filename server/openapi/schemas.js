@@ -258,6 +258,7 @@ const taskProperties = {
   external_uid: { type: ['string', 'null'] },
   external_account_id: { type: ['integer', 'null'] },
   external_object_url: { type: ['string', 'null'] },
+  external_rrule: { type: ['string', 'null'], description: 'RRULE of a series another app owns (iOS Reminders, Tasks.org), as that app wrote it; null otherwise. A rule Yuvomi can follow also arrives as `is_recurring`/`recurrence_rule`, and ticking the task off then moves the series on in that app. Otherwise ticking it off answers 409 `task_foreign_series` (#2506, #2515).' },
   target_caldav_account_id: { type: ['integer', 'null'], description: 'The reminder list a local task is sent to.' },
   target_caldav_list_url: { type: ['string', 'null'] },
   outbound_dirty: flag(SYNC_BOOKKEEPING),
@@ -1372,6 +1373,10 @@ export const schemas = {
             },
             external_calendar_id: { type: ['string', 'null'] },
             external_object_url: { type: ['string', 'null'] },
+            provider_status: {
+              type: ['string', 'null'],
+              description: 'The event status an ICS subscription, CalDAV or iCloud reports: `TENTATIVE`, `CONFIRMED` or `CANCELLED`, null when the provider sends none and for every other event. A `CANCELLED` event stays in the calendar answers but reminds no one and is left out of `GET /calendar/upcoming`, the dashboard and the countdowns.',
+            },
             subscription_id: { type: ['integer', 'null'], description: 'The ICS subscription the event came from.' },
             calendar_ref_id: { type: ['integer', 'null'], description: 'The synced calendar the event came from.' },
             caldav_account_id: { type: ['integer', 'null'] },

@@ -64,7 +64,7 @@ Eltern-PIN für den Admin-Account.
 Keine neue API nötig — der Agent nutzt exakt die Android-Endpunkte aus
 `medienzeit-android-tracker.md` (sync/heartbeat/end, exceptions_version, quota-state).
 Einzige Server-Änderung bei Umsetzung: `media_time_sessions.source`-CHECK um `'win'`
-erweitern (Migration v282, append-only).
+erweitern (Migration v286, append-only).
 
 ## Quellen (Auswahl)
 

@@ -81,7 +81,7 @@ function renderPage(container, preferences) {
         })}
       </div>
     </section>
-    <!-- KONSEQUENZEN-KATALOG (Migration 283): die Vorlagen hinter der
+    <!-- KONSEQUENZEN-KATALOG (Migration 287): die Vorlagen hinter der
          Straf-Vergabe. Unsichtbar, solange der Schalter oben aus ist - eine
          Familie ohne Strafsystem pflegt kein Regal, das sie nie oeffnet. -->
     <section class="settings-section" id="rewards-consequence-catalog" data-penalties-enabled="${preferences.rewards_penalties_enabled === true ? '1' : ''}" hidden>
@@ -183,7 +183,7 @@ function applyConsequenceVisibility(container, enabled) {
 }
 
 /**
- * Konsequenzen-Katalog (Migration 283): Liste der Vorlagen mit Schalter
+ * Konsequenzen-Katalog (Migration 287): Liste der Vorlagen mit Schalter
  * (an/aus) und Losch-Knopf, dazu eine Zeile 'Eintrag anlegen'. Ladt nur, wenn
  * der Schalter an ist - die Seite bleibt schnell, wo das Regal zu ist.
  * Das Loeschen ist der Toggle-Pfad der Praemienpflege: der Schalter deaktiviert

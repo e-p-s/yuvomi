@@ -13,7 +13,7 @@ import { openDetailView, leaveDetailTo, visibilityRow, assignedRow } from '/comp
 import { mountMasterDetail, splitViewDetailHtml, releaseAddressOnClose } from '/utils/master-detail.js';
 import { beginRowFill, drawRowIcons } from '/utils/row-fill.js';
 import { stagger, wireScrollFade, scheduleUndoableDelete, vibrate, durationToken, requestHeadCollapse } from '/utils/ux.js';
-import { t, getLocale, formatDayMonth, formatMonthYear, formatTime, timeSuffix, formatDateInput, parseDateInput, isDateInputValid, formatTimeInput, parseTimeInput } from '/i18n.js';
+import { t, getLocale, formatDayMonth, formatMonthYear, formatTime, timeSuffix, formatDateInput, parseDateInput, isDateInputValid, formatTimeInput, parseTimeInput, setWeekStart } from '/i18n.js';
 import { esc, fmtLocation, REQUIRED_MARK } from '/utils/html.js';
 import { periodStepperHtml, syncPeriodReset, swapPeriod } from '/utils/period-stepper.js';
 import { swapRegion } from '/utils/content-swap.js';
@@ -780,7 +780,29 @@ function eventGlyphsHtml(ev, { compact = true } = {}) {
   const icon = hasEventIcon(ev.icon)
     ? eventIconHtml(ev.icon, compact ? 'event-icon event-icon--compact' : 'event-icon')
     : '';
-  return `${icon}${calendarRepeatIconHtml(ev)}`;
+  return `${calendarCancelledMarkHtml(ev, { compact })}${icon}${calendarRepeatIconHtml(ev)}`;
+}
+
+/** Vom Anbieter abgesagt (#2499), per STATUS:CANCELLED aus ICS-Abo, CalDAV oder iCloud. */
+function isProviderCancelled(ev) {
+  return ev?.provider_status === 'CANCELLED';
+}
+
+/**
+ * DIE ABSAGE STEHT NUR IM KALENDER (#2499): ein Termin, den der Anbieter
+ * absagt, aber stehen laesst, bleibt hier sichtbar, damit niemand fragt, wo er
+ * hin ist - alle anderen Flaechen lassen ihn aus (Server). Die Marke steht vor
+ * den uebrigen Glyphen; der Titel dahinter ist durchgestrichen und tritt in
+ * die Sekundaertinte zurueck (calendar.css, Geschwister-Selektor - keine
+ * Klasse an jeder der acht Chip-Wurzeln). Im Raster ein Icon mit Namen, in
+ * der Listenzeile das Wort: dort ist Platz, und ein Wort braucht keine
+ * Legende.
+ */
+function calendarCancelledMarkHtml(ev, { compact = true } = {}) {
+  if (!isProviderCancelled(ev)) return '';
+  const label = esc(t('calendar.cancelled'));
+  if (!compact) return `<span class="calendar-cancelled-mark calendar-cancelled-mark--word">${label}</span>`;
+  return `<span class="calendar-cancelled-mark" role="img" aria-label="${label}" title="${label}"><i data-lucide="calendar-x" class="icon-sm" aria-hidden="true"></i></span>`;
 }
 
 function eventIconElement(icon, className = 'event-icon') {
@@ -1955,6 +1977,8 @@ async function loadUsers() {
 function applyEventFormPreferences(prefs = {}, documentOptions = {}) {
   state.holidayPrefs  = prefs ?? {};
   state.weekStart     = weekStartIndex(prefs?.week_start);
+  // Der frische Wert auch fuer den Datepicker, der ihn aus i18n.js liest (#2533).
+  if (prefs?.week_start) setWeekStart(prefs.week_start);
   state.defaultDuration = Number(prefs?.calendar_default_duration) || 60;
   // Standardwerte für neue Termine (#497/#498).
   state.defaultReminders = Array.isArray(prefs?.calendar_default_reminders)
@@ -4832,8 +4856,9 @@ const MONTH_DAY_LABEL_TITLES = 3;
 function monthDayAriaLabel(date, total, events = [], { tasks = [], others = [], isToday = false } = {}) {
   const eventTitle = (event) => {
     if (!event?.title) return '';
-    const title = (event.recurrence_rule || event.is_recurring_instance)
+    const series = (event.recurrence_rule || event.is_recurring_instance)
       ? `${t('calendar.recurringEvent')}: ${event.title}` : event.title;
+    const title = isProviderCancelled(event) ? `${t('calendar.cancelled')}: ${series}` : series;
     const position = multiDayPositionText(event, date);
     return position ? `${title} (${position})` : title;
   };
@@ -7638,6 +7663,7 @@ function renderAgendaEvent(ev, dayStr) {
 
 function agendaEventAriaLabel(ev, timeStr, dayText = '') {
   return [
+    isProviderCancelled(ev) ? t('calendar.cancelled') : '',
     (ev.recurrence_rule || ev.is_recurring_instance) ? t('calendar.recurringEvent') : '',
     ev.title,
     timeStr,
@@ -7835,6 +7861,8 @@ function eventDetailHead(ev) {
     dot: resolveEventBackground(ev),
     subtitle: eventWhenRelative(ev),
     subtitleLabel: t('calendar.detailWhen'),
+    // Die Absage im Kopf (#2499): das Erste, was der Dialog sagt.
+    facts: isProviderCancelled(ev) ? [t('calendar.cancelled')] : [],
     people: ev.assigned_users ?? [],
     peopleLabel: t('calendar.assignedLabel'),
   };

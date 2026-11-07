@@ -978,7 +978,7 @@ function penaltyPermissionRefusal(d, actorId, targetId) {
   return null;
 }
 
-// Konsequenten-Katalog (Migration 283): die Vorlagen hinter der Straf-Vergabe.
+// Konsequenten-Katalog (Migration 287): die Vorlagen hinter der Straf-Vergabe.
 // Eltern haben ihre Standard-Faelle nicht jedes Mal frei zu tippen - ein
 // Eintrag fuellt Titel und Punkte in POST /penalty (catalog_consequence_id),
 // freies Editieren bleibt. Pflege wie der Praemien-Katalog: Admin-only,

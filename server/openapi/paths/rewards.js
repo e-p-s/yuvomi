@@ -68,7 +68,7 @@ export function rewardsPaths() {
         },
       }),
     },
-    // Konsequenzen-Katalog (Migration 283): die Vorlagen hinter der
+    // Konsequenzen-Katalog (Migration 287): die Vorlagen hinter der
     // Straf-Vergabe. Dieselbe Form wie der Praemien-Katalog: Pflege durch
     // Admin/Eltern, `active` statt Loeschen, Sortierung ueber sort_order.
     '/api/v1/rewards/consequences': {

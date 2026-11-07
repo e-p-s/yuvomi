@@ -70,7 +70,7 @@ const earned = (uid) => getBalance(db, uid);
 // ----------------------------------------------------------
 // Schema
 // ----------------------------------------------------------
-test('Migration 280: Freigabe-Spalten vorhanden', () => {
+test('Migration 284: Freigabe-Spalten vorhanden', () => {
   const cols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
   for (const c of ['requires_approval', 'approval_status', 'approved_by', 'approved_at', 'reject_note', 'checkin_at']) {
     assert.ok(cols.includes(c), c);

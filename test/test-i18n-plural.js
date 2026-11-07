@@ -275,6 +275,8 @@ const PLURAL_EXCEPTIONS = {
   'dashboard.healthRefill': 'NO_NOUN',
   'dashboard.mediaTimeMore': 'NO_NOUN',
   'health.labs.abnormalBadge': 'NO_NOUN',
+  // #2413: "statt 3" - der Grundwert einer verspaeteten Buchung, nur fuer Screenreader.
+  'rewards.ledgerLateDecayInsteadOf': 'NO_NOUN',
 
   // --- Zahl in Klammern / hinter Doppelpunkt ------------------------------
   'category.errorInUse': 'PARENTHETICAL',

@@ -333,7 +333,7 @@ async function loadCatalog() {
   state.catalog = res.data || [];
 }
 
-/* KONSEQUENZEN-KATALOG (Migration 283): die aktiven Vorlagen fuer die
+/* KONSEQUENZEN-KATALOG (Migration 287): die aktiven Vorlagen fuer die
  * Straf-Vergabe. Scheitert die Abfrage, bleibt `null` und die Vergabe zeigt nur
  * die freien Felder - die Vorlagen erleichtern die Vergabe, sie bedingen sie
  * nicht. */
@@ -1830,7 +1830,7 @@ function openConsequenceEditModal(id, afterSave) {
     },
   });
   // Loeschen ist die Route, die den Katalogeintrag entfernt; gebuchte
-  // Konsequenzen bleiben (Snapshot im Ledger, Migration 283).
+  // Konsequenzen bleiben (Snapshot im Ledger, Migration 287).
   setTimeout(() => {
     document.querySelector('#rw-consequence-edit-delete')?.addEventListener('click', async () => {
       const modalContext = captureModalContext();

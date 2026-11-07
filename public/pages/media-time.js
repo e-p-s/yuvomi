@@ -935,7 +935,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-/* Family-Link-Istzeit auf der Tageskarte (Spec 287). Ohne Zuordnung steht
+/* Family-Link-Istzeit auf der Tageskarte (Spec 291). Ohne Zuordnung steht
  * hier nichts; ohne Collector-Sitzion steht der Hinweis, NIE eine Null.
  * Die Minuten zaehlen bereits im Balken (dayUsage-Ersatz) - dieser Block ist
  * die Auskunft ueber die Quelle, nicht das Konto. */

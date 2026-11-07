@@ -189,6 +189,24 @@ test('POST /restore: leerer Body → 400', async () => {
   const r = await call('POST', '/restore', { actor: ADM, raw: Buffer.alloc(0) });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /required/i);
+  // #1909: die Seite sagt den Fall in der Sprache der Oberflaeche.
+  assert.equal(r.body.reason, 'backup_file_empty');
+});
+
+// #1909: eine lesbare SQLite-Datei, die keine Yuvomi-Datenbank ist - die Seite
+// zeigte bisher den englischen Text des Servers.
+test('POST /restore: SQLite ohne Yuvomi-Schema → 400 backup_not_yuvomi, Live-DB unangetastet', async () => {
+  const versionBefore = dbmod.currentVersion();
+  const foreignPath = path.join(TMP_ROOT, 'foreign.db');
+  const { default: Database } = await import('better-sqlite3-multiple-ciphers');
+  const foreign = new Database(foreignPath);
+  foreign.exec('CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT)');
+  foreign.close();
+  const r = await call('POST', '/restore', { actor: ADM, raw: fs.readFileSync(foreignPath) });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /not a valid Yuvomi database/);
+  assert.equal(r.body.reason, 'backup_not_yuvomi');
+  assert.equal(dbmod.currentVersion(), versionBefore);
 });
 
 test('POST /restore: kein gültiges SQLite → 400, Live-DB unangetastet', async () => {
@@ -399,6 +417,10 @@ test('POST /restore: Upload über dem Limit → 413', async () => {
   const r = await call('POST', '/restore', { actor: ADM, raw: tooLarge });
   assert.equal(r.status, 413);
   assert.match(r.body.error, /too large/i);
+  // #2564 (Codex): die Seite nennt die Grenze und den Hebel nur, wenn der
+  // Grund und die Grenze strukturiert mitkommen - der englische Text faellt weg.
+  assert.equal(r.body.reason, 'backup_file_too_large');
+  assert.deepEqual(r.body.params, { limit: '4mb' });
 });
 
 // ── POST /restore: echter Roundtrip (re-initialisiert die DB) — als LETZTES ──────
@@ -473,6 +495,8 @@ test('POST /restore: Backup aus einer neueren Yuvomi-Version → 400, Live-DB un
   assert.equal(r.status, 400);
   assert.match(r.body.error, /newer Yuvomi/i);
   assert.match(r.body.error, /999999/);
+  // #1909: der naechste Schritt (erst aktualisieren) steht als Fall in der Antwort.
+  assert.equal(r.body.reason, 'backup_newer_version');
   // Nichts kopiert: Version und Nutzbarkeit der Live-DB unveraendert.
   assert.equal(dbmod.currentVersion(), versionBefore);
   assert.deepEqual(dbmod.unknownMigrationVersions(database()), []);
@@ -490,4 +514,79 @@ test('unknownMigrationVersions: sieht genau die Nummern, die dieser Build nicht 
     live.prepare('DELETE FROM schema_migrations WHERE version = ?').run(999999);
   }
   assert.deepEqual(dbmod.unknownMigrationVersions(live), []);
+});
+
+// ── GET /database: Rate-Limit je Konto (#2524) ─────────────────────────────────
+// Jeder Abruf baut eine volle Kopie der Datenbank; eine gekaperte Admin-Sitzung
+// darf das nicht im Takt ausloesen. Eigene Konto-IDs, damit die Abrufe der
+// Faelle oben nicht mitzaehlen.
+test('GET /database: der elfte Download eines Admins in der Stunde bekommt 429, andere Konten nicht (#2524)', async () => {
+  const first = { id: 41, role: 'admin' };
+  const second = { id: 42, role: 'admin' };
+  const member = { id: 43, role: 'member' };
+
+  // Ein Mitglied scheitert am Gate, bevor der Zaehler laeuft: auch nach zwoelf
+  // Versuchen kommt 403, nie 429.
+  for (let i = 0; i < 12; i += 1) {
+    const r = await call('GET', '/database', { actor: member });
+    assert.equal(r.status, 403, `Versuch ${i + 1} des Mitglieds`);
+  }
+
+  for (let i = 0; i < 10; i += 1) {
+    const r = await call('GET', '/database', { actor: first });
+    assert.equal(r.status, 200, `Download ${i + 1} des ersten Admins`);
+  }
+  const blocked = await call('GET', '/database', { actor: first });
+  assert.equal(blocked.status, 429, 'der elfte Download in der Stunde wird abgewiesen');
+  assert.equal(blocked.body?.code, 429);
+  assert.ok(!blocked.buf.subarray(0, 16).toString('latin1').startsWith('SQLite format 3'), 'kein Backup im 429');
+
+  // Ein zweiter Admin hat sein eigenes Budget.
+  assert.equal((await call('GET', '/database', { actor: second })).status, 200);
+
+  // Wird das Mitglied Admin, ist sein Budget unberuehrt: die 403 oben haben nichts verbraucht.
+  for (let i = 0; i < 10; i += 1) {
+    const r = await call('GET', '/database', { actor: { ...member, role: 'admin' } });
+    assert.equal(r.status, 200, `Download ${i + 1} des befoerderten Mitglieds`);
+  }
+});
+
+// ── Integritaetspruefung vor Download und Upload (#2520) ────────────────────────
+// Die Backup-API kopiert die Seiten der Live-Datenbank, einen kaputten Index also
+// mit. Vor #2520 bekam der Admin diese Datei als gelungenes Backup, und WebDAV
+// lud sie hoch; der Fehler zeigte sich erst beim Restore.
+test('GET /database und POST /webdav/trigger: ein Backup ohne bestandene Integritaetspruefung geht nicht raus (#2520)', async () => {
+  const admin = { id: 51, role: 'admin' };
+  const live = database();
+  live.exec('CREATE TABLE probe_2520 (x INTEGER, y INTEGER); CREATE INDEX probe_2520_x ON probe_2520 (x);');
+  const insert = live.prepare('INSERT INTO probe_2520 VALUES (?, ?)');
+  for (let i = 0; i < 20; i++) insert.run(i, 1000 - i);
+  live.unsafeMode(true);
+  live.pragma('writable_schema = ON');
+  live.prepare("UPDATE sqlite_master SET sql = 'CREATE INDEX probe_2520_x ON probe_2520 (y)' WHERE name = 'probe_2520_x'").run();
+  live.pragma('writable_schema = OFF');
+  live.unsafeMode(false);
+
+  try {
+    const dl = await call('GET', '/database', { actor: admin });
+    assert.equal(dl.status, 500, 'ein kaputtes Backup wird nicht ausgeliefert');
+    assert.equal(dl.body?.reason, 'backup_verify_failed');
+    assert.equal(dl.body?.error, 'Database backup failed.', 'fester Satz, der Befund steht im Log');
+    assert.ok(!dl.buf.subarray(0, 16).toString('latin1').startsWith('SQLite format 3'), 'keine Datenbank im Body');
+
+    const localBefore = fs.readdirSync(BACKUP_DIR).sort();
+    const putsBefore = davSeen.filter((m) => m === 'PUT').length;
+    const up = await call('POST', '/webdav/trigger', { actor: admin });
+    assert.equal(up.status, 500, 'ein kaputtes Backup wird nicht hochgeladen');
+    assert.equal(davSeen.filter((m) => m === 'PUT').length, putsBefore, 'kein PUT an WebDAV');
+    assert.deepEqual(fs.readdirSync(BACKUP_DIR).sort(), localBefore, 'keine kaputte Datei im Backup-Ordner');
+  } finally {
+    live.exec('DROP INDEX probe_2520_x; DROP TABLE probe_2520;');
+  }
+  assert.equal((await call('GET', '/database', { actor: admin })).status, 200, 'heil wieder herunterladbar');
+  // Die Pruefung oeffnet die Kopie, und eine Kopie im WAL-Modus bekommt dabei
+  // `-wal` und `-shm` - die Rotation raeumt nur `.db`, sie blieben liegen.
+  assert.equal((await call('POST', '/trigger', { actor: admin })).body?.data?.success, true);
+  assert.deepEqual(fs.readdirSync(BACKUP_DIR).filter((f) => !f.endsWith('.db')), [],
+    'keine Begleitdateien der Pruefung im Backup-Ordner');
 });

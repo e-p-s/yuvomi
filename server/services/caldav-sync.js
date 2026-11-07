@@ -48,7 +48,8 @@ import {
   formatICSDate,
   tzLocalToUTC,
   applyDuration,
-  normalizeRecurrenceOverrides
+  normalizeRecurrenceOverrides,
+  providerStatusOf
 } from './ics-parser.js';
 
 // Historisch hier beheimatet, inzwischen in utils/ics-format.js - der Re-Export
@@ -404,13 +405,20 @@ async function testConnection(caldavUrl, username, password, { createClient } = 
 
     const calendars = await client.fetchCalendars();
     if (!calendars.length) {
-      throw new Error('Connected, but no calendars found.');
+      const empty = new Error('Connected, but no calendars found.');
+      empty.code = 'caldav_no_calendars';
+      throw empty;
     }
 
     return { ok: true, calendars };
   } catch (err) {
     log.error('Connection test failed:', err.message);
-    throw new Error(`CalDAV connection failed: ${err.message}`);
+    const failed = new Error(`CalDAV connection failed: ${err.message}`);
+    // Der eine Fall, den die App selbst kennt (#1909): der Server hat
+    // geantwortet, das Konto hat nur keine Kalender. Alles andere ist die
+    // Angabe des fremden Servers und bleibt ohne Code.
+    if (err.code === 'caldav_no_calendars') failed.code = err.code;
+    throw failed;
   }
 }
 
@@ -434,7 +442,9 @@ async function addAccount(name, caldavUrl, username, password, { createClient } 
   ).get(caldavUrl, username);
 
   if (existing) {
-    throw new Error('Account with this URL and username already exists.');
+    const duplicate = new Error('Account with this URL and username already exists.');
+    duplicate.code = 'caldav_account_exists';
+    throw duplicate;
   }
 
   // Warn if DB_ENCRYPTION_KEY not set
@@ -953,6 +963,94 @@ function rememberCalendarWritability(accountId, serverCalendars) {
   }
 }
 
+/**
+ * Lädt die lokalen Termine hoch, die auf ihren Upload in dieses Konto warten
+ * (`localUploadsOf`). EINE Schleife für den Sync-Lauf und den Sofortversuch
+ * (#2565): vorher lief sie nur im Lauf, und ein neu angelegter Termin kam erst
+ * mit dem nächsten Intervall an, obwohl die Doku den Versuch beim Speichern
+ * zusagt. `serverCalendars` ist die Auflistung des Kontos, aus der Ziel und
+ * Schreibrechte gelesen werden.
+ * @returns {Promise<number>} hochgeladene und gebuchte Termine
+ */
+async function uploadWaitingEvents(client, account, serverCalendars, { stop = null } = {}) {
+  const localEvents = localUploadsOf(account.id);
+  if (!localEvents.length) return 0;
+
+  // Einmal je Lauf: die Zone, an der naive Zeiten haengen (#938).
+  const householdZone = householdTimeZone(db.get());
+
+  let uploaded = 0;
+  const uploadGate = createUploadGate(stop);
+  const readOnlyWaiting = new Map();
+  for (const listed of localEvents) {
+    // Frisch lesen (#1862): die Liste stammt von vor der Schleife, und
+    // jeder Upload davor war ein await. Wer inzwischen bearbeitet wurde,
+    // geht mit dem Stand von jetzt hinauf; wer gelöscht wurde oder nicht
+    // mehr auf den Upload in dieses Konto wartet, gar nicht.
+    const [event] = localUploadsOf(account.id, listed.id);
+    if (!event) continue;
+    try {
+      // Find target calendar
+      const targetCal = serverCalendars.find(sc => sc.url === event.target_caldav_calendar_url);
+
+      if (!targetCal) {
+        log.warn(`Target calendar ${event.target_caldav_calendar_url} not found, skipping event ${event.id}.`);
+        continue;
+      }
+
+      // Der Kalender hat in diesem Lauf schon abgelehnt: nicht für jeden
+      // wartenden Termin dieselbe Absage abholen.
+      if (uploadGate.isClosed(targetCal.url)) continue;
+
+      // Nimmt der Kalender laut seinen Rechten keine neuen Termine an
+      // (#1840), geht keine Anfrage hinaus: die Absage wäre sicher. Der
+      // Termin bleibt lokal und wartet, die Kontoeinstellungen nennen ihn.
+      if (!acceptsNewEntries(targetCal)) {
+        readOnlyWaiting.set(targetCal.url, (readOnlyWaiting.get(targetCal.url) || 0) + 1);
+        continue;
+      }
+
+      const uid     = outbound.eventUidFor(event.id);
+      const icsData = buildCalDAVICS(event, householdZone);
+
+      // Upload to CalDAV. Ein 412 auf den eigenen Namen ist der eigene
+      // frühere Upload und wird übernommen (uploadNewEvent).
+      const { objectUrl, adopted } = await outbound.uploadNewEvent(client, targetCal, uid, icsData, {
+        source: 'caldav', eventId: event.id, accountId: account.id,
+      });
+
+      const calRefId  = upsertExternalCalendar(
+        'caldav', event.target_caldav_calendar_url,
+        calendarDisplayName(targetCal.displayName, event.target_caldav_calendar_url), null
+      );
+      // Gebucht wird gegen den Stand NACH dem await (bookEventUpload).
+      const booked = outbound.bookEventUpload(event, {
+        source: 'caldav', uid, objectUrl, calRefId, adopted, accountId: account.id,
+        calendarUrl: event.target_caldav_calendar_url,
+        snapshot: icsSnapshot(event, icsData, uid, householdZone),
+      });
+      if (booked !== 'mirrored') continue;
+
+      uploaded++;
+    } catch (err) {
+      const calendarUrl = event.target_caldav_calendar_url;
+      if (!uploadGate.refused(calendarUrl, err)) {
+        log.error(`Failed to upload event ${event.id} to CalDAV:`, err.message);
+      }
+    }
+  }
+  for (const [calendarUrl, waiting] of readOnlyWaiting) {
+    log.warn(`Calendar ${calendarUrl} is read-only for this account; `
+      + `${waiting} event(s) stay local until it accepts new events or they get another calendar.`);
+  }
+  // EINE Zeile je Kalender, der in diesem Lauf abgelehnt hat.
+  uploadGate.report((calendarUrl, err, waiting) => log.error(
+    `Calendar ${calendarUrl} is not accepting uploads (${err.message}); `
+    + `${waiting} event(s) stay local and are tried again on the next run.`
+  ));
+  return uploaded;
+}
+
 /** Echter tsdav-Client für einen Account; in Tests durch eine Factory ersetzbar. */
 const defaultClientFactory = createCalDAVClient;
 
@@ -1147,8 +1245,15 @@ async function runSync({ createClient } = {}) {
     INSERT INTO calendar_events
       (title, description, start_datetime, end_datetime, all_day,
        location, color, external_calendar_id, external_source, recurrence_rule, tzid, calendar_ref_id, created_by,
-       external_object_url, caldav_account_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'caldav', ?, ?, ?, ?, ?, ?)
+       external_object_url, caldav_account_id, provider_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'caldav', ?, ?, ?, ?, ?, ?, ?)
+  `);
+  // Die Absage des Anbieters (#2499), bei jedem Abruf, auch zurueck auf
+  // CONFIRMED oder NULL - sonst bliebe ein wieder zugesagter Termin stumm.
+  // Der Vergleich haelt unveraenderte Laeufe ohne Schreibvorgang.
+  const updProviderStatus = conn.prepare(`
+    UPDATE calendar_events SET provider_status = ?
+    WHERE id = ? AND provider_status IS NOT ?
   `);
   // Die Serie einer neu angelegten Ausnahme (#2202), im selben Konto.
   const selSeriesRow = conn.prepare(`
@@ -1461,6 +1566,8 @@ async function runSync({ createClient } = {}) {
                 eventId = existing.id;
                 // Auf dem Server verschoben (#1377): die Erinnerungen ziehen mit.
                 if (changed) followInboundStartChange(conn, eventId, existing.start_datetime, when.dtstart);
+                const providerStatus = providerStatusOf(ev);
+                if (updProviderStatus.run(providerStatus, existing.id, providerStatus).changes > 0) changed = true;
                 // Von einem Kalender in einen anderen verschoben (#1270): die
                 // unangetastete Standard-Zuweisung zieht mit um.
                 reassignDefaultOnCalendarMove(db.get(), eventId, {
@@ -1473,7 +1580,7 @@ async function runSync({ createClient } = {}) {
                 const inserted = insEvent.run(
                   ev.summary, ev.description, ev.dtstart, ev.dtend,
                   ev.allDay ? 1 : 0, ev.location, evColor, ev.uid, ev.rrule, ev.tzid ?? null, calRefId, createdBy,
-                  obj.url ?? null, account.id
+                  obj.url ?? null, account.id, providerStatusOf(ev)
                 );
                 eventId = Number(inserted.lastInsertRowid);
                 changed = true;
@@ -1588,80 +1695,9 @@ async function runSync({ createClient } = {}) {
       }
 
       // Outbound sync: Yuvomi → CalDAV (events with target_caldav_account_id)
-      const localEvents = localUploadsOf(account.id);
-
-      // Einmal je Lauf: die Zone, an der naive Zeiten haengen (#938).
-      const householdZone = householdTimeZone(db.get());
-
-      const uploadGate = createUploadGate(stop);
-      const readOnlyWaiting = new Map();
-      for (const listed of localEvents) {
-        // Frisch lesen (#1862): die Liste stammt von vor der Schleife, und
-        // jeder Upload davor war ein await. Wer inzwischen bearbeitet wurde,
-        // geht mit dem Stand von jetzt hinauf; wer gelöscht wurde oder nicht
-        // mehr auf den Upload in dieses Konto wartet, gar nicht.
-        const [event] = localUploadsOf(account.id, listed.id);
-        if (!event) continue;
-        try {
-          // Find target calendar
-          const targetCal = serverCalendars.find(sc => sc.url === event.target_caldav_calendar_url);
-
-          if (!targetCal) {
-            log.warn(`Target calendar ${event.target_caldav_calendar_url} not found, skipping event ${event.id}.`);
-            continue;
-          }
-
-          // Der Kalender hat in diesem Lauf schon abgelehnt: nicht für jeden
-          // wartenden Termin dieselbe Absage abholen.
-          if (uploadGate.isClosed(targetCal.url)) continue;
-
-          // Nimmt der Kalender laut seinen Rechten keine neuen Termine an
-          // (#1840), geht keine Anfrage hinaus: die Absage wäre sicher. Der
-          // Termin bleibt lokal und wartet, die Kontoeinstellungen nennen ihn.
-          if (!acceptsNewEntries(targetCal)) {
-            readOnlyWaiting.set(targetCal.url, (readOnlyWaiting.get(targetCal.url) || 0) + 1);
-            continue;
-          }
-
-          const uid     = outbound.eventUidFor(event.id);
-          const icsData = buildCalDAVICS(event, householdZone);
-
-          // Upload to CalDAV. Ein 412 auf den eigenen Namen ist der eigene
-          // frühere Upload und wird übernommen (uploadNewEvent).
-          const { objectUrl, adopted } = await outbound.uploadNewEvent(client, targetCal, uid, icsData, {
-            source: 'caldav', eventId: event.id, accountId: account.id,
-          });
-
-          const calRefId  = upsertExternalCalendar(
-            'caldav', event.target_caldav_calendar_url,
-            calendarDisplayName(targetCal.displayName, event.target_caldav_calendar_url), null
-          );
-          // Gebucht wird gegen den Stand NACH dem await (bookEventUpload).
-          const booked = outbound.bookEventUpload(event, {
-            source: 'caldav', uid, objectUrl, calRefId, adopted, accountId: account.id,
-            calendarUrl: event.target_caldav_calendar_url,
-            snapshot: icsSnapshot(event, icsData, uid, householdZone),
-          });
-          if (booked !== 'mirrored') continue;
-
-          accountEventCount++;
-          accountChangedCount++;
-        } catch (err) {
-          const calendarUrl = event.target_caldav_calendar_url;
-          if (!uploadGate.refused(calendarUrl, err)) {
-            log.error(`Failed to upload event ${event.id} to CalDAV:`, err.message);
-          }
-        }
-      }
-      for (const [calendarUrl, waiting] of readOnlyWaiting) {
-        log.warn(`Calendar ${calendarUrl} is read-only for this account; `
-          + `${waiting} event(s) stay local until it accepts new events or they get another calendar.`);
-      }
-      // EINE Zeile je Kalender, der in diesem Lauf abgelehnt hat.
-      uploadGate.report((calendarUrl, err, waiting) => log.error(
-        `Calendar ${calendarUrl} is not accepting uploads (${err.message}); `
-        + `${waiting} event(s) stay local and are tried again on the next run.`
-      ));
+      const uploaded = await uploadWaitingEvents(client, account, serverCalendars, { stop });
+      accountEventCount   += uploaded;
+      accountChangedCount += uploaded;
 
       // Update last_sync for account
       db.get().prepare(`
@@ -1706,7 +1742,9 @@ async function runSync({ createClient } = {}) {
  * Anders als der Sync-Lauf holt er keine Kalender ab, sondern nur die betroffenen
  * Objekte: eine Löschung ist ein DELETE auf die gespeicherte URL, eine Änderung
  * ein gezielter GET plus PUT. Termine ohne bekannte Objekt-URL (synchronisiert vor
- * Migration v106) bleiben vorgemerkt und laufen im nächsten Sync mit.
+ * Migration v106) bleiben vorgemerkt und laufen im nächsten Sync mit. Wartet ein
+ * neu angelegter Termin auf seinen Upload (#2565), kommt die Auflistung des
+ * Kontos dazu, aber kein Abruf der Kalenderinhalte.
  * @returns {Promise<{deleted:number,updated:number}>}
  */
 async function flushOutbound(opts = {}) {
@@ -1743,21 +1781,45 @@ async function runFlushOutbound({ createClient } = {}) {
       updates.push({ ...event, __calendarUrl: calendarUrl });
       if (event.outbound_move_to) needsCalendars = true;
     }
-    if (!deletions.length && !updates.length) continue;
+    // Neu angelegte Termine (#2565): ihr Upload braucht die Auflistung des
+    // Kontos (Ziel und Schreibrechte), sonst nichts aus einem vollen Abruf.
+    const waitingUploads = localUploadsOf(account.id).length > 0;
+    if (!deletions.length && !updates.length && !waitingUploads) continue;
 
     try {
       const client = withAccountOrigin(await makeClient(account), accountUrls(account));
-      const res = await flushAccount(client, 'caldav', {
-        deletions, updates, needsCalendars, accountId: account.id, isSelected,
-      });
-      total.deleted += res.deleted;
-      total.updated += res.updated;
+      // EIN Stoppsignal für alle Phasen dieses Versuchs (#1863, #2565): nach
+      // einer kontoweiten Absage (429, 5xx, 401) geht nichts mehr an das
+      // Konto, auch kein Upload; die Arbeit wartet auf den nächsten Lauf.
+      const stop = outbound.createRefusalStop();
+      if (deletions.length || updates.length) {
+        const res = await flushAccount(client, 'caldav', {
+          deletions, updates, needsCalendars, accountId: account.id, isSelected, stop,
+        });
+        total.deleted += res.deleted;
+        total.updated += res.updated;
+      }
+      if (waitingUploads) await flushUploads(client, account, stop);
     } catch (err) {
       // Unkritisch: alles bleibt vorgemerkt, der nächste Sync-Lauf zieht nach.
       log.warn(`Immediate outbound attempt failed for account ${account.id}: ${err.message}`);
     }
   }
   return total;
+}
+
+/**
+ * Der Upload-Teil des Sofortversuchs für ein Konto (#2565): dieselbe Schleife
+ * wie im Lauf, mit der Auflistung, die der Lauf auch nimmt. Nennt der Server
+ * keinen Kalender, ist das eine unvollständige Antwort (siehe runSync), und
+ * es geht nichts hinaus; die Termine warten auf den nächsten Lauf.
+ */
+async function flushUploads(client, account, stop) {
+  // Hat eine frühere Phase das Konto gesperrt, fragt auch die Auflistung nicht.
+  if (stop.blocks()) return 0;
+  const serverCalendars = await client.fetchCalendars();
+  if (!serverCalendars?.length) return 0;
+  return uploadWaitingEvents(client, account, serverCalendars, { stop });
 }
 
 function getStatus() {

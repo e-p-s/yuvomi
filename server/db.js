@@ -11929,6 +11929,65 @@ const MIGRATIONS = [
   },
   {
     version: 278,
+    description: 'Wall displays: centrally managed night hours and screensaver options (#2436)',
+    // NULL preserves existing device-local choices until an administrator saves.
+    up: `ALTER TABLE display_accounts ADD COLUMN device_settings TEXT CHECK(device_settings IS NULL OR json_valid(device_settings));`,
+  },
+  {
+    version: 279,
+    description: 'tasks: external_rrule keeps the recurrence rule another app owns',
+    // #2506/#2515: eine in iOS Erinnerungen oder Tasks.org angelegte Serie kam
+    // als Einmal-Aufgabe an. Hakte Yuvomi sie ab, ging STATUS:COMPLETED auf den
+    // Master mit der RRULE, und die besitzende App beendete die ganze Serie.
+    // Die Spalte haelt die fremde Regel woertlich fest (der Inbound schreibt
+    // sie bei jedem Abruf, NULL ohne Regel oder bei Yuvomis eigener). Solange
+    // sie steht, sperren die Routen das Abhaken und der Push schickt nie
+    // COMPLETED auf diesen Master. Reines SQL, damit der Testspiegel
+    // (db-schema-test.js) sie fuehren kann; eine gedriftete Datenbank ohne die
+    // Spalte heilt reconcileCriticalSchema.
+    up: `ALTER TABLE tasks ADD COLUMN external_rrule TEXT;`,
+  },
+  {
+    version: 280,
+    description: 'Shopping: purchase price history (#1003)',
+    // A PURCHASE HISTORY IS A RECORD OF FACTS (#1003). When a priced item is
+    // ticked off or cleared, a purchase entry is written with the item name,
+    // price in cents, shop reference, and date. Names match ignoring case
+    // (COLLATE NOCASE). shopping_item_id keeps uniqueness while on the list
+    // and turns to NULL when cleared, preserving the history row forever.
+    up: `
+      CREATE TABLE IF NOT EXISTS shopping_purchases (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_name        TEXT    NOT NULL,
+        price_cents      INTEGER NOT NULL CHECK(price_cents >= 0),
+        store_id         INTEGER REFERENCES shopping_stores(id) ON DELETE SET NULL,
+        shopping_item_id INTEGER REFERENCES shopping_items(id) ON DELETE SET NULL,
+        purchased_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+        created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_shopping_purchases_name_date
+        ON shopping_purchases(item_name COLLATE NOCASE, purchased_at DESC, id DESC);
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_shopping_purchases_item
+        ON shopping_purchases(shopping_item_id)
+        WHERE shopping_item_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 281,
+    description: 'calendar_events: provider_status keeps a cancellation the provider reports',
+    // #2499: ein Termin, den der Anbieter per STATUS:CANCELLED absagt, aber
+    // stehen laesst, kam ueber ICS-Abo, CalDAV und iCloud als normaler Termin
+    // an und erinnerte weiter. Die Spalte gehoert dem Anbieter (der Inbound
+    // schreibt sie bei jedem Abruf, auch zurueck auf CONFIRMED oder NULL);
+    // lokal angelegte Termine bleiben NULL. Reines SQL fuer den Testspiegel
+    // (db-schema-test.js); eine gedriftete Datenbank heilt
+    // reconcileCriticalSchema.
+    up: `ALTER TABLE calendar_events ADD COLUMN provider_status TEXT CHECK(provider_status IS NULL OR provider_status IN ('TENTATIVE', 'CONFIRMED', 'CANCELLED'));`,
+  },
+  {
+    version: 282,
     description: 'rewards: late completion decay audit fields',
     // Spaeterledigung mit Punkteabzug (Haushalt opt-in): ist
     // `tasks_late_decay_enabled` auf '1', verbucht awardForCompletion() pro
@@ -11949,7 +12008,7 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 279,
+    version: 283,
     description: 'rewards: optional consequences (penalty ledger type)',
     // Eltern koennen auf Fehlverhalten reagieren (schlechtes Zimmer, Geschrei,
     // zu spaet ins Bett) — als ehrliche Buchung, nicht als zweckentfremdete
@@ -11991,7 +12050,7 @@ const MIGRATIONS = [
           allowance_date TEXT,
           currency      TEXT
                                     CHECK((unit = 'money') = (currency IS NOT NULL)),
-          -- Spaetabzug-Auditfelder (Migration 278): der Rebuild muss sie
+          -- Spaetabzug-Auditfelder (Migration 282): der Rebuild muss sie
           -- mitnehmen, sonst verliert die Tabelle sie bei einer frischen DB
           -- (dort laeuft 278 vor 279, 279 sieht keinen 'penalty'-CREATE und
           -- baut neu — ohne diese Spalten waeren decay_days/base_points weg).
@@ -12025,7 +12084,7 @@ const MIGRATIONS = [
     },
   },
     {
-    version: 280,
+    version: 284,
     description: 'tasks: parental approval of completion',
     // Aufgaben-Freigabe (opt-in pro Aufgabe): ist `requires_approval`
     // gesetzt, bucht ein Check-in durch Nicht-Admins keine Punkte - die
@@ -12063,7 +12122,7 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 281,
+    version: 285,
     description: 'media time: devices and quotas (server-side ledger, trustee model)',
     // Bildschirmzeit-Kontingente (docs/medienzeit-konzept.md, Entscheidungen in
     // docs/medienzeit-entscheidungen.md): der Server ist die einzige Autoritaet
@@ -12105,7 +12164,7 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 282,
+    version: 286,
     description: 'media time: usage sessions, app exceptions, device inventory (classification)',
     // Die Sessions: der Rohwert, den ein Geraet meldet (Entscheidung 6: Roh-
     // zeiten speichern, Paket + Start/Ende, Aufbewahrung 90 Tage). Anhaengig
@@ -12193,9 +12252,9 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 283,
+    version: 287,
     description: 'rewards: consequence catalog (editable penalty templates)',
-    // Der Katalog zu den Konsequenzen (Migration 279): Eltern haben ihre
+    // Der Katalog zu den Konsequenzen (Migration 283): Eltern haben ihre
     // Standard-Faelle (Zimmer nicht aufgeraeumt, Zu-spaet-gekommen) nicht
     // jedes Mal frei zu tippen - ein Katalogeintrag fuellt Grund und Punkte
     // in der Straf-Vergabe, freies Editieren bleibt (POST /penalty nimmt
@@ -12265,7 +12324,7 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 284,
+    version: 288,
     description: 'media time: quota adjustment notes (parent edits today\'s quota with a reason)',
     // Die Tagesanpassung der Medienzeit (User-Wunsch): Eltern duerfen das
     // Kontingent des HEUTIGEN Tages erhoehen oder verringern - aber nicht
@@ -12305,7 +12364,7 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 285,
+    version: 289,
     description: 'media time: enforcement flag, app duty/exempt rule kinds, per-device quota',
     // Entscheidung des Nutzers (04.11.): "das kind hat 30min zeit. sind die
     // 30min soll es nicht mehr mehr machen duerfen bzw eine nachricht
@@ -12391,7 +12450,7 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 286,
+    version: 290,
     description: 'media time: check-in (check-in/check-out) per device, for agents without an OS integration',
     // Nutzer 05.11.: "Jedes kind soll sich aber einbuchen und ausbuchen koennen."
     // Fuer Geraete ohne Agent (Konsole, Fernseher, Tablet ohne Rechten) fuehrt
@@ -12421,7 +12480,7 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 287,
+    version: 291,
     description: 'family link: istzeit-collector tables (mapping + daily usage) for media time',
     // Einbau-Spec HANDOVER.md (dc62917df): der Collector (scripts/familylink/)
     // liefert echte Google-Family-Link-Zeiten. Zuordnung Kind <-> Google-Konto
@@ -12461,9 +12520,9 @@ const MIGRATIONS = [
     },
   },
   {
-    version: 288,
+    version: 292,
     description: 'media time: per-device quota upserts (unique (user_id, device_id), partial unique global row)',
-    // Migration 285 ergaenzte media_time_quotas um device_id (Kontingent pro
+    // Migration 289 ergaenzte media_time_quotas um device_id (Kontingent pro
     // Geraet), aber der Primerschluessel blieb user_id: die Tabelle konnte
     // pro Kind nie zwei Zeilen tragen (Basis + Geraet). Der PUT-Upschnitt
     // braucht zwei Konfliktziele: (user_id) WHERE device_id IS NULL fuer die
@@ -12891,7 +12950,16 @@ const CRITICAL_COLUMNS = [
   // D#2330: v273 traegt den Feed-Stand nach; ohne die Spalte scheitert jeder
   // ICS-Sync (er schreibt sie) und jeder Reset (er liest sie).
   { table: 'calendar_events', column: 'feed_original', type: 'TEXT' },
-
+  // #2506: v279 traegt die fremde Serienregel nach; ohne die Spalte scheitert
+  // jeder VTODO-Abruf (der Upsert schreibt sie). Kein Nachtrag: NULL ist der
+  // Stand, mit dem die Migration beginnt, der naechste Abruf fuellt sie.
+  { table: 'tasks', column: 'external_rrule', type: 'TEXT' },
+  // #2499: v281 traegt die Absage des Anbieters nach; ohne die Spalte scheitert
+  // jeder Kalender-Abruf (der Upsert schreibt sie) und jede Erinnerung (der
+  // Filter liest sie). Kein Nachtrag: NULL heisst "nicht abgesagt", der
+  // naechste Abruf fuellt sie.
+  { table: 'calendar_events', column: 'provider_status',
+    type: "TEXT CHECK(provider_status IS NULL OR provider_status IN ('TENTATIVE', 'CONFIRMED', 'CANCELLED'))" },
 ];
 
 /**
@@ -13089,6 +13157,7 @@ async function backupToFileUntracked(destinationPath) {
     vacuumInto(database, destinationPath);
   }
 
+  await verifyWrittenBackup(destinationPath);
   return destinationPath;
 }
 
@@ -13240,6 +13309,9 @@ function unreadableBackupError(encrypted, cause) {
         cause
       );
     }
+    // Ohne Grund (#1909): die Ursache steht nur im Stack, und den schreibt die
+    // Route nur fuer Fehler ohne `reason` ins Log - die Seite zeigt dazu den
+    // allgemeinen Satz, der auf das Server-Log zeigt.
     return new Error('Backup file is not a valid Yuvomi database.', { cause });
   }
   if (code === 'SQLITE_NOTADB') return undecryptableBackupError(cause);
@@ -13337,9 +13409,16 @@ function checkBackupFile(sourcePath) {
   return validateBackupFile(sourcePath);
 }
 
-function validateBackupFile(sourcePath) {
+/**
+ * Backup-Datei oeffnen und lesen wie vor einem Restore: mit dem eigenen
+ * Schluessel, falls sie keinen Klartext-Kopf hat, `sqlite_master` lesbar, jede
+ * Seite heil (`assertBackupIntact()`). Liefert die offene Verbindung; wirft
+ * mit denselben Gruenden wie der Restore und schliesst sie dann selbst.
+ * @param {string} sourcePath
+ */
+function openIntactBackup(sourcePath) {
   // Backups, die vor der Verschlüsselungs-Umstellung entstanden sind, liegen im
-  // Klartext vor. Sie müssen einspielbar bleiben — würden wir ihnen den Key
+  // Klartext vor. Sie müssen einspielbar bleiben - würden wir ihnen den Key
   // aufsetzen, läse SQLite sie als verschlüsselt und die Validierung schlüge
   // fehl. Nach dem Restore verschlüsselt init() sie ohnehin.
   const encrypted = !isPlaintextDatabase(sourcePath);
@@ -13359,22 +13438,83 @@ function validateBackupFile(sourcePath) {
       throw unreadableBackupError(encrypted, err);
     }
     assertBackupIntact(candidate, encrypted);
+    return candidate;
+  } catch (err) {
+    candidate.close();
+    throw err;
+  }
+}
+
+/**
+ * Ein frisch geschriebenes Backup pruefen, bevor es jemand bekommt (#2520).
+ *
+ * Ohne Pruefung ging jede Datei als gelungenes Backup durch - zum Download, in
+ * die Rotation, nach WebDAV -, und ein Fehler zeigte sich erst beim Restore,
+ * wenn die guten alten Backups womoeglich schon wegrotiert waren. Gemessen ist
+ * der Fall, den die Backup-API ohne Schluessel mitbringt: sie kopiert die
+ * Seiten der Live-Datenbank, einen kaputten Index also mit. Dieselbe Pruefung
+ * wie vor dem Restore (`openIntactBackup()`), ohne dessen Schema- und
+ * Versionsfragen: ein eigenes Backup traegt das eigene Schema, und eine
+ * Instanz auf einer neueren Datenbank (`unknownMigrationVersions()`) soll ihre
+ * Backups weiter bekommen.
+ *
+ * Die kaputte Datei wird geloescht: im Backup-Ordner zaehlte sie sonst bei
+ * der naechsten Rotation als eines der aufbewahrten Backups.
+ * @param {string} destinationPath
+ */
+async function verifyWrittenBackup(destinationPath) {
+  try {
+    openIntactBackup(destinationPath).close();
+  } catch (cause) {
+    await unlinkIfExists(destinationPath);
+    await removeCheckSideFiles(destinationPath);
+    // Nur der erste Satz: der Rest der Restore-Meldung raet zum erneuten
+    // Herunterladen, und das passt nicht zu einem Backup, das hier entsteht.
+    const finding = String(cause?.message ?? cause).split('. ')[0];
+    throw restoreError(
+      `Backup failed its integrity check and was discarded (${finding}). `
+      + 'Older backups were kept. The database this instance runs on may be damaged: check it '
+      + 'with `PRAGMA integrity_check` and check the disk it is stored on.',
+      'backup_verify_failed',
+      cause
+    );
+  }
+  await removeCheckSideFiles(destinationPath);
+}
+
+/**
+ * Eine Kopie aus der Backup-API traegt den WAL-Modus der Live-Datenbank, und
+ * schon das Oeffnen zum Pruefen legt `-wal` und `-shm` daneben an. Die
+ * Verbindung war nur lesend, die beiden Dateien sind also leer - im
+ * Backup-Ordner laegen sie sonst neben jedem Backup, und die Rotation raeumt
+ * nur `.db`-Dateien.
+ * @param {string} destinationPath
+ */
+async function removeCheckSideFiles(destinationPath) {
+  await unlinkIfExists(`${destinationPath}-wal`);
+  await unlinkIfExists(`${destinationPath}-shm`);
+}
+
+function validateBackupFile(sourcePath) {
+  const candidate = openIntactBackup(sourcePath);
+  try {
     const row = candidate.prepare(`
       SELECT name
       FROM sqlite_master
       WHERE type = 'table' AND name = 'schema_migrations'
     `).get();
     if (!row) {
-      throw new Error('Backup file is not a valid Yuvomi database.');
+      throw restoreError('Backup file is not a valid Yuvomi database.', 'backup_not_yuvomi');
     }
     // Backup aus einer neueren Yuvomi-Version: ablehnen, bevor irgendetwas
     // kopiert wird. Eingespielt liefe diese App stumm gegen ein Schema, das
     // sie nicht kennt; der richtige erste Schritt ist das Update.
     const unknown = unknownMigrationVersions(candidate);
     if (unknown.length > 0) {
-      throw new Error(
+      throw restoreError(
         `Backup was written by a newer Yuvomi (schema v${unknown[unknown.length - 1]}; this ` +
-        `version knows up to v${latestKnownVersion()}). Update Yuvomi first, then restore.`
+        `version knows up to v${latestKnownVersion()}). Update Yuvomi first, then restore.`,
+        'backup_newer_version'
       );
     }
     return candidate.prepare('SELECT MAX(version) AS version FROM schema_migrations').get()?.version ?? 0;
