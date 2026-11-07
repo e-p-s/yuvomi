@@ -92,6 +92,9 @@ cap = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cap)
 
 LOGIN_SECRET_FILE = os.path.expanduser("~/.familyhub/login_secret")
+SIGNIN_URL = ("https://accounts.google.com/signin/v2/identifier"
+              "?flowName=GlifWebSignIn&flowEntry=ServiceLogin"
+              "&continue=https%3A%2F%2Ffamilylink.google.com%2F")
 PUSH_TOKEN_FILE = os.path.expanduser("~/.familyhub/push_token")
 # Debug-Schalter: existiert die Datei ~/.familyhub/debug, protokolliert der
 # Auto-Login jeden Zustandswechsel (URL, Feldtypen, Konten, erster Textsatz —
@@ -390,19 +393,22 @@ def _open_pending(state):
 
 def _attach_ws(navigate=False):
     """Eigene WS-Verbindung zum Page-Target (der Viewer hat seine eigene — zwei
-    Verbindungen an einem Target sind in CDP üblich). navigate=True: erst zur
-    LOGIN_URL (der Auto-Pfad startet immer bei Null, auch wenn die Seite schon
-    auf familylink steht und ensure_page sonst nicht navigieren wuerde)."""
+    Verbindungen an einem Target sind in CDP üblich). navigate=URL: fährt diese
+    Seite erst an (der Auto-Pfad startet immer bei Null — auch wenn die Seite
+    schon auf familylink steht und ensure_page sonst nicht navigieren würde).
+    Vorher: blockiert die Headless-Kennung Google, startet der Browser mit
+    normaler Kennung neu (familyhub_capture2.restart_if_flagged)."""
+    cap.restart_if_flagged()
     cap.ensure_chromium()
     t = cap.page_target()
     if t is None:
-        t = cap.cdp("/json/new?" + urllib.parse.quote(cap.LOGIN_URL, safe=":/?=&%"), method="PUT")
+        t = cap.cdp("/json/new?" + urllib.parse.quote(navigate or cap.LOGIN_URL, safe=":/?=&%"), method="PUT")
         ws = cap.WS(t["webSocketDebuggerUrl"])
     else:
         ws = cap.WS(t["webSocketDebuggerUrl"])
     ws.call("Page.enable")
     if navigate:
-        ws.call("Page.navigate", {"url": cap.LOGIN_URL})
+        ws.call("Page.navigate", {"url": navigate})
         time.sleep(1.5)
     return ws
 
@@ -501,7 +507,7 @@ def _run_login_flow(email, password):
     _last_email = email or None
     masks = (email,)
     _dbg(f"Auto-Login startet (Konto {_mask(email, masks)})")
-    ws = _attach_ws(navigate=True)
+    ws = _attach_ws(navigate=SIGNIN_URL)
     try:
         st = _wait_for(ws, ("email", "password", "otp", "success", "bad_password", "challenge"), 12, masks)
         if st == "timeout":

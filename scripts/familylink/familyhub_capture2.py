@@ -20,6 +20,7 @@ Commands:
 import json
 import os
 import secrets
+import shutil
 import socket
 import struct as st
 import subprocess
@@ -53,11 +54,25 @@ def ensure_chromium():
     if chromium_running():
         return
     os.makedirs(PROFILE, exist_ok=True)
+    # Google blockiert Headless-Chromes bei der Anmeldung ("This browser or app
+    # may not be secure", 2026-11-07 belegt — auch mit normaler Kennung).
+    # Mit Xvfb laeuft ein echter Fenster-Browser ohne Bildschirm; ohne Xvfb
+    # bleibt der Notbehelf headless (fuer reine Cookie-Erneuerung reicht er).
+    xvfb = shutil.which("xvfb-run")
+    if xvfb:
+        argv = [xvfb, "-a", "--server-args=-screen 0 1280x1024x24", "/usr/bin/chromium"]
+    else:
+        argv = ["/usr/bin/chromium"]
     subprocess.Popen(
-        ["/usr/bin/chromium",
+        argv +
+        [
          "--user-data-dir=" + PROFILE,
-         "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+         "--no-sandbox", "--disable-dev-shm-usage",
          "--no-first-run", "--disable-gpu",
+         # Normale Chrome-Kennung + weggeschalteter Automations-Marker —
+         # zusaetzlich zum echten Fenstermodus gegen Googles Blockseite.
+         "--disable-blink-features=AutomationControlled",
+         "--user-agent=" + NORMAL_UA,
          "--remote-debugging-port=9333", "--remote-debugging-address=127.0.0.1",
          "about:blank"],
         start_new_session=True,
@@ -69,6 +84,34 @@ def ensure_chromium():
             return
         time.sleep(1)
     raise SystemExit("chromium start failed")
+
+
+NORMAL_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+             "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
+
+
+def chromium_flagged():
+    """Laeuft ein Chromium, das sich als HeadlessChrome zu erkennen gibt?
+    Dann wuerde Google die Anmeldung blockieren — es braucht einen Neustart
+    mit normaler Kennung (ensure_chromium uebernimmt das)."""
+    try:
+        return "HeadlessChrome" in cdp("/json/version").get("Browser", "")
+    except Exception:
+        return False
+
+
+def restart_if_flagged():
+    """Headless-Kennung -> Profil-Chromium sanft beenden und mit normalem UA
+    neu starten. Nur sinnvoll, wenn Xvfb einen echten Fenster-Browser erlaubt;
+    ohne Xvfb blieb es sonst in einem Neustart-Kreislauf hängen."""
+    if not chromium_running() or not chromium_flagged() or not shutil.which("xvfb-run"):
+        return
+    subprocess.call(["pkill", "-f", "--user-data-dir=" + PROFILE])
+    for _ in range(10):
+        if not chromium_running():
+            break
+        time.sleep(1)
+    ensure_chromium()
 
 
 def page_target():
