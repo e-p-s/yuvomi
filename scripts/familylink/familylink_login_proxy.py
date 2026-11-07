@@ -330,6 +330,25 @@ JS_AUTO_PROBE = """
 
 # Mitte des ersten sichtbaren Felds zu diesem Selektor (Pixel, fuer den Klick
 # vor Input.insertText — insertText schreibt nur in das, was den Fokus hat).
+# Klick wie familyhub_capture2.JS_CLICK, aber zusaetzlich Links: Google baut
+# "Anderen Weg versuchen" als Link, nicht als Knopf.
+JS_CLICK_WIDE = """
+((txt) => {
+  const re = new RegExp(txt, 'i');
+  const cands = [...document.querySelectorAll('button, [role="button"], a')]
+    .filter(b => (b.offsetWidth || b.offsetHeight || b.getClientRects().length)
+                 && re.test((b.textContent.trim() || '') + ' ' + (b.ariaLabel || '')));
+  if (!cands.length) return 'no-match';
+  const b = cands[cands.length - 1];
+  b.click();
+  return 'clicked:' + (b.textContent.trim() || b.ariaLabel || '').slice(0, 60);
+})(%s)
+"""
+
+# Google-Texte der Weg-Umschaltung (deutsch/englisch, ohne Umlaute gemischt).
+RE_TRY_OTHER = "anderen weg|anderer weg|try another way|anderweitig"
+RE_PROMPT_OPTION = "eingabeaufforderung|aufforderung an ihr|prompt"
+
 JS_FIELD_CENTER = """
 ((sel) => {
   const els = [...document.querySelectorAll(sel)]
@@ -500,13 +519,49 @@ def _finish_bad_password(ws):
     return "bad_password"
 
 
-def _dispatch_terminal(ws, st):
+def _switch_to_prompt(ws, masks=()):
+    """Von der Code-Seite zur Handy-Bestaetigung ("Ja, das bin ich") wechseln.
+
+    Google zeigt die Geraete-Prompt-Seite fast nie direkt an, aber unter
+    "Anderen Weg versuchen" steht sie bereit ("Eingabeaufforderung an Ihr
+    Handy senden" / "Show prompt on your phone"). Zwei Klicks mit kurzem
+    Nachwarten; nach dem ersten Klick zaehlt 'otp' nicht als Ende (die
+    Optionsseite nennt Bestaetigungswege), erst nach dem zweiten gibt der
+    gefundene Zustand zurueck. Misslingt der Schalter, kommt 'none'."""
+    steps = ((RE_TRY_OTHER, "Weg wechseln", ("prompt", "success", "bad_password", "challenge")),
+             (RE_PROMPT_OPTION, "Handy-Prompt", ("prompt",) + TERMINALS))
+    for pat, label, wanted in steps:
+        try:
+            r = cap.ev(ws, JS_CLICK_WIDE % json.dumps(pat))
+        except Exception:
+            return "none"
+        _dbg(f"Prompt-Schalter ({label}): {r}")
+        if not (isinstance(r, str) and r.startswith("clicked")):
+            return "none"
+        st = _wait_for(ws, wanted, 4, masks)
+        if st == "prompt" or (st in TERMINALS and st != "otp") or (steps[-1][0] == pat and st in TERMINALS):
+            return st
+    return "none"
+
+
+def _dispatch_terminal(ws, st, tried_prompt=False):
     """Eine Terminal-Erkenntnis in die Auto-Antwort uebersetzen."""
     if st == "success":
         return _finish_ok(ws)
     if st == "bad_password":
         return _finish_bad_password(ws)
     if st == "otp":
+        # Nutzer will das Tippen am Handy ("Ja, das bin ich"), nicht SMS.
+        # Erster Versuch: von der Code-Seite dorthin umschalten — gelingt das,
+        # wird bis PROMPT_WAIT_SECONDS auf den Klick gewartet.
+        if not tried_prompt:
+            sw = _switch_to_prompt(ws, (_last_email,))
+            if sw == "prompt":
+                return _dispatch_terminal(ws, _await_prompt(ws, "prompt"))
+            if sw in TERMINALS and sw != "otp":
+                return _dispatch_terminal(ws, sw)
+            # sonst: Code-Weg durchspielen — aber nie erneut umschalten.
+            return _dispatch_terminal(ws, "otp", tried_prompt=True)
         # "Get a code to sign in" liefert den Code oft erst nach einem Klick
         # ("Send"/"An Ihr Handy senden"/"Weiter") — ohne ihn kaeme nichts am
         # Handy an. Fehlender Knopf ist ungefaehrlich (kein Treffer, kein Klick).
