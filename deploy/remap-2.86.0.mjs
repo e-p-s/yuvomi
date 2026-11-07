@@ -93,9 +93,18 @@ if (have.has(289) || have.has(292)) {
   process.exit(0);
 }
 const stale = OURS.filter((v) => !have.has(v));
-if (stale.length) {
-  console.error(`Abbruch: fuer den Fork-Zweig werden 279-288 erwartet, es fehlt ${stale.join(', ')}.`);
-  console.error('Diese Datenbank ist nicht der erwartete Stand vor dem Merge - nichts veraendert.');
+const highest = Math.max(0, ...rows.map((r) => r.version));
+if (!stale.length) {
+  // erwarteter Fork-Stand vor dem Merge -> unten umschreiben
+} else if (highest < 279) {
+  // Frischinstallation (oder eine DB ohne unsere Migrationen): hier ist nichts
+  // umzuschreiben - der Laeufer legt beim Start alles in der neuen Nummerierung an.
+  console.log(`Kein Umschreiben noetig: hoechste Nummer ${highest} (unsere Fork-Migrationen 279-288 sind nie gelaufen).`);
+  db.close();
+  process.exit(0);
+} else {
+  console.error(`Abbruch: fuer den Fork-Zweig werden 279-288 erwartet, es fehlt ${stale.join(', ')} (hoechste Nummer ${highest}).`);
+  console.error('Diese Datenbank ist weder der erwartete Stand vor dem Merge noch eine Frischinstallation - nichts veraendert.');
   db.close();
   process.exit(1);
 }

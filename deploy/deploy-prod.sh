@@ -23,7 +23,7 @@ run_ct() { run_remote "pct exec $CT -- bash -c '$1'"; }
 
 : "${PROXNAS_PW:?PROXNAS_PW muss gesetzt sein (Wiki: meta/credentials-cards/cred-030-proxnas-ssh.md)}"
 
-echo "== 1/6 Staging: prod-Zweig sauber auspacken =="
+echo "== 1/7 Staging: prod-Zweig sauber auspacken =="
 git -C "$LOCAL_DIR" rev-parse --verify prod >/dev/null
 [[ -z "$(git -C "$LOCAL_DIR" status --porcelain)" ]] || { echo "FAIL: Arbeitsverzeichnis ist nicht sauber."; exit 1; }
 rm -rf "$STAGE"
@@ -32,19 +32,29 @@ git -C "$LOCAL_DIR" worktree add --detach "$STAGE" prod >/dev/null
 FORK_SHA=$(git -C "$STAGE" rev-parse --short HEAD)
 echo "prod = $FORK_SHA"
 
-echo "== 2/6 Backup auf CT135 (DB + Baum) =="
+echo "== 2/7 Backup auf CT135 (DB + Baum) =="
 STAMP=$(date +%Y%m%dT%H%M)
 run_ct "cp $APP_DIR/data/yuvomi.db $APP_DIR/backups/pre-deploy-$STAMP.db && test -s $APP_DIR/backups/pre-deploy-$STAMP.db && echo DB_BACKUP_OK"
 run_ct "tar -C $APP_DIR --exclude=node_modules --exclude=data --exclude=backups -czf /root/pre-deploy-$STAMP.tar.gz . && test -s /root/pre-deploy-$STAMP.tar.gz && mv /root/pre-deploy-$STAMP.tar.gz $APP_DIR/backups/ && echo TREE_BACKUP_OK"
 [[ $DRY -eq 1 ]] && { echo "DRY-RUN: hier wurde abgebrochen, nichts veraendert."; exit 0; }
 
-echo "== 3/6 Upload (Baum ohne node_modules/data/.env) =="
+echo "== 3/7 Upload (Baum ohne node_modules/data/.env) =="
 tar -C "$STAGE" --exclude=node_modules --exclude=data --exclude=.env -czf - . | run_remote "pct exec $CT -- tar -C $APP_DIR -xzf -"
 
-echo "== 4/6 npm ci auf CT135 =="
+echo "== 4/7 npm ci auf CT135 =="
 run_ct "cd $APP_DIR && npm ci --omit=dev >/tmp/npmci.log 2>&1 && echo NPM_OK || (tail -5 /tmp/npmci.log; exit 1)"
 
-echo "== 5/6 Restart + Migrationen =="
+echo "== 5/7 Remap der schema_migrations (Pflicht nach dem Merge auf v2.86.0) =="
+# Der Laeufer entscheidet nach der Versionsnummer: unsere 279-288 heissen jetzt
+# 283-292. Ohne Umschreibung blieben die offiziellen 278-281 aus, und der Laeufer
+# wollte unsere 289-292 auf eine Datenbank loslassen, in der sie laengst laufen
+# (Probelauf: "duplicate column name: kind"). Das Skript ist ein No-op, wenn die
+# DB den Zielzustand schon hat oder nie unter den alten Nummern lief - und der
+# Dienst muss dafuer stehen, weil die Umschreibung schreiben will.
+run_ct "systemctl stop yuvomi.service && sleep 2 && systemctl is-active yuvomi.service || true"
+run_ct "cd $APP_DIR && set -a && . ./.env && set +a && node deploy/remap-2.86.0.mjs --write 2>&1 | tail -4"
+
+echo "== 6/7 Restart + Migrationen =="
 # APP_BUILD_REVISION in .env auf den Deploy-Sha: damit aendert sich der
 # Service-Worker-Cache-Name (sw.js rendert ihn aus der Umgebungsvariable) und
 # die Clients holen sich beim naechsten Oeffnen das neue Buendel statt dem
@@ -52,7 +62,7 @@ echo "== 5/6 Restart + Migrationen =="
 run_ct "cp $APP_DIR/.env $APP_DIR/backups/pre-deploy-$STAMP.env && grep -v ^APP_BUILD_REVISION= $APP_DIR/backups/pre-deploy-$STAMP.env > $APP_DIR/.env.tmp && mv $APP_DIR/.env.tmp $APP_DIR/.env; echo APP_BUILD_REVISION=$FORK_SHA >> $APP_DIR/.env"
 run_ct "systemctl restart yuvomi.service && sleep 3 && systemctl is-active yuvomi.service"
 
-echo "== 6/6 Health-Check (max 60s) =="
+echo "== 7/7 Health-Check (max 60s) =="
 # /api/v1/health ist auth-pflichtig; 401/403 zeigen einen lebenden Server an.
 OK=0
 for i in $(seq 1 12); do
