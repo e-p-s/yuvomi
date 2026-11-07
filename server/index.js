@@ -1030,7 +1030,7 @@ const server = app.listen(PORT, BIND_ADDRESS, () => {
           "SELECT value FROM sync_config WHERE key = 'familylink_ingest_command'"
         ).get()?.value,
       });
-      if (!r.ok) logSync.info(`Family-Link-Ingest: ${r.status} (kein Snapshot geschrieben).`);
+      if (!r.ok && r.status !== 'ok') logSync.info(`Family-Link-Ingest: ${r.status} (kein Snapshot geschrieben).`);
     }).catch((e) => logSync.error('Family-Link tick failed:', e.message));
   };
   setTimeout(() => {

@@ -241,6 +241,22 @@ const cfgPut = (key, value) => db.prepare(
 const cfgGet = (key) => db.prepare('SELECT value FROM sync_config WHERE key = ?').get(key)?.value;
 const cfgDel = (key) => db.prepare('DELETE FROM sync_config WHERE key = ?').run(key);
 
+test('runFamilylinkIngest - Pull-Fehlschlag ueberschreibt keinen frischen Push (07.11.)', async () => {
+  // Der Push-Cron des Collectors hatte gerade Erfolg (status_at = jetzt):
+  // ein lokaler Pull-Laeufer (ohne Session) darf den Status nicht kippen.
+  fl.setStatus(db, 'ok');
+  const r = await fl.runFamilylinkIngest(db, { runner: async () => ({ ok: false }) });
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 'ok', 'der frische Zustand bleibt die Auskunft');
+  assert.equal(fl.familylinkStatus(db), 'ok');
+  // Aelter als zwei Takte plus Puffer (12 min): der Fehl-Fall gewinnt wieder.
+  cfgPut(fl.FAMILYLINK_STATUS_KEYS.at,
+    new Date(Date.now() - 15 * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z'));
+  const r2 = await fl.runFamilylinkIngest(db, { runner: async () => ({ ok: false }) });
+  assert.equal(r2.status, 'login_noetig');
+  assert.equal(fl.familylinkStatus(db), 'login_noetig');
+});
+
 test('migrateLegacyStatusKeys - Altschluessel wandert zum neuen Key, alt verschwindet (Idempotenz)', () => {
   // So sah eine alte Datenbank aus: nur die U+2026-Zeilen, neue Keys fehlen.
   cfgDel(fl.FAMILYLINK_STATUS_KEYS.status);

@@ -173,8 +173,16 @@ export async function runFamilylinkIngest(d, { command, runner } = {}) {
     report = null;
   }
   if (!ok || !report) {
-    setStatus(d, 'login_noetig');
-    return { ok: false, written: 0, status: 'login_noetig' };
+    // Ein fehlgeschlagener lokaler Pull ueberschreibt keinen frischen Push:
+    // auf dem Collector-Host liefert der 5-Minuten-Cron (familylink_push.sh)
+    // die Daten — erst wenn dessen letzter Erfolg laenger als zwei Takte
+    // plus Puffer her ist, darf der Fehl-Fall den Status kippen (07.11.:
+    // der Takt auf CT135 machte jeden Push-Erfolg zunichtezurueck).
+    const at = d.prepare('SELECT value FROM sync_config WHERE key = ?')
+      .get(STATUS_AT_KEY)?.value;
+    const ageMin = at ? (Date.now() - Date.parse(at)) / 60_000 : Infinity;
+    if (ageMin >= 12) setStatus(d, 'login_noetig');
+    return { ok: false, written: 0, status: familylinkStatus(d) ?? 'login_noetig' };
   }
   try {
     const r = ingestFamilylinkReport(d, report);
