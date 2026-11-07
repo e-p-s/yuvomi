@@ -21,10 +21,25 @@
 
 import { spawn } from 'node:child_process';
 
+import { createLogger } from '../logger.js';
+import { activeAccountSql } from './account-state.js';
+import { pushService as defaultPushService } from './push.js';
+import { createNotificationChannelStore } from './notification-channels.js';
+import { defaultProviders } from './notifications.js';
+
+const log = createLogger('Familylink');
+
 /** Der Status-Key und seine Zeitmarke (sync_config-Muster wie media_time_*). */
 const STATUS_KEY = 'familylink_status';
 const STATUS_AT_KEY = 'familylink_status_at';
 export const FAMILYLINK_STATUS_KEYS = { status: STATUS_KEY, at: STATUS_AT_KEY };
+
+/** Meldung beim Wechsel ok -> login_noetig (feste deutsche Vorgabe der Spec). */
+export const FAMILYLINK_LOGIN_ALERT = {
+  title: 'Family-Link-Verbindung abgelaufen',
+  body: 'Bitte in den Medienzeit-Regeln erneut anmelden.',
+  url: '/media-time',
+};
 
 /**
  * Die Altschluessel (self-healing-Migration, kein Deploy-Schritt): die erste
@@ -243,4 +258,48 @@ export function familylinkUsage(d, userId, day) {
       fetched_at: r.fetched_at,
     })),
   };
+}
+
+/**
+ * Eltern/Admins melden, dass die Google-Sitzung des Sammlers abgelaufen ist —
+ * Muster medication-scheduler.js: Web Push ueber den bestehenden Engpass
+ * (pushService) plus die aktivierten Notification-Channels der Person.
+ * Aufgerufene Stelle ist die Status-Annahme in routes/familylink-report.js
+ * (Wechsel von 'ok' nach 'login_noetig'); Titel und Text sind die feste
+ * deutsche Vorgabe der Spec. Empfaenger sind die Verwaltung des Haushalts —
+ * Kinder bekommen die Meldung nicht (sie koennen nichts anmelden).
+ * @param {Function} [deps.push] Test-Haendler: async (userId, payload) => number
+ * @param {Object} [deps.channelStore] { listEnabledChannelsForUser } - ohne ihn
+ *   und ohne push laeuft die Meldung gegen den echten Dienst (Produktionspfad).
+ */
+export async function notifyFamilylinkLoginNeeded(d, { push, channelStore, providers = defaultProviders } = {}) {
+  const pushFn = push || ((userId, payload) => defaultPushService.sendPushToUser(userId, payload));
+  const store = channelStore
+    ?? (push ? { listEnabledChannelsForUser: () => [] } : createNotificationChannelStore({ db: d }));
+  const recipients = d.prepare(
+    `SELECT id FROM users
+      WHERE (role = 'admin' OR family_role IN ('dad', 'mom', 'parent'))
+        AND ${activeAccountSql('users')}`
+  ).all();
+  const payload = { ...FAMILYLINK_LOGIN_ALERT, tag: 'familylink-login-noetig', priority: 'default' };
+  let sent = 0;
+  for (const r of recipients) {
+    try {
+      const n = await pushFn(r.id, payload);
+      if (n > 0) sent += n;
+    } catch (err) {
+      log.warn(`familylink: Web Push an ${r.id} fehlgeschlagen:`, err?.message || err);
+    }
+    for (const channel of store.listEnabledChannelsForUser(r.id)) {
+      const provider = providers[channel.provider];
+      if (!provider) continue;
+      try {
+        await provider.send({ channel, payload });
+        sent += 1;
+      } catch (err) {
+        log.warn(`familylink: Channel-Zustellung an ${r.id} fehlgeschlagen:`, err?.message || err);
+      }
+    }
+  }
+  return { recipients: recipients.length, sent };
 }

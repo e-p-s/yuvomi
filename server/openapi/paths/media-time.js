@@ -589,6 +589,36 @@ export function mediaTimePaths() {
         },
       }),
     },
+    '/api/v1/media-time/familylink/login': {
+      post: op({
+        summary: 'Automated family link login on the collector (parents/admin): fill email/password, then code',
+        tag: 'MediaTime',
+        stateChanging: true,
+        requestBody: jsonBody('#/components/schemas/MediaTimeFamilylinkLoginInput'),
+        description: 'Der Parent tippt E-Mail+Passwort nur in die App - der Sammler fuellt den Google-Login selbst aus\n'
+          + '(CDP-Auto-Ausfuellen in scripts/familylink/familylink_login_proxy.py). Zwei Formen, eine Route:\n'
+          + '{ email, password } startet einen Versuch, { code } loest eine offene pending-Sitzung (OTP-Seite) auf.\n'
+          + 'Antworten: state ok (Cookies frisch, familylink_status ok, die Adresse bleibt als familylink_email\n'
+          + 'vorgemerkt - das Passwort wird NIE gespeichert und erscheint in keiner Antwort), otp_needed (die App\n'
+          + 'fragt den Code ab, die pending bleibt 10 Minuten offen), bad_code (erneut mit code erlaubt),\n'
+          + 'challenge (fuer den Menschen: data traegt viewer_url + expires_at der bestehenden Viewer-Sitzung,\n'
+          + 'derselbe Target - die App wechselt nahtlos ins Fenster). Kein Fenster im Normalfall.',
+        responses: {
+          200: {
+            description: 'Outcome of the attempt (state ok / otp_needed / bad_code / challenge; viewer_url and expires_at only with challenge)',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkLoginResponse' } } },
+          },
+          400: { description: 'Neither email+password nor code in the body, or a field is out of range' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          422: { description: 'bad_credentials: Google rejected the password (the pending attempt is closed) / login_expired: no pending login session - start a new attempt with email and password' },
+          429: { description: 'More than 10 login attempts in 10 minutes for this account' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+          502: { description: 'The collector did not answer or reported a broken flow' },
+          503: { description: 'FAMILYLINK_COLLECTOR_BASE or FAMILYLINK_LOGIN_SECRET is unset' },
+        },
+      }),
+    },
     '/api/v1/media-time/familylink/login-session': {
       post: op({
         summary: 'Start a remote family link login session on the collector (parents/admin) - returns the one-shot viewer URL',
@@ -660,6 +690,15 @@ const CASE_REASONS = {
   },
   '/api/v1/media-time/familylink/report': {
     post: REASON_BAD + ' (400, Report-Koerper wird von der Ingest-Funktion abgelehnt), `media_time_unauthenticated` (401, x-familylink-token fehlt oder passt nicht)',
+  },
+  '/api/v1/media-time/familylink/login': {
+    post: REASON_BAD + ' (400, weder email+password noch code im Koerper oder ein Feld ausserhalb der Grenze), '
+      + '`media_time_unauthenticated` (401, keine Session), `media_time_forbidden` (403, nicht Elternteil oder Admin), '
+      + '`media_time_familylink_login_rate_limited` (429, mehr als zehn Versuche in zehn Minuten je Mitglied), '
+      + '`media_time_familylink_bad_credentials` (422, Google verwirft das Passwort — die pending-Sitzung ist geschlossen), '
+      + '`media_time_familylink_login_expired` (422, keine offene pending-Sitzung — mit E-Mail+Passwort neu ansetzen), '
+      + '`media_time_familylink_collector_unreachable` (502, der Collector antwortet nicht oder meldet kaputten Ablauf), '
+      + '`media_time_familylink_not_configured` (503, FAMILYLINK_COLLECTOR_BASE oder FAMILYLINK_LOGIN_SECRET fehlt)',
   },
   '/api/v1/media-time/familylink/login-session': {
     post: '`media_time_familylink_not_configured` (503, FAMILYLINK_COLLECTOR_BASE oder FAMILYLINK_LOGIN_SECRET fehlt), '

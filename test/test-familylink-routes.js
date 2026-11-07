@@ -371,3 +371,188 @@ test('POST /familylink/login-session - Erfolg: Viewer-URL + Ablauf, Doppelstart 
   delete process.env.FAMILYLINK_COLLECTOR_BASE;
   delete process.env.FAMILYLINK_LOGIN_SECRET;
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Auto-Login (POST /familylink/login) — der Collector fuellt den Google-Login
+// selbst aus; der Fetch des Dienstes wird gemockt (Muster login-session oben).
+// Contract: ok/otp_needed/bad_code/challenge als 200 {data:{state}}, bad_password
+// und geschlossene pending als 422, Collector tot 502, env fehlt 503.
+// ════════════════════════════════════════════════════════════════════════════
+
+const AUTO_SECRET = 'auto-login-secret';
+const PW = 'Geheim!Niemals-in-einer-Antwort';
+
+function autoEnv(on = true) {
+  if (on) {
+    process.env.FAMILYLINK_COLLECTOR_BASE = 'http://collector.invalid:9334';
+    process.env.FAMILYLINK_LOGIN_SECRET = AUTO_SECRET;
+  } else {
+    delete process.env.FAMILYLINK_COLLECTOR_BASE;
+    delete process.env.FAMILYLINK_LOGIN_SECRET;
+  }
+}
+/** Mockt den Collector: autoResult je Aufruf, startOk fuer den Viewer-Pfad. */
+function mockCollector(...autoResults) {
+  const calls = [];
+  flLogin.__setFetchImpl(async (url, opts) => {
+    calls.push({ url, body: opts?.body ? JSON.parse(opts.body) : null, auth: opts?.headers?.authorization });
+    if (url.endsWith('/login/start') || url.endsWith('/login/cancel')) return { ok: true, status: 200 };
+    const r = autoResults.length ? autoResults.shift() : 'ok';
+    if (r === 'throw') throw new Error('ECONNREFUSED');
+    if (r === 'notok') return { ok: false, status: 500 };
+    return { ok: true, status: 200, json: async () => ({ result: r }) };
+  });
+  return calls;
+}
+function assertNoSecrets(body, password) {
+  const text = JSON.stringify(body) ?? '';
+  if (password) assert.ok(!text.includes(password), 'das Passwort erscheint in keiner Antwort');
+  assert.ok(!text.includes(AUTO_SECRET), 'das Collector-Geheimnis verlaesst den Server nie');
+}
+
+test('POST /familylink/login - env fehlt: 503 familylink_not_configured (vor jedem Collector-Ruf)', async () => {
+  autoEnv(false);
+  const calls = mockCollector('ok');
+  const res = await call('POST', '/familylink/login', { actor: DAD, body: { email: 'mutti@example.org', password: PW } });
+  assert.equal(res.status, 503);
+  assert.equal(res.body.reason, 'media_time_familylink_not_configured');
+  assert.equal(calls.length, 0, 'ohne Konfiguration fallt die Absage vor dem Collector-Ruf');
+});
+
+test('POST /familylink/login - Formfehler: 400 ohne Collector-Ruf (weder/noch, code mit email)', async () => {
+  autoEnv();
+  const calls = mockCollector('ok');
+  const empty = await call('POST', '/familylink/login', { body: {} });
+  assert.equal(empty.status, 400);
+  assert.equal(empty.body.reason, 'media_time_bad_request');
+  const onlyEmail = await call('POST', '/familylink/login', { body: { email: 'mutti@example.org' } });
+  assert.equal(onlyEmail.status, 400);
+  const mixed = await call('POST', '/familylink/login', { body: { email: 'mutti@example.org', password: PW, code: '123456' } });
+  assert.equal(mixed.status, 400);
+  const badCode = await call('POST', '/familylink/login', { body: { code: 'zu lang!!' } });
+  assert.equal(badCode.status, 400);
+  assert.equal(calls.length, 0);
+});
+
+test('POST /familylink/login - Kind ohne Elternrolle: 403 vor dem Collector-Ruf', async () => {
+  const calls = mockCollector('ok');
+  const res = await call('POST', '/familylink/login', { actor: kidB, body: { email: 'mutti@example.org', password: PW } });
+  assert.equal(res.status, 403);
+  assert.equal(res.body.reason, 'media_time_forbidden');
+  assert.equal(calls.length, 0);
+});
+
+test('POST /familylink/login - Erfolg: state ok, familylink_email bleibt, das Passwort nirgends', async () => {
+  const calls = mockCollector('ok');
+  const res = await call('POST', '/familylink/login', { actor: DAD, body: { email: 'FamilienVerwalter@Example.ORG', password: PW } });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.deepEqual(res.body.data, { state: 'ok' });
+  assertNoSecrets(res.body, PW);
+  assert.equal(calls[0].url, 'http://collector.invalid:9334/login/auto');
+  assert.equal(calls[0].auth, `Bearer ${AUTO_SECRET}`);
+  // Der Collector braucht beides — durchgereicht, gespeichert wird nur die Adresse.
+  assert.equal(calls[0].body.password, PW, 'zum Collector geht das Passwort durch');
+  assert.equal(statusRow(), 'ok', 'ein Erfolg setzt den lokalen Status zurueck');
+  const settings = await call('GET', '/settings');
+  assert.equal(settings.body.data.familylink_email, 'FamilienVerwalter@Example.ORG');
+});
+
+test('POST /familylink/login - otp_needed: 200 {state:otp_needed}, pending bleibt offen', async () => {
+  const calls = mockCollector('otp_needed');
+  const res = await call('POST', '/familylink/login', { actor: DAD, body: { email: 'mutti@example.org', password: PW } });
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.data, { state: 'otp_needed' });
+  assertNoSecrets(res.body, PW);
+  assert.equal(statusRow(), 'ok', 'ein offenes OTP ist noch kein neuer Status');
+});
+
+test('POST /familylink/login - code-Pfad: bad_code erlaubt erneut, dann ok (email bleibt vorgemerkt)', async () => {
+  const calls = mockCollector('bad_code', 'ok');
+  const first = await call('POST', '/familylink/login', { actor: DAD, body: { code: '111222' } });
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.body.data, { state: 'bad_code' });
+  const second = await call('POST', '/familylink/login', { actor: DAD, body: { code: '111222' } });
+  assert.equal(second.status, 200);
+  assert.deepEqual(second.body.data, { state: 'ok' });
+  assert.equal(calls[0].body.code, '111222');
+  assert.ok(!('email' in calls[0].body) && !('password' in calls[0].body));
+  const settings = await call('GET', '/settings');
+  assert.equal(settings.body.data.familylink_email, 'FamilienVerwalter@Example.ORG',
+    'ein Code-Erfolg ueberschreibt die vorgemerkte Adresse nicht');
+});
+
+test('POST /familylink/login - challenge: 200 mit viewer_url und expires_at (Viewer-Pfad wiederverwendet)', async () => {
+  flLogin.__resetLoginSession();
+  mockCollector('challenge');
+  const res = await call('POST', '/familylink/login', { actor: DAD, body: { email: 'mutti@example.org', password: PW } });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.data.state, 'challenge');
+  assert.match(res.body.data.viewer_url, /^http:\/\/collector\.invalid:9334\/login\/view\?t=[0-9a-f]{64}$/);
+  assert.match(String(res.body.data.expires_at), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  assertNoSecrets(res.body, PW);
+});
+
+test('POST /familylink/login - bad_password: 422 reason bad_credentials (Antwort ohne Passwort)', async () => {
+  mockCollector('bad_password');
+  const res = await call('POST', '/familylink/login', { body: { email: 'mutti@example.org', password: PW } });
+  assert.equal(res.status, 422);
+  assert.equal(res.body.reason, 'media_time_familylink_bad_credentials');
+  assertNoSecrets(res.body, PW);
+});
+
+test('POST /familylink/login - keine pending (code nach Ablauf): 422 login_expired', async () => {
+  mockCollector('no_pending');
+  const res = await call('POST', '/familylink/login', { body: { code: '654321' } });
+  assert.equal(res.status, 422);
+  assert.equal(res.body.reason, 'media_time_familylink_login_expired');
+});
+
+test('POST /familylink/login - Collector tot: 502 (Wurf wie Nicht-2xx)', async () => {
+  mockCollector('throw');
+  const thrown = await call('POST', '/familylink/login', { body: { code: '654321' } });
+  assert.equal(thrown.status, 502);
+  assert.equal(thrown.body.reason, 'media_time_familylink_collector_unreachable');
+  mockCollector('notok');
+  const notok = await call('POST', '/familylink/login', { body: { code: '654321' } });
+  assert.equal(notok.status, 502);
+  assert.equal(notok.body.reason, 'media_time_familylink_collector_unreachable');
+});
+
+test('notifyFamilylinkLoginNeeded - Eltern/Admins erhalten die deutsche Meldung, Kinder nicht', async () => {
+  const sent = [];
+  const r = await flSvc.notifyFamilylinkLoginNeeded(db, {
+    push: async (userId, payload) => { sent.push({ userId, payload }); return 1; },
+    channelStore: { listEnabledChannelsForUser: () => [] },
+  });
+  assert.ok(r.recipients >= 2, 'Admin und Eltern sind Empfaenger');
+  const ids = new Set(sent.map((s) => s.userId));
+  assert.ok(ids.has(ADMIN.id), 'der Admin erhaelt die Meldung');
+  assert.ok(ids.has(DAD.id), 'der Vater erhaelt die Meldung');
+  assert.ok(!ids.has(kidA.id) && !ids.has(kidB.id), 'Kinder koennen nichts anmelden — keine Meldung');
+  for (const s of sent) {
+    assert.equal(s.payload.title, 'Family-Link-Verbindung abgelaufen');
+    assert.equal(s.payload.body, 'Bitte in den Medienzeit-Regeln erneut anmelden.');
+    assert.equal(s.payload.url, '/media-time');
+  }
+});
+
+test('POST /familylink/report - Wechsel ok -> login_noetig (Route nimmt an; Statuspfad wie bisher)', async () => {
+  // Der Melde-Haenger ist fire-and-forget; geprueft wird hier die Annahme der
+  // Route (der Versand selbst im Service-Test oben).
+  const token = await freshReportToken();
+  setStatusOk();
+  const res = await postReport(token, { status: 'login_noetig' });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).data.status, 'login_noetig');
+});
+function setStatusOk() {
+  db.prepare(`
+    INSERT INTO sync_config (key, value) VALUES ('familylink_status', 'ok')
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run();
+}
+
+// Aufraeumen fuer folgende Suites (Muster oben).
+flLogin.__setFetchImpl(null);
+flLogin.__resetLoginSession();
+autoEnv(false);

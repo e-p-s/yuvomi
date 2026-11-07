@@ -973,6 +973,15 @@ const REASONS_PASSED_THROUGH = new Map([
   ['services/document-deletion-lock.js: err.reason', { sites: 1, at403: [], why: 'feste 409' }],
   ['middleware/error-handler.js: err.reason', { sites: 1, at403: [], why: 'feste 503' }],
   ['middleware/restore-gate.js: RESTORE_IN_PROGRESS_REASON', { sites: 1, at403: [], why: '503 oder 409' }],
+  // Family-Link-Fernlogin (Auto-Login und login-session): der Dienst reicht den
+  // Grund durch, die Route sendet ihn an seinem festen Status (503 bei fehlender
+  // Konfiguration, 422 bei geschlossener pending, sonst 502) - eine 403 baut
+  // keine der beiden Stellen; die 403 der Route (media_time_forbidden) steht als
+  // Literal im Riegel requireManager.
+  ['routes/media-time.js: r.reason', { sites: 2, at403: [],
+    why: 'postFamilylinkLogin/startFamilylinkLoginSession: 503 (not_configured), 422 (login_expired) oder 502 (collector_unreachable)' }],
+  ['routes/media-time.js: s.reason', { sites: 1, at403: [],
+    why: 'challenge-Zweig: startFamilylinkLoginSession kennt nur 503 (not_configured) und 502 (collector_unreachable)' }],
   ['routes/weather.js: WEATHER_REASON.NOT_CONFIGURED', { sites: 1, at403: [], why: 'Antwort 200 ohne Daten' }],
   ['routes/weather.js: WEATHER_REASON.UPSTREAM_ERROR', { sites: 5, at403: [], why: 'Antwort 200 ohne Daten (Wetter 3x, Ortssuche 2x)' }],
   ['routes/rewards.js: item.name', { sites: 1, at403: [], why: 'Buchungstext im Punktekonto, keine Antwort' }],

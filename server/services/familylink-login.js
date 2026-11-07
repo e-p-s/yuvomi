@@ -96,6 +96,59 @@ export async function startFamilylinkLoginSession() {
   };
 }
 
+/**
+ * Der Auto-Login-Pfad (POST {base}/login/auto): der Collector fuellt den
+ * Google-Login selbst aus (E-Mail+Passwort) und fuehrt eine pending-Sitzung,
+ * die ein zweiter Aufruf mit {code} auf der OTP-Seite fortsetzt. Das Passwort
+ * geht NUR im Request-Header/Body an den Collector — es wird nie geloggt und
+ * die Antwort enthaelt ausschliesslich das Ergebnis-Wort. Ungueltige
+ * Collector-Antworten (kein bekanntes result)zaehlen wie unerreichbar.
+ * @returns {Promise<{ok: true, result: 'ok'|'otp_needed'|'bad_code'|'bad_password'|'challenge'} |
+ *   {ok: false, status: number, reason: string}>}
+ */
+export async function postFamilylinkLogin({ email, password, code } = {}) {
+  const base = String(process.env.FAMILYLINK_COLLECTOR_BASE || '').trim().replace(/\/+$/, '');
+  const secret = String(process.env.FAMILYLINK_LOGIN_SECRET || '').trim();
+  if (!base || !secret) {
+    return { ok: false, status: 503, reason: 'media_time_familylink_not_configured' };
+  }
+  const body = {};
+  if (typeof email === 'string' && email) body.email = email;
+  if (typeof password === 'string' && password) body.password = password;
+  if (typeof code === 'string' && code) body.code = code;
+  let res;
+  try {
+    res = await fetchImpl(`${base}/login/auto`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, status: 502, reason: 'media_time_familylink_collector_unreachable' };
+  }
+  if (!res.ok) {
+    return { ok: false, status: 502, reason: 'media_time_familylink_collector_unreachable' };
+  }
+  let result = null;
+  try {
+    result = (await res.json())?.result ?? null;
+  } catch {
+    result = null;
+  }
+  // Der Collector meldet eine geschlossene pending (abgelaufen oder nach
+  // bad_password geschlossen): die App muss mit E-Mail+Passwort neu ansetzen.
+  if (result === 'no_pending') {
+    return { ok: false, status: 422, reason: 'media_time_familylink_login_expired' };
+  }
+  if (!['ok', 'otp_needed', 'bad_code', 'bad_password', 'challenge'].includes(result)) {
+    return { ok: false, status: 502, reason: 'media_time_familylink_collector_unreachable' };
+  }
+  return { ok: true, result };
+}
+
 function isoNow() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }

@@ -22,8 +22,8 @@ import rateLimit from 'express-rate-limit';
 
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
-import { familylinkStatus, familylinkUsage, runFamilylinkIngest, FAMILYLINK_STATUS_KEYS } from '../services/familylink.js';
-import { startFamilylinkLoginSession } from '../services/familylink-login.js';
+import { familylinkStatus, familylinkUsage, runFamilylinkIngest, setStatus, FAMILYLINK_STATUS_KEYS } from '../services/familylink.js';
+import { startFamilylinkLoginSession, postFamilylinkLogin } from '../services/familylink-login.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
@@ -891,6 +891,11 @@ router.get('/settings', (req, res) => {
           "SELECT value FROM sync_config WHERE key = 'familylink_ingest_enabled'"
         ).get()?.value === '1',
         familylink_status: familylinkStatus(d),
+        // Vorgemerkt nach erfolgreichem Auto-Login (nur die Adresse, nie ein
+        // Passwort) — null, bevor je eine Anmeldung durch diesen Pfad ging.
+        familylink_email: d.prepare(
+          "SELECT value FROM sync_config WHERE key = 'familylink_email'"
+        ).get()?.value ?? null,
         // Zeitmarken fuer die UI: wann der Status zuletzt gesetzt wurde und
         // wann die letzte echte Tageszeile einkam - null, bevor etwas gelaufen
         // ist (die UI behauptet dann nichts).
@@ -1766,6 +1771,104 @@ router.post('/familylink/ingest', requireManager, async (req, res) => {
   } catch (err) {
     log.error('POST /familylink/ingest error:', err);
     return res.status(500).json({ error: 'Failed to run family link ingest.', code: 500 });
+  }
+});
+
+/* Auto-Login (Eltern): der Parent tippt E-Mail+Passwort nur in die App — der
+ * Sammler fuellt den Google-Login selbst aus (POST {base}/login/auto am
+ * Collector). Zustands-Mapping: ok -> Status 'ok' und (bei E-Mail) die Adresse
+ * als familylink_email gespeichert — das Passwort wird NIE gespeichert, es
+ * fliesst nur durch. otp_needed/bad_code -> 200 mit State, die App fragt den
+ * Code ab bzw. erneut nach challenge oeffnet der Server die bestehende
+ * Viewer-Sitzung (Notfallpfad = altes login-session, unveraendert).
+ * Rate-Limit wie login-session: je Mitglied, 10 in 10 Minuten. */
+const FAMILYLINK_EMAIL_KEY = 'familylink_email';
+const familylinkLoginLimiter = rateLimit({
+  windowMs: 10 * 60_000,
+  max: 10,
+  keyGenerator: (req) => `user:${req.authUserId ?? 'anon'}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many family link login attempts. Please wait a few minutes.', code: 429, reason: 'media_time_familylink_login_rate_limited' },
+});
+router.post('/familylink/login', requireManager, familylinkLoginLimiter, async (req, res) => {
+  const bad = (detail) => res.status(400).json({
+    error: `Body must carry email and password (new attempt) or code (pending OTP): ${detail}`,
+    code: 400, reason: 'media_time_bad_request',
+  });
+  try {
+    const d = db.get();
+    const body = req.body ?? {};
+    let email = null, password = null, code = null;
+    if (body.email !== undefined && body.email !== null) {
+      email = String(body.email).trim();
+      if (!/^[^@\s]{1,64}@[^\s@]{1,255}$/.test(email)) return bad('email is not an address');
+    }
+    if (body.password !== undefined && body.password !== null) {
+      password = String(body.password);
+      if (password.length < 1 || password.length > 300) return bad('password is out of range');
+    }
+    if (body.code !== undefined && body.code !== null) {
+      code = String(body.code).trim();
+      if (!/^[0-9A-Za-z .-]{4,16}$/.test(code)) return bad('code is out of range');
+    }
+    let r;
+    if (code !== null && (email !== null || password !== null)) {
+      // Nie gemischt: ein Code gehoert zur offenen pending, ein neuer Versuch
+      // traegt email+password — beides zugleich waere eine Rate ueber den Zustand.
+      return bad('do not mix code with email or password');
+    }
+    if (code !== null) {
+      r = await postFamilylinkLogin({ code });
+    } else if (email !== null && password !== null) {
+      r = await postFamilylinkLogin({ email, password });
+    } else {
+      return bad('give either email+password or code');
+    }
+    if (!r.ok) {
+      const message = r.reason === 'media_time_familylink_not_configured'
+        ? 'Family link remote login is not configured on this server.'
+        : r.reason === 'media_time_familylink_login_expired'
+          ? 'There is no pending family link login - start a new attempt with email and password.'
+          : 'The family link collector could not be reached.';
+      return res.status(r.status).json({ error: message, code: r.status, reason: r.reason });
+    }
+    if (r.result === 'ok') {
+      // Nur die Adresse bleibt (fuer die Vorbelegung in der App) — nie das Passwort.
+      if (email !== null) {
+        d.prepare(`
+          INSERT INTO sync_config (key, value) VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `).run(FAMILYLINK_EMAIL_KEY, email);
+      }
+      setStatus(d, 'ok');
+      return res.json({ data: { state: 'ok' } });
+    }
+    if (r.result === 'otp_needed') return res.json({ data: { state: 'otp_needed' } });
+    if (r.result === 'bad_code') return res.json({ data: { state: 'bad_code' } });
+    if (r.result === 'bad_password') {
+      return res.status(422).json({
+        error: 'Google rejected the password. Please try again with the correct password.',
+        code: 422, reason: 'media_time_familylink_bad_credentials',
+      });
+    }
+    // challenge: der Viewer-Pfad uebernimmt — derselbe Ablauf wie die alte
+    // login-session (Notfallpfad bleibt unveraendert bestehen).
+    const s = await startFamilylinkLoginSession();
+    if (!s.ok) {
+      return res.status(s.status).json({
+        error: s.reason === 'media_time_familylink_not_configured'
+          ? 'Family link remote login is not configured on this server.'
+          : 'The family link collector could not be reached.',
+        code: s.status,
+        reason: s.reason,
+      });
+    }
+    return res.json({ data: { state: 'challenge', viewer_url: s.viewer_url, expires_at: s.expires_at } });
+  } catch (err) {
+    // Nie Request-Werte ins Log — das Passwort koennte sonst dort landen.
+    log.error('POST /familylink/login error:', err?.constructor?.name || 'Error');
+    return res.status(500).json({ error: 'Failed to run family link login.', code: 500 });
   }
 });
 

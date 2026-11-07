@@ -2349,7 +2349,8 @@ function wireRules(el) {
 const FL_FRESH_HOURS = 6;
 const FL_STALE_HOURS = 24;
 
-/* Die drei Befehle stehen fest - nur der Begleittext ist uebersetzt. */
+/* Expertenweg allein: die drei Befehle stehen fest und wohnen ganz unten in
+ * der Gruppe unter "Experten-Details" - nicht mehr am sichtbaren Rand. */
 const FL_STEPS = [
   { label: 'mediaTime.flStep1Text', cmd: 'ssh sammler' },
   { label: 'mediaTime.flStep2Text', cmd: 'python3 ~/yuvomi/scripts/familylink/familyhub_capture2.py' },
@@ -2388,17 +2389,26 @@ const FL_LOGIN_ERRORS = {
   media_time_login_session_rate_limited: 'mediaTime.flLoginRateLimited',
 };
 
+/* Der Primärweg ist das Zugangsdaten-Formular - direkt im Statusblock. Das
+ * Passwort lebt dabei nur im Eingabefeld: nie in state, nie in localStorage.
+ * Dieser Schalter sagt, welchen Schritt des Formulars die Anzeige zeigt; er
+ * gilt fuer diese Seite und wird bei jedem Neuaufbau der Gruppe zurueckgesetzt. */
+let _flAuthMode = 'form'; // 'form' | 'otp' | 'challenge'
+
 /* Der Merker laeuft mit, bis das Fenster zu ist oder die Viewer-Zeit ablauft;
  * ein zweiter Anmeldeverschnitt loescht den vorigen Merker. */
 let _flLoginWatch = null;
 
-/* Nach dem Schliessen: gestaffelt 0/3/8 s nachfragen, ob der Sammler 'ok'
- * meldet - der Block springt dann von selbst auf die ruhige Zeile. Kein
- * Dauer-Poll: drei Nachfragen, dann ruht die Seite. */
+/* Nach dem Schliessen (oder nach dem Formular-'ok'): gestaffelt 0/3/8 s
+ * nachfragen, ob der Sammler 'ok' meldet - der Block springt dann von selbst
+ * auf die ruhige Zeile. Kein Dauer-Poll: drei Nachfragen, dann ruht die
+ * Seite. Der Rueckfall-Satz des Challenges endet mit dem ersten Nachfragen:
+ * danach fuehrt wieder das Formular. */
 function reloadFlStatusAfterLogin(host) {
   [0, 3000, 8000].forEach((ms) => {
     setTimeout(async () => {
       if (!host.isConnected) return;
+      if (_flAuthMode === 'challenge') _flAuthMode = 'form';
       try {
         const res = await api.get('/media-time/settings');
         if (res?.data) state.settings = { ...state.settings, ...res.data };
@@ -2439,6 +2449,19 @@ function openFlLoginLinkModal(viewerUrl) {
   });
 }
 
+/* Das Viewer-Fenster selbst: der Sammler nennt die Adresse, hier oeffnet es
+ * und der Merker bemerkt das Schliessen. Blockt der Browser das Fenster,
+ * liegt der Link im Modal - dasselbe Muster wie beim Knopf unten. */
+function openFlViewer(viewerUrl, expiresAt, host) {
+  const win = window.open(viewerUrl, 'yuvomi-fl-login', 'width=480,height=760');
+  if (!win) {
+    openFlLoginLinkModal(viewerUrl);
+    return false;
+  }
+  watchFlLoginClose(win, expiresAt, host);
+  return true;
+}
+
 async function startFlLogin(host, btn) {
   btn.disabled = true;
   try {
@@ -2450,12 +2473,8 @@ async function startFlLogin(host, btn) {
       toast(t('mediaTime.errorGeneric'), 'danger');
       return;
     }
-    const win = window.open(viewerUrl, 'yuvomi-fl-login', 'width=480,height=760');
-    if (!win) {
-      openFlLoginLinkModal(viewerUrl);
-    } else {
+    if (openFlViewer(viewerUrl, expiresAt, host)) {
       toast(t('mediaTime.flLoginOpening'));
-      watchFlLoginClose(win, expiresAt, host);
     }
   } catch (err) {
     const reasonKey = FL_LOGIN_ERRORS[err?.data?.reason];
@@ -2465,10 +2484,150 @@ async function startFlLogin(host, btn) {
   }
 }
 
+/* Das Zugangsdaten-Formular - der Primärweg, direkt im Statusblock. Die
+ * E-Mail kommt vorbelegt aus der settings-Antwort (familylink_email); das
+ * Passwort steht in keinem Feld drin, in keinem state und in keinem
+ * localStorage - es lebt nur in der Eingabe und wird nach jedem Versuch
+ * geleert. Feldfehler wohnen unter dem Feld, nie als Toast. */
+function flAuthFormHtml(s) {
+  const err = '<div id="mt-fl-login-error" class="form-error" role="alert" hidden></div>';
+  if (_flAuthMode === 'otp') {
+    return `
+      <form class="mt-fl-form" id="mt-fl-auth-form">
+        <div class="form-group">
+          <label class="label" for="mt-fl-code">${esc(t('mediaTime.flOtpLabel'))}${REQUIRED_MARK}</label>
+          <input class="input" id="mt-fl-code" type="text" inputmode="numeric"
+                 autocomplete="one-time-code" maxlength="12" required>
+          <p class="form-hint">${esc(t('mediaTime.flOtpHint'))}</p>
+          ${err}
+        </div>
+        <div class="mt-row-actions">
+          <button class="btn btn--primary btn--sm" type="submit" data-action="mt-fl-connect">
+            <span>${esc(t('mediaTime.flOtpSubmit'))}</span>
+          </button>
+        </div>
+      </form>`;
+  }
+  const email = typeof s.familylink_email === 'string' ? s.familylink_email : '';
+  return `
+    <form class="mt-fl-form" id="mt-fl-auth-form">
+      <p class="form-hint mt-fl-form__intro">${esc(t('mediaTime.flFormIntro'))}</p>
+      <div class="form-group">
+        <label class="label" for="mt-fl-email">${esc(t('mediaTime.flEmailLabel'))}${REQUIRED_MARK}</label>
+        <input class="input" id="mt-fl-email" type="email" maxlength="254" required
+               autocomplete="off" autocapitalize="none" spellcheck="false"
+               value="${esc(email)}">
+      </div>
+      <div class="form-group">
+        <label class="label" for="mt-fl-password">${esc(t('mediaTime.flPasswordLabel'))}${REQUIRED_MARK}</label>
+        <input class="input" id="mt-fl-password" type="password" autocomplete="new-password" required>
+        ${err}
+      </div>
+      <div class="mt-row-actions">
+        <button class="btn btn--primary btn--sm" type="submit" data-action="mt-fl-connect">
+          <i data-lucide="log-in" aria-hidden="true"></i><span>${esc(t('mediaTime.flConnect'))}</span>
+        </button>
+      </div>
+    </form>`;
+}
+
+/* Ein POST, drei Antworten: 'ok' legt den Block auf die ruhige Zeile,
+ * 'otp_needed' tauscht das Formular gegen das Einmalcode-Feld, 'challenge'
+ * oeffnet still das Viewer-Fenster - der Klarstellungs-Satz steht schon im
+ * Block. Fehler: falsche Zugangsdaten als Feldfehler unter dem Passwort,
+ * Sammler-Faelle (502/503) in den bekannten Toast-Saetzen. */
+function wireFlAuth(form, host) {
+  const errEl = form.querySelector('#mt-fl-login-error');
+  const submit = form.querySelector('[data-action="mt-fl-connect"]');
+  const label = submit.querySelector('span');
+  const orig = label.textContent;
+  const settle = () => {
+    submit.disabled = false;
+    label.textContent = orig;
+    delete submit.dataset.busy;
+  };
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (submit.dataset.busy === '1') return;
+    submit.dataset.busy = '1';
+    submit.disabled = true;
+    label.textContent = t('mediaTime.flConnecting');
+    errEl.hidden = true;
+    const body = {};
+    if (_flAuthMode === 'otp') {
+      body.code = String(form.querySelector('#mt-fl-code')?.value || '').trim();
+    } else {
+      body.email = String(form.querySelector('#mt-fl-email')?.value || '').trim();
+      body.password = String(form.querySelector('#mt-fl-password')?.value || '');
+    }
+    let res = null;
+    let err = null;
+    try {
+      res = await api.post('/media-time/familylink/login', body);
+    } catch (e) {
+      err = e;
+    }
+    /* Das Passwort hat seine Arbeit getan - das Feld bleibt nicht voll. */
+    const pw = form.querySelector('#mt-fl-password');
+    if (pw) pw.value = '';
+    if (err) {
+      settle();
+      const status = err?.status ?? err?.response?.status;
+      if (status === 422 && err?.data?.reason === 'media_time_familylink_bad_credentials') {
+        errEl.textContent = t('mediaTime.flBadCredentials');
+        errEl.hidden = false;
+        (form.querySelector('#mt-fl-password') || form.querySelector('#mt-fl-code'))?.focus();
+      } else {
+        const reasonKey = FL_LOGIN_ERRORS[err?.data?.reason];
+        toast(reasonKey ? t(reasonKey) : mediaTimeErrorSentence(err), 'danger');
+      }
+      return;
+    }
+    const answer = res?.data?.status;
+    if (answer === 'ok') {
+      /* Ruhige Zeile sogleich, die Staffel 0/3/8 s bringt den Nachweis. */
+      state.settings = {
+        ...(state.settings || {}),
+        familylink_status: 'ok',
+        familylink_last_report_at: new Date().toISOString(),
+      };
+      _flAuthMode = 'form';
+      toast(t('mediaTime.flConnectOk'));
+      reloadFlStatusAfterLogin(host);
+      return;
+    }
+    if (answer === 'otp_needed') {
+      _flAuthMode = 'otp';
+      renderFlStatus(host);
+      host.querySelector('#mt-fl-code')?.focus();
+      return;
+    }
+    if (answer === 'challenge') {
+      const viewerUrl = String(res?.data?.viewer_url || '');
+      const expiresAt = Date.parse(res?.data?.expires_at || '');
+      if (!/^https?:\/\//i.test(viewerUrl)) {
+        /* Antwort ohne Adresse ist keine Auskunft - eher Toast als Raten. */
+        settle();
+        toast(t('mediaTime.errorGeneric'), 'danger');
+        return;
+      }
+      /* Stiller Rueckfall: der Klarstellungs-Satz erscheint im Block, das
+       * Fenster oeffnet sich von selbst - kein weiterer Erklaerungstext. */
+      _flAuthMode = 'challenge';
+      renderFlStatus(host);
+      openFlViewer(viewerUrl, expiresAt, host);
+      return;
+    }
+    /* Antwort ohne Zustandswort: keine Auskunft, kein Raten. */
+    settle();
+    toast(t('mediaTime.errorGeneric'), 'danger');
+  });
+}
+
 /* Der Block haengt an der settings-Antwort: 'ok' ist eine ruhige Zeile,
- * 'expired' und 'setup' fuehren denselben Weg - zuerst der Fernlogin-Knopf,
- * darunter die Schrittfolge als Kompass; der Knopf ist ein
- * <button aria-expanded>, die Schritte wohnen in der region darunter. */
+ * 'expired' und 'setup' zeigen dasselbe Zugangsdaten-Formular - einmal
+ * ausfuellen, danach laeuft die Verbindung von allein. Die Schrittfolge und
+ * der Fenster-Knopf wohnen ganz unten in der Gruppe (Experten-Details). */
 function flStatusBlockHtml(s) {
   const kind = flCollectorState(s);
   if (kind === 'ok') {
@@ -2482,13 +2641,48 @@ function flStatusBlockHtml(s) {
         <span>${esc(line)}</span>
       </p>`;
   }
-  const open = state.flStepsOpen ?? (kind === 'expired');
   const heading = kind === 'expired' ? t('mediaTime.flExpiredTitle') : t('mediaTime.flSetupTitle');
   /* familylink_status_at ist der Nachweis, dass der Status selbst frisch
    * geprueft wurde - als stille Zeile unter der auffaelligen. */
   const checked = s.familylink_status_at
     ? `<p class="mt-fl-status__checked">${esc(t('mediaTime.flChecked', { ago: flAgoText(s.familylink_status_at) }))}</p>`
     : '';
+  /* Challenge-Rueckfall: ein einziger Satz Klarstellung, kein Formular. */
+  const note = _flAuthMode === 'challenge'
+    ? `<p class="mt-fl-status__note">${esc(t('mediaTime.flChallengeNote'))}</p>`
+    : '';
+  const auth = _flAuthMode === 'challenge' ? '' : flAuthFormHtml(s);
+  return `
+    <p class="mt-fl-status__line mt-fl-status__line--warn">
+      <i class="mt-fl-status__icon" data-lucide="triangle-alert" aria-hidden="true"></i>
+      <span>${esc(heading)}</span>
+    </p>
+    ${checked}${note}${auth}`;
+}
+
+/* Einsetzen und verdrahten: das Formular ist der einzige Aufbau hier -
+ * Fehleranzeige, Beschriftung und Fokusring folgen dem Formular-Kanon der
+ * Seite. Der Statusblock selbst traegt aria-live: Zustandswechsel des
+ * Formulars (Formular -> Code -> ruhige Zeile) werden angesagt. */
+function renderFlStatus(host) {
+  const box = host.querySelector('#mt-fl-status');
+  if (!box) return;
+  box.replaceChildren();
+  box.insertAdjacentHTML('beforeend', flStatusBlockHtml(state.settings || {}));
+  icons(box);
+  const form = box.querySelector('#mt-fl-auth-form');
+  if (form) wireFlAuth(form, host);
+}
+
+/* Expertenweg ganz unten in der Gruppe: die Befehlsfolge des Sammlers und -
+ * als manueller Notfallweg - das Anmeldefenster. Am sichtbaren Rand steht
+ * nichts mehr, das anleitet; diese Region oeffnet von Hand, wer sie will.
+ * Derselbe Toggle-Knopf-Stil wie beim Karten-Toggle, dasselbe Copy-Muster
+ * wie beim Geräte-Token. */
+function renderFlExpert(host) {
+  const box = host.querySelector('#mt-fl-expert');
+  if (!box) return;
+  const open = state.flStepsOpen ?? false;
   const items = FL_STEPS.map((step, i) => `
     <li class="mt-fl-step">
       <span class="mt-fl-step__head">
@@ -2503,42 +2697,27 @@ function flStatusBlockHtml(s) {
         </button>
       </span>
     </li>`).join('');
-  return `
-    <p class="mt-fl-status__line mt-fl-status__line--warn">
-      <i class="mt-fl-status__icon" data-lucide="triangle-alert" aria-hidden="true"></i>
-      <span>${esc(heading)}</span>
-    </p>
-    ${checked}
-    <div class="mt-fl-login">
-      <button class="btn btn--primary btn--sm" type="button" data-action="mt-fl-login">
-        <i data-lucide="log-in" aria-hidden="true"></i>${esc(t('mediaTime.flLoginCta'))}
-      </button>
-    </div>
+  box.insertAdjacentHTML('beforeend', `
     <button class="btn btn--ghost btn--sm mt-fl-toggle" type="button" id="mt-fl-steps-btn"
             aria-expanded="${open ? 'true' : 'false'}" aria-controls="mt-fl-steps-body">
-      <i data-lucide="chevron-down" class="icon-sm" aria-hidden="true"></i>${esc(t('mediaTime.flStepsToggle'))}
+      <i data-lucide="chevron-down" class="icon-sm" aria-hidden="true"></i>${esc(t('mediaTime.flExpertDetails'))}
     </button>
     <div id="mt-fl-steps-body"${open ? '' : ' hidden'} role="region" aria-labelledby="mt-fl-steps-btn">
       <p class="form-hint">${esc(t('mediaTime.flWhyCollector'))}</p>
       <ol class="mt-fl-steps">${items}</ol>
-    </div>`;
-}
-
-/* Einsetzen und verdrahten: dasselbe Copy-Muster wie beim Geräte-Token
- * (Clipboard, Toast als Nachweis), derselbe Toggle-Knopf-Stil wie die
- * Kinderkarten. */
-function renderFlStatus(host) {
-  const box = host.querySelector('#mt-fl-status');
-  if (!box) return;
-  box.replaceChildren();
-  box.insertAdjacentHTML('beforeend', flStatusBlockHtml(state.settings || {}));
+      <div class="mt-fl-login">
+        <button class="btn btn--secondary btn--sm" type="button" data-action="mt-fl-login">
+          <i data-lucide="log-in" aria-hidden="true"></i>${esc(t('mediaTime.flLoginCta'))}
+        </button>
+      </div>
+    </div>`);
   icons(box);
   box.querySelector('#mt-fl-steps-btn')?.addEventListener('click', (ev) => {
     const btn = ev.currentTarget;
-    const open = btn.getAttribute('aria-expanded') !== 'true';
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    box.querySelector('#mt-fl-steps-body').hidden = !open;
-    state.flStepsOpen = open;
+    const isOpen = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    box.querySelector('#mt-fl-steps-body').hidden = !isOpen;
+    state.flStepsOpen = isOpen;
   });
   box.querySelector('[data-action="mt-fl-login"]')?.addEventListener('click', (ev) => {
     startFlLogin(host, ev.currentTarget);
@@ -2558,6 +2737,8 @@ function renderFlStatus(host) {
 }
 
 function renderFlHost(host) {
+  /* Neuer Seitenaufbau: das Formular beginnt wieder beim Anfangsschritt. */
+  _flAuthMode = 'form';
   const s = state.settings || {};
   host.insertAdjacentHTML('beforeend', `
     <label class="toggle-row toggle-row--switch">
@@ -2568,13 +2749,14 @@ function renderFlHost(host) {
       </span>
     </label>
     <p class="form-hint">${esc(t('mediaTime.flSwitchHint'))}</p>
-    <div id="mt-fl-status"></div>
+    <div id="mt-fl-status" aria-live="polite"></div>
     <div class="mt-row-actions">
       <button class="btn btn--secondary btn--sm" type="button" data-action="mt-fl-fetch">
         <i data-lucide="refresh-cw" aria-hidden="true"></i>${esc(t('mediaTime.flFetch'))}
       </button>
     </div>
-    <div id="mt-fl-map"></div>`);
+    <div id="mt-fl-map"></div>
+    <div id="mt-fl-expert" class="mt-fl-expert"></div>`);
   renderFlStatus(host);
   host.querySelector('#mt-fl-enabled')?.addEventListener('change', async (ev) => {
     try {
@@ -2602,6 +2784,7 @@ function renderFlHost(host) {
     }
     btn.disabled = false;
   });
+  renderFlExpert(host);
   loadFlMap(host.querySelector('#mt-fl-map'));
 }
 

@@ -28,6 +28,27 @@ Einrichtung (einmalig, auf dem Sammler):
          'pgrep -f "familylink_login_proxy.py" >/dev/null || \
           nohup python3 /pfad/zu/scripts/familylink/familylink_login_proxy.py >> ~/.familyhub/login_proxy.log 2>&1 &'
 
+Zusatzpfad — Auto-Ausfuellen (der Parent tippt E-Mail+Passwort nur in die App):
+  POST /login/auto {email, password} oder {code} + Bearer
+      -> 200 {result: "ok" | "otp_needed" | "bad_code" | "bad_password"
+                             | "challenge" | "no_pending"}
+  Der Auto-Pfad fuehrt eine pending-Login-Sitzung (In-Memory, TTL 10 Minuten,
+  eine zugleich, parallel zur viewer-Sitzung moeglich): ueber CDP wird zur
+  LOGIN_URL navigiert, das E-Mail-Feld gefuellt (input[type=email] bzw. erstes
+  Textfeld), "Weiter" geklickt, das Passwortfeld nach Klick mit Input.insertText
+  gefuellt (kein Passwort-Feld-Setzen per Skript-Lesezugriff), "Weiter". Danach
+  Zustands-Erkennung (Poll bis 12s): familylink/families erreicht und nicht
+  accounts.google -> Cookies exportieren (dieselbe Logik wie der capture-Befehl
+  von familyhub_capture2.py) -> session.json, Report {"status":"ok"}, pending
+  schliessen. OTP-Seite ohne mitgegebenen Code -> otp_needed (pending bleibt
+  offen, die Seite steht auf OTP). Code mitgegeben -> ins Code-Feld tippen,
+  Weiter, wieder Erkennung; bleibt die OTP-Seite stehen -> bad_code (Feld leer,
+  code erneut erlaubt). "Falsches Passwort/Wrong password/Access denied" ->
+  bad_password (pending schliessen, Seite auf about:blank). Captcha,
+  Geraetebestaetigung, Kontenauswahl mit mehreren Konten -> challenge; die
+  pending-Sitzung bleibt viewer-bar (das Viewer-System verwendet denselben
+  Target — die App kann nahtlos ins Fenster wechseln).
+
 Vertrag (Freigabe nur fuer den Yuvomi-Server; alle Antworten ohne Sitzungsdaten):
   POST /login/start   {session_token, expires_at} + Bearer  -> 200 {ok:true}
                       (eine Sitzung zur Zeit; eine zweite Start ersetzt die alte)
@@ -35,7 +56,8 @@ Vertrag (Freigabe nur fuer den Yuvomi-Server; alle Antworten ohne Sitzungsdaten)
   GET  /login/view?t=<session_token>                        -> Viewer-Seite
   GET  /login/stream?t=<session_token>                      -> SSE (Frames + Status)
   POST /login/input?t=<session_token> {kind, ...}           -> 200 {ok:true}
-  GET  /health  (nur laeuft/was_laeuft, keine Daten)         -> 200
+  POST /login/auto  {email,password} | {code} + Bearer      -> 200 {result} (s.o.)
+  GET  /health  (nur laeuft/was_laeuft, keine Daten)         -> 200 {ok, session, pending}
 Auth: "Authorization: Bearer <inhalt ~/.familyhub/login_secret>" — falsch oder
 fehlend -> 401. Die Viewer-Pfade beweisen das einmalige Sitzungs-Token; ein
 abgelaufenes oder falsches Token ist 404. Es wird NIE etwas aus Cookies,
@@ -165,6 +187,337 @@ def write_session_json(cookies):
                    "cookies": cookies}, f)
     os.chmod(tmp, 0o600)
     os.replace(tmp, cap.SESSION_FILE)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Auto-Ausfuellen: reine Zustands-Erkennung (ohne Chromium testbar)
+# ══════════════════════════════════════════════════════════════════════════
+
+# Kleinschreibung + Umlaute gefaltet: die Texte kommen von Google in beiden
+# Schreibweisen (und die deutsche Seite schreibt "Bestätigen" wie "Bestaetigen").
+# str.maketrans ist noetig: str.translate vergleicht Codepunkte, keine Strings.
+_FOLD = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue"})
+
+
+def _fold(s):
+    return str(s or "").lower().translate(_FOLD)
+
+
+RE_BAD_PASSWORD = re.compile(
+    r"falsches passwort|wrong password|access denied|passwort falsch|passwort ist falsch")
+RE_CAPTCHA = re.compile(r"captcha|ich bin kein roboter|not a robot")
+# Geraetebestaetigung: Verb-Phrase ("Bestätigen Sie …"), nicht das Substantiv
+# "Bestätigung" der OTP-Seite — die Reihenfolge in classify_page haelt beides auseinander.
+RE_DEVICE_CONFIRM = re.compile(
+    r"bestaetigen sie|ist das ihr (geraet|tablet|handy)|confirm (this sign-in|it is you)"
+    r"|diese anfrage bestaetigen")
+RE_OTP_TEXT = re.compile(
+    r"bestaetigung|two-step|two step|authenticator|sicherheitscode|bestaetigungscode"
+    r"|verifizierungscode|verification code|confirmation code")
+
+# Zustands-Erkennung: diese vier Antworten beenden jeden Poll (Timeout -> challenge).
+TERMINALS = ("success", "otp", "bad_password", "challenge")
+
+
+def classify_page(url, dom):
+    """Zustand der Google-Seite aus URL und DOM-Sondenergebnis (rein, ohne CDP).
+
+    dom ist das Ergebnis von JS_AUTO_PROBE: {url, text, fields: [{type, aria}],
+    accounts}. Akzeptiert der Einfachheit halber auch Felder als reine Typ-Strings.
+    Rueckgabe: success | bad_password | challenge | otp | password | email | unknown.
+    Reihenfolge: Erfolg, dann Fehlermeldungen (die Seite zeigt das Passwortfeld
+    weiter, obwohl es schon verworfen ist), dann Kontenauswahl, dann Feldform."""
+    u = _fold(url)
+    d = dom if isinstance(dom, dict) else {}
+    text = _fold(d.get("text"))
+    types, arias = [], []
+    for f in (d.get("fields") or []):
+        if isinstance(f, str):
+            types.append(f.lower())
+            arias.append("")
+        elif isinstance(f, dict):
+            types.append(str(f.get("type") or "text").lower())
+            arias.append(str(f.get("aria") or "").lower())
+    has_pw = "password" in types
+    has_email = "email" in types or any(("email" in a or "e-mail" in a) for a in arias)
+    has_code_field = any(t in ("tel", "number") or "code" in a for t, a in zip(types, arias))
+    # Erfolg: Family-Link-App geladen und nicht mehr auf accounts.google
+    # (der continue-Parameter traegt familylink sonst in jede Login-URL).
+    if ("familylink.google.com" in u or "families.google.com" in u) and "accounts.google" not in u:
+        return "success"
+    if RE_BAD_PASSWORD.search(text):
+        return "bad_password"
+    if RE_CAPTCHA.search(text) or RE_DEVICE_CONFIRM.search(text):
+        return "challenge"
+    # Kontenauswahl mit mehreren Konten: ein Klick waere eine Entscheidung fuer
+    # ein bestimmtes Konto — die trifft der Mensch im Viewer-Fenster.
+    if "chooser" in u and int(d.get("accounts") or 0) >= 2:
+        return "challenge"
+    if has_pw:
+        return "password"
+    if has_email:
+        return "email"
+    if RE_OTP_TEXT.search(text) or has_code_field:
+        return "otp"
+    return "unknown"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Auto-Ausfuellen: gefuehrte Feld-Eingaben ueber CDP (Werkzeuge aus capture2)
+# ══════════════════════════════════════════════════════════════════════════
+
+AUTO_TTL = 10 * 60  # eine pending-Login-Sitzung lebt 10 Minuten
+EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^\s@]{1,255}$")
+CODE_RE = re.compile(r"^[0-9A-Za-z .\-]{4,16}$")
+
+# Sonde fuer classify_page: URL, sichtbarer Text, sichtbare Felder, Kontenliste.
+JS_AUTO_PROBE = """
+(() => {
+  const vis = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  const fields = [...document.querySelectorAll('input')]
+    .filter(i => i.type !== 'hidden' && vis(i))
+    .map(i => ({ type: (i.type || 'text').toLowerCase(),
+                 aria: String(i.ariaLabel || i.name || i.id || '').toLowerCase() }));
+  const text = ((document.body && document.body.innerText) || '').slice(0, 4000);
+  const accounts = document.querySelectorAll('[data-email]').length;
+  return { url: location.href, fields: fields, text: text, accounts: accounts };
+})()
+"""
+
+# Mitte des ersten sichtbaren Felds zu diesem Selektor (Pixel, fuer den Klick
+# vor Input.insertText — insertText schreibt nur in das, was den Fokus hat).
+JS_FIELD_CENTER = """
+((sel) => {
+  const els = [...document.querySelectorAll(sel)]
+    .filter(i => i.type !== 'hidden' && (i.offsetWidth || i.offsetHeight || i.getClientRects().length));
+  if (!els.length) return null;
+  const r = els[0].getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})(%s)
+"""
+
+# Code-Feld der OTP-Seite: tel/number/text, aber weder E-Mail noch Passwort.
+JS_CODE_CENTER = """
+(() => {
+  const els = [...document.querySelectorAll('input')].filter(i => {
+    if (i.type === 'hidden' || i.type === 'password' || i.type === 'email') return false;
+    if (!(i.offsetWidth || i.offsetHeight || i.getClientRects().length)) return false;
+    const t = (i.type || 'text').toLowerCase();
+    const a = String(i.ariaLabel || i.name || i.id || '').toLowerCase();
+    return t === 'tel' || t === 'number' || t === 'text' || a.includes('code');
+  });
+  if (!els.length) return null;
+  const r = els[0].getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()
+"""
+
+JS_CODE_CLEAR = """
+(() => {
+  const els = [...document.querySelectorAll('input')].filter(i => {
+    if (i.type === 'hidden' || i.type === 'password' || i.type === 'email') return false;
+    const t = (i.type || 'text').toLowerCase();
+    const a = String(i.ariaLabel || i.name || i.id || '').toLowerCase();
+    return t === 'tel' || t === 'number' || t === 'text' || a.includes('code');
+  });
+  if (!els.length) return 'none';
+  const set = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype, 'value').set;
+  set.call(els[0], '');
+  els[0].dispatchEvent(new Event('input', { bubbles: true }));
+  return 'cleared';
+})()
+"""
+
+_auto_lock = threading.Lock()
+_pending = None  # {'state': 'otp'|'challenge', 'expiry': epoch} oder None
+
+
+def pending_state():
+    """Der pending-Zustand fuer /health: null | 'otp' | 'challenge' (abgelaufene
+    Sitzung wird hier faellig — eine GET-Antwort luegt nie ueber eine tote pending)."""
+    global _pending
+    with _auto_lock:
+        if _pending is None:
+            return None
+        if time.time() > _pending["expiry"]:
+            _pending = None
+            return None
+        return _pending["state"]
+
+
+def _open_pending(state):
+    """Pending anlegen/verlaengern (eine zugleich — die Regel des Auftrags)."""
+    global _pending
+    _pending = {"state": state, "expiry": time.time() + AUTO_TTL}
+
+
+def _attach_ws(navigate=False):
+    """Eigene WS-Verbindung zum Page-Target (der Viewer hat seine eigene — zwei
+    Verbindungen an einem Target sind in CDP üblich). navigate=True: erst zur
+    LOGIN_URL (der Auto-Pfad startet immer bei Null, auch wenn die Seite schon
+    auf familylink steht und ensure_page sonst nicht navigieren wuerde)."""
+    cap.ensure_chromium()
+    t = cap.page_target()
+    if t is None:
+        t = cap.cdp("/json/new?" + urllib.parse.quote(cap.LOGIN_URL, safe=":/?=&%"), method="PUT")
+        ws = cap.WS(t["webSocketDebuggerUrl"])
+    else:
+        ws = cap.WS(t["webSocketDebuggerUrl"])
+    ws.call("Page.enable")
+    if navigate:
+        ws.call("Page.navigate", {"url": cap.LOGIN_URL})
+        time.sleep(1.5)
+    return ws
+
+
+def _probe(ws):
+    dom = cap.ev(ws, JS_AUTO_PROBE)
+    return dom if isinstance(dom, dict) else {}
+
+
+def _wait_for(ws, wanted, timeout):
+    """Poll (0.8s) bis ein gewuenschter Zustand erreicht ist; 'timeout' sonst."""
+    end = time.time() + timeout
+    while True:
+        dom = _probe(ws)
+        st = classify_page(dom.get("url") or "", dom)
+        if st in wanted:
+            return st
+        if time.time() >= end:
+            return "timeout"
+        time.sleep(0.8)
+
+
+def _click_xy(ws, x, y):
+    base = {"x": int(x), "y": int(y), "button": "left", "clickCount": 1}
+    ws.call("Input.dispatchMouseEvent", dict(base, type="mousePressed"))
+    ws.call("Input.dispatchMouseEvent", dict(base, type="mouseReleased"))
+
+
+def _finish_ok(ws):
+    """Erfolg: Cookies exportieren (dieselbe Logik wie capture2.capture), Report
+    'ok' wie bisher, pending schliessen, getippte Daten nicht stehen lassen.
+    Scheitert der Export, bleibt die pending offen — der Viewer-Pfad kann
+    fertig werden, und ein 'ok' ohne frische session.json waere eine Falsaussage."""
+    global _pending
+    try:
+        cookies = cap.get_all_cookies(ws)
+        write_session_json(cookies)
+        report_status("ok")
+    except Exception:
+        return "challenge"
+    _pending = None
+    return "ok"
+
+
+def _finish_bad_password(ws):
+    """Pending schliessen, Seite auf about:blank (das getippte Passwort bleibt
+    nicht stehen); ein neuer Versuch braucht E-Mail+Passwort von der App."""
+    global _pending
+    _pending = None
+    try:
+        ws.call("Page.navigate", {"url": "about:blank"})
+    except Exception:
+        pass
+    return "bad_password"
+
+
+def _dispatch_terminal(ws, st):
+    """Eine Terminal-Erkenntnis in die Auto-Antwort uebersetzen."""
+    if st == "success":
+        return _finish_ok(ws)
+    if st == "bad_password":
+        return _finish_bad_password(ws)
+    if st == "otp":
+        _open_pending("otp")
+        return "otp_needed"
+    # challenge und alles Unklare: pending bleibt offen und viewer-bar —
+    # die App kann nahtlos ins Fenster wechseln (Viewer nutzt denselben Target).
+    _open_pending("challenge")
+    return "challenge"
+
+
+def _run_login_flow(email, password):
+    global _pending
+    _pending = None
+    ws = _attach_ws(navigate=True)
+    try:
+        st = _wait_for(ws, ("email", "password", "otp", "success", "bad_password", "challenge"), 12)
+        if st == "email":
+            cap.ev(ws, cap.JS_FILL % ("null", json.dumps(email)))
+            time.sleep(0.6)
+            cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next"))
+            st = _wait_for(ws, ("password", "otp", "success", "bad_password", "challenge"), 12)
+        if st not in ("password", "otp", "success", "bad_password", "challenge"):
+            return _dispatch_terminal(ws, "challenge")  # timeout/unklar: manuell weiter
+        if st == "password":
+            # Vorgabe: Input.insertText ERST nach dem Klick aufs Feld — sonst
+            # landet der Text nirgends. Kein Skript-Lesen am Passwortfeld.
+            c = cap.ev(ws, JS_FIELD_CENTER % json.dumps('input[type="password"]'))
+            if isinstance(c, dict) and "x" in c:
+                _click_xy(ws, c["x"], c["y"])
+                time.sleep(0.15)
+                ws.call("Input.insertText", {"text": password})
+            else:
+                cap.ev(ws, cap.JS_FILL % (json.dumps('input[type="password"]'), json.dumps(password)))
+            time.sleep(0.6)
+            cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next|anmelden|einloggen"))
+            st = _wait_for(ws, TERMINALS, 12)
+        return _dispatch_terminal(ws, st if st in TERMINALS else "challenge")
+    finally:
+        try:
+            ws.s.close()
+        except Exception:
+            pass
+
+
+def _run_code_flow(code):
+    ws = _attach_ws(navigate=False)  # die Seite steht auf OTP — nicht wegnavigieren
+    try:
+        dom = _probe(ws)
+        st = classify_page(dom.get("url") or "", dom)
+        if st in ("success", "bad_password", "challenge"):
+            return _dispatch_terminal(ws, st)
+        c = cap.ev(ws, JS_CODE_CENTER)
+        if not isinstance(c, dict) or "x" not in c:
+            _open_pending("otp")
+            return "bad_code"  # kein Feld: code erneut erlaubt
+        _click_xy(ws, c["x"], c["y"])
+        time.sleep(0.15)
+        ws.call("Input.insertText", {"text": code})
+        time.sleep(0.6)
+        cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next"))
+        st = _wait_for(ws, TERMINALS, 12)
+        if st == "success":
+            return _finish_ok(ws)
+        if st in ("bad_password", "challenge"):
+            return _dispatch_terminal(ws, st)
+        # OTP-Seite bleibt stehen (oder nichts Neues): falsch/zu frueh — Feld
+        # leer zurueck, code ist erneut erlaubt (pending bleibt auf 'otp').
+        cap.ev(ws, JS_CODE_CLEAR)
+        _open_pending("otp")
+        return "bad_code"
+    finally:
+        try:
+            ws.s.close()
+        except Exception:
+            pass
+
+
+def auto_login(email, password, code):
+    """Ein Auto-Login-Schritt (unter der Auto-Lock, damit nie zwei Fluesse am
+    selben Target tippen). Gibt zurueck: ok | otp_needed | bad_code |
+    bad_password | challenge | no_pending. NIE Passwoerter oder Codes."""
+    with _auto_lock:
+        global _pending
+        if _pending is not None and time.time() > _pending["expiry"]:
+            _pending = None
+        if code is not None and email is None:
+            if _pending is None:
+                return "no_pending"
+            return _run_code_flow(code)
+        return _run_login_flow(email, password)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -473,8 +826,11 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         t = (urllib.parse.parse_qs(u.query).get("t") or [""])[0]
         if u.path == "/health":
-            return self._reply(200, json.dumps(
-                {"ok": True, "session": active_session() is not None}).encode())
+            return self._reply(200, json.dumps({
+                "ok": True,
+                "session": active_session() is not None,
+                "pending": pending_state(),
+            }).encode())
         if u.path in ("/login/view", "/login/stream"):
             sess = active_session()
             if not (sess and sess.matches(t)):
@@ -542,6 +898,37 @@ class Handler(BaseHTTPRequestHandler):
                 return self._reply(401, json.dumps({"error": "unauthorized"}).encode())
             cancel_session()
             return self._reply(200, json.dumps({"ok": True}).encode())
+        if u.path == "/login/auto":
+            if not self._authed():
+                return self._reply(401, json.dumps({"error": "unauthorized"}).encode())
+            body = self._json_in()
+            if not isinstance(body, dict):
+                return self._reply(400, json.dumps({"error": "bad_body"}).encode())
+            email = body.get("email")
+            password = body.get("password")
+            code = body.get("code")
+            # Validierung vor jedem Zugriff: Form/laenge, NIE der Inhalt. Ein
+            # Code-Feld wird erst im Flow angefasst; Fehlermeldungen tragen hier
+            # nur die Feldbezeichnung.
+            if email is not None and not (isinstance(email, str) and EMAIL_RE.match(email)):
+                return self._reply(400, json.dumps({"error": "bad_email"}).encode())
+            if password is not None and not (isinstance(password, str) and 0 < len(password) <= 300):
+                return self._reply(400, json.dumps({"error": "bad_password_field"}).encode())
+            if code is not None and not (isinstance(code, str) and CODE_RE.match(code)):
+                return self._reply(400, json.dumps({"error": "bad_code_field"}).encode())
+            try:
+                if code is not None and email is None and password is None:
+                    result = auto_login(None, None, code)
+                elif email is not None and password is not None:
+                    result = auto_login(email, password, None)
+                else:
+                    return self._reply(400, json.dumps({"error": "bad_body"}).encode())
+            except Exception:
+                # Kein Grundtext hierher — er koennte Seiten-URLs tragen; die
+                # Art steht im Log (Methode und Pfad ohne Query), Daten nie.
+                sys.stderr.write("login/auto:FLOW fehlgeschlagen\n")
+                return self._reply(500, json.dumps({"error": "auto_failed"}).encode())
+            return self._reply(200, json.dumps({"result": result}).encode())
         if u.path == "/login/input":
             t = (urllib.parse.parse_qs(u.query).get("t") or [""])[0]
             sess = active_session()

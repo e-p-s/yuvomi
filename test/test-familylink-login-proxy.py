@@ -74,6 +74,76 @@ check("Token-Regel akzeptiert 64 hex", bool(flp.TOKEN_RE.match("0" * 64)))
 check("Token-Regel lehnt kurz ab", not flp.TOKEN_RE.match("deadbeef"))
 check("Token-Regel lehnt Nicht-hex ab", not flp.TOKEN_RE.match("z" * 64))
 
+# ════════════════════════════════════════════════════════════════════════════
+# Zustands-Erkennung des Auto-Logins (classify_page — rein, ohne Chromium)
+# ════════════════════════════════════════════════════════════════════════════
+
+SIGNIN = "https://accounts.google.com/signin/challenge/sl/password"
+
+# Erfolg: Family-Link-App erreicht und nicht mehr auf accounts.google.
+check("Erfolg auf familylink",
+      flp.classify_page("https://familylink.google.com/", {"fields": []}) == "success")
+check("Erfolg auf families",
+      flp.classify_page("https://families.google.com/families", None) == "success")
+# Der continue-Parameter traegt familylink in jede Login-URL — kein Erfolg.
+check("continue-URL ist kein Erfolg",
+      flp.classify_page("https://accounts.google.com/AccountChooser?continue=https%3A%2F%2Ffamilylink.google.com%2F",
+                        {"fields": [{"type": "email"}]}) != "success")
+
+# Passwortfehler (beide Sprachen,Spec-Formulierungen).
+for msg in ("Falsches Passwort.", "Wrong password.", "Access denied"):
+    check("bad_password: %s" % msg,
+          flp.classify_page(SIGNIN, {"text": msg, "fields": [{"type": "password"}]}) == "bad_password")
+
+# Nicht automatisierbar: captcha / 'Ich bin kein Roboter' / Geraetebestaetigung.
+check("challenge captcha",
+      flp.classify_page(SIGNIN, {"text": "Bitte geben Sie die Zeichen im Captcha ein",
+                                 "fields": []}) == "challenge")
+check("challenge Roboter deutsch",
+      flp.classify_page(SIGNIN, {"text": "Ich bin kein Roboter", "fields": []}) == "challenge")
+check("challenge Geraetebestaetigung vor OTP-Text",
+      flp.classify_page(SIGNIN, {"text": "Bestätigen Sie, dass Sie sich anmelden möchten",
+                                 "fields": [{"type": "tel"}]}) == "challenge")
+# Kontenauswahl: erst ab zwei Konten eine Entscheidung fuer den Menschen.
+check("challenge Kontenauswahl (2 Konten)",
+      flp.classify_page("https://accounts.google.com/AccountChooser",
+                        {"accounts": 2, "fields": []}) == "challenge")
+check("Kontenauswahl mit einem Konto ist keine Entscheidung",
+      flp.classify_page("https://accounts.google.com/AccountChooser",
+                        {"accounts": 1, "fields": [{"type": "email"}]}) == "email")
+
+# OTP-Seite: Text (Bestaetigung/Two-step/Authenticator) und/oder Code-Feld.
+check("otp Bestaetigungscode",
+      flp.classify_page(SIGNIN, {"text": "Geben Sie zur Bestätigung Ihren Code ein",
+                                 "fields": [{"type": "tel", "aria": "eingabecode"}]}) == "otp")
+check("otp two-step",
+      flp.classify_page(SIGNIN, {"text": "Two-Step Verification", "fields": [{"type": "text"}]}) == "otp")
+check("otp Authenticator",
+      flp.classify_page(SIGNIN, {"text": "Authenticator-Code", "fields": []}) == "otp")
+
+# Feldformen: Passwortseite vor OTP-Text, E-Mailseite als email, sonst unknown.
+check("Feld password",
+      flp.classify_page(SIGNIN, {"fields": [{"type": "password"}]}) == "password")
+check("Feld email",
+      flp.classify_page(SIGNIN, {"fields": [{"type": "email", "aria": "e-mail"}]}) == "email")
+check("Feld tel mit email-aria bleibt email",
+      flp.classify_page(SIGNIN, {"fields": [{"type": "tel", "aria": "email"}]}) == "email")
+check("leere Seite unknown", flp.classify_page(SIGNIN, {"fields": []}) == "unknown")
+check("Felder als reine Typ-Strings akzeptiert",
+      flp.classify_page(SIGNIN, {"fields": ["password"]}) == "password")
+
+# Terminals sind die vier Auto-Antworten (der Poll endet spaetestens damit).
+check("Terminals vollständig",
+      set(flp.TERMINALS) == {"success", "otp", "bad_password", "challenge"})
+
+# pending-Zustand fuer /health: null | 'otp' | 'challenge' (TTLfaellig -> null).
+flp._pending = None
+check("pending ohne Sitzung null", flp.pending_state() is None)
+flp._open_pending("otp")
+check("pending otp", flp.pending_state() == "otp")
+flp._pending["expiry"] = time.time() - 1
+check("pending abgelaufen -> null", flp.pending_state() is None)
+
 if failures:
     print("FAIL:", "; ".join(failures))
     sys.exit(1)

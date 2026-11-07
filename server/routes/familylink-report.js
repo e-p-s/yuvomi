@@ -14,7 +14,7 @@
  */
 import express from 'express';
 import * as db from '../db.js';
-import { ingestFamilylinkReport, setStatus } from '../services/familylink.js';
+import { ingestFamilylinkReport, familylinkStatus, setStatus, notifyFamilylinkLoginNeeded } from '../services/familylink.js';
 import { hashDeviceToken } from '../services/media-time.js';
 
 export const familylinkReportRouter = express.Router();
@@ -40,7 +40,15 @@ familylinkReportRouter.post('/media-time/familylink/report', (req, res) => {
       if (body.status !== 'ok' && body.status !== 'login_noetig') {
         return res.status(400).json({ error: 'Report not accepted.', code: 400, reason: 'media_time_bad_request' });
       }
+      const prev = familylinkStatus(d);
       setStatus(d, body.status);
+      // Der Wechsel ok -> login_noetig ist der Moment, in dem die Eltern etwas
+      // tun koennen (fern anmelden) — genau dann geht die Meldung raus, nicht
+      // bei jedem Follow-up-Lauf im already-broken-Zustand. Fire and forget:
+      // ein hanger Kanal darf den Report des Sammlers nicht aufhalten.
+      if (prev === 'ok' && body.status === 'login_noetig') {
+        notifyFamilylinkLoginNeeded(d).catch(() => { /* Meldung ist Bonus */ });
+      }
       return res.json({ data: { status: body.status } });
     }
     const r = ingestFamilylinkReport(d, req.body);

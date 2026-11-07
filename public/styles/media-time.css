@@ -688,6 +688,32 @@ button.mt-budget-chip:hover {
   color: var(--color-text-secondary);
 }
 
+/* Klarstellungs-Satz im Challenge-Rueckfall: eine Zeile, nuechtern wie die
+ * Statuszeile selbst - die Worte tragen es, kein Kasten drumherum. */
+.mt-fl-status__note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Zugangsdaten-Formular im Statusblock: der Kanon der Seite (form-group,
+ * label, input) in der Spalte des Blocks; die Eingaben sind blockfull,
+ * damit 360px-Seiten nie seitlich scrollen. */
+.mt-fl-form {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-3);
+}
+
+.mt-fl-form__intro {
+  margin: 0 0 var(--space-2);
+}
+
+/* Experten-Details: ganz unten in der Gruppe, offenbart nur von Hand. */
+.mt-fl-expert {
+  margin-top: var(--space-4);
+}
+
 /* Fernlogin-CTA: die erste Handlung im Warnzustand, ueber dem Schritt-Toggle;
  * der Knopf traegt den geteilten Fokusring der btn-Klassen selbst. */
 .mt-fl-login {

@@ -4058,6 +4058,7 @@ export const schemas = {
             enforcement: mediaTimeProperties.enforcement,
             familylink_ingest_enabled: { type: 'boolean', description: 'True when the five-minute family link ingest runs on this household.' },
             familylink_status: { type: ['string', 'null'], enum: ['ok', 'login_noetig', null], description: 'Last collector outcome; null before the first run.' },
+            familylink_email: { type: ['string', 'null'], description: 'Kontoadresse des letzten erfolgreichen Auto-Logins (Vorbelegung der App); null, bevor je ein Auto-Login gelang. Ein Passwort wird nie gespeichert.' },
             familylink_status_at: { type: ['string', 'null'], description: 'When the collector status was last set (ISO instant); null before the first run.' },
             familylink_last_report_at: { type: ['string', 'null'], description: 'Newest fetched_at of a collected family link day row (the last real report); null when nothing was ever collected - a login_noetig status alone does not move it.' },
           },
@@ -4125,6 +4126,30 @@ export const schemas = {
         MediaTimeFamilylinkLoginSessionResponse: {
           type: 'object', required: ['data'],
           properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkLoginSessionData' } },
+        },
+        MediaTimeFamilylinkLoginInput: {
+          description: 'Zwei Formen, eine Route: { email, password } startet einen Auto-Login-Versuch (der Sammler\n'
+            + 'fuellt das Google-Formular selbst), { code } loest eine offene pending-Sitzung auf der OTP-Seite auf.\n'
+            + 'Niemals gemischt; das Passwort verlaesst den Server nur als Request an den Collector.',
+          type: 'object',
+          properties: {
+            email: { type: 'string', maxLength: 320, description: 'Google-Kontoadresse des Familienverwalters.' },
+            password: { type: 'string', minLength: 1, maxLength: 300, writeOnly: true, description: 'Nur Eingabe - erscheint in keiner Antwort und wird nie gespeichert.' },
+            code: { type: 'string', pattern: '^[0-9A-Za-z .-]{4,16}$', description: 'OTP-Code fuer die offene pending-Sitzung.' },
+          },
+        },
+        MediaTimeFamilylinkLoginData: {
+          type: 'object',
+          required: ['state'],
+          properties: {
+            state: { type: 'string', enum: ['ok', 'otp_needed', 'bad_code', 'challenge'], description: 'ok: anmeldet und Cookies frisch. otp_needed: die App fragt den Code ab (pending offen, 10 Minuten). bad_code: Code war falsch, erneut erlaubt. challenge: nicht automatisierbar - die Antwort traegt den Viewer-Pfad.' },
+            viewer_url: { type: ['string', 'null'], description: 'Nur bei state challenge: Einmal-Viewer-Seite des Collectors (dieselbe Sitzung wie POST /familylink/login-session).' },
+            expires_at: { type: ['string', 'null'], description: 'Nur bei state challenge: ISO-Moment des Viewer-Ablaufs.' },
+          },
+        },
+        MediaTimeFamilylinkLoginResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkLoginData' } },
         },
         MediaTimeFamilylinkDay: {
           type: 'object',
