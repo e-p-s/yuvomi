@@ -457,6 +457,15 @@ def _wait_for(ws, wanted, timeout, masks=()):
         time.sleep(0.8)
 
 
+def _press(ws, name):
+    """Eine der drei hinterlegten Tasten (Enter/Backspace/Tab) echt druecken."""
+    k = KEYS[name]
+    ws.call("Input.dispatchKeyEvent", {"type": "keyDown", **{x: k[x] for x in k if x != "text"}})
+    if "text" in k:
+        ws.call("Input.dispatchKeyEvent", {"type": "keyDown", "text": k["text"], "key": k["key"], "code": k["code"]})
+    ws.call("Input.dispatchKeyEvent", {"type": "keyUp", "key": k["key"], "code": k["code"]})
+
+
 def _click_xy(ws, x, y):
     base = {"x": int(x), "y": int(y), "button": "left", "clickCount": 1}
     ws.call("Input.dispatchMouseEvent", dict(base, type="mousePressed"))
@@ -498,6 +507,14 @@ def _dispatch_terminal(ws, st):
     if st == "bad_password":
         return _finish_bad_password(ws)
     if st == "otp":
+        # "Get a code to sign in" liefert den Code oft erst nach einem Klick
+        # ("Send"/"An Ihr Handy senden"/"Weiter") — ohne ihn kaeme nichts am
+        # Handy an. Fehlender Knopf ist ungefaehrlich (kein Treffer, kein Klick).
+        try:
+            cap.ev(ws, cap.JS_CLICK % json.dumps("senden|send|an ihr handy|sms|text|weiter|next"))
+        except Exception:
+            pass
+        time.sleep(0.5)
         _open_pending("otp")
         return "otp_needed"
     # challenge und alles Unklare: pending bleibt offen und viewer-bar —
@@ -561,7 +578,19 @@ def _run_login_flow(email, password):
                 cap.ev(ws, cap.JS_FILL % (json.dumps('input[type="password"]'), json.dumps(password)))
             time.sleep(0.6)
             cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next|anmelden|einloggen"))
-            st = _await_prompt(ws, _wait_for(ws, TERMINALS + ("prompt",), 12, masks), masks)
+            # Googles Formular reagiert nicht immer auf den Klick allein — ein
+            # Enter ins Feld ist derselbe Absender (13:32-Befund: Seite blieb
+            # nach Klick stehen). Und die SPA braucht gern mal >12s.
+            st = _wait_for(ws, TERMINALS + ("prompt",), 3, masks)
+            if st not in TERMINALS and st != "prompt":
+                c = cap.ev(ws, JS_FIELD_CENTER % json.dumps('input[type="password"]'))
+                if isinstance(c, dict) and "x" in c:
+                    _click_xy(ws, c["x"], c["y"])
+                    time.sleep(0.1)
+                _press(ws, "Enter")
+                st = _await_prompt(ws, _wait_for(ws, TERMINALS + ("prompt",), 20, masks), masks)
+            else:
+                st = _await_prompt(ws, st, masks)
         return _dispatch_terminal(ws, st if st in TERMINALS else "challenge")
     finally:
         try:
