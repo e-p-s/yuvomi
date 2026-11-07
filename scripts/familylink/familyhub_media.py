@@ -294,15 +294,18 @@ def parse_usage(data):
 def report(as_json=False, force_learn=False):
     # Browser ist Chance, nicht Voraussetzung: ohne ihn arbeiten session.json
     # (sid + Cookies) und die vorhandenen Vorlagen weiter (Cron-tauglich).
+    # FAMILYHUB_NO_BROWSER=1 (Push-Pfad) verhindert zusaetzlich, dass ein
+    # Collector-Lauf nur fuer Apps einen ganzen Browser hochzieht.
     ws = None
     sid = None
-    try:
-        t, ws = get_browser()
-        sidjar = {c["name"]: c["value"] for c in cap.get_all_cookies(ws)
-                  if c["domain"] == ".google.com"}
-        sid = sidjar.get("SAPISID")
-    except Exception:
-        ws = None
+    if not os.environ.get("FAMILYHUB_NO_BROWSER"):
+        try:
+            t, ws = get_browser()
+            sidjar = {c["name"]: c["value"] for c in cap.get_all_cookies(ws)
+                      if c["domain"] == ".google.com"}
+            sid = sidjar.get("SAPISID")
+        except Exception:
+            ws = None
     if not sid:
         sid = session_sid()
     if not sid:
@@ -344,4 +347,7 @@ def report(as_json=False, force_learn=False):
 
 if __name__ == "__main__":
     r = report("--json" in sys.argv, "--learn" in sys.argv)
-    print(json.dumps(r, indent=1, ensure_ascii=False)[:6000])
+    # --json liefert volles JSON (Maschinen lesen mit); die 6000-Zeichen-
+    # Kuerzung war nur fuer den Menschen am Terminal.
+    print(json.dumps(r, indent=1, ensure_ascii=False)
+          if "--json" in sys.argv else json.dumps(r, ensure_ascii=False)[:6000])

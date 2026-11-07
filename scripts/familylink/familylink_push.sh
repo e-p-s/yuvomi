@@ -39,6 +39,9 @@ ERR="$(mktemp)"
 trap 'rm -f "$OUT" "$ERR"' EXIT
 
 if python3 "$DIR/familyhub_screen.py" --json > "$OUT" 2> "$ERR"; then
+  # Apps (A2) anhaengen, wenn der Media-Teil ohne Browser liefert — stiller
+  # Zusatz: ohne Apps geht der Report unveraendert raus.
+  python3 "$DIR/familylink_apps_merge.py" "$OUT" 2>/dev/null || true
   post_json "$OUT"
 else
   rc=$?
