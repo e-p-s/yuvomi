@@ -22,7 +22,7 @@ import rateLimit from 'express-rate-limit';
 
 import * as db from '../db.js';
 import { createLogger } from '../logger.js';
-import { familylinkStatus, familylinkUsage, runFamilylinkIngest, setStatus, FAMILYLINK_STATUS_KEYS } from '../services/familylink.js';
+import { familylinkStatus, familylinkUsage, familylinkAppUsage, runFamilylinkIngest, setStatus, FAMILYLINK_STATUS_KEYS } from '../services/familylink.js';
 import { startFamilylinkLoginSession, postFamilylinkLogin } from '../services/familylink-login.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
 import {
@@ -1616,6 +1616,25 @@ router.get('/familylink/usage', (req, res) => {
     const actor = actingUser(req);
     if (!actor) {
       return res.status(401).json({ error: 'Authentication required.', code: 401, reason: 'media_time_unauthenticated' });
+    }
+    /* App-Liste eines Tages (A2, Eltern/Admin): dieselbe Route, andere Form —
+     * die Geraete-Istzeit oben bleibt fuer das Bestands-Frontend unveraendert.
+     * Kein user_id: alle gesammelten Kinder; keine Kind-Namen (Spec). */
+    if (req.query.kind === 'apps') {
+      if (!isParentOrAdmin(req)) {
+        return res.status(403).json({ error: 'Only parents can read app usage.', code: 403, reason: 'media_time_forbidden' });
+      }
+      const appsDayRaw = req.query.day;
+      let appsDay;
+      if (appsDayRaw === undefined || appsDayRaw === '') {
+        appsDay = mediaTimeDayKey(d, new Date());
+      } else {
+        appsDay = String(appsDayRaw);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(appsDay)) {
+          return res.status(400).json({ error: 'day must be YYYY-MM-DD.', code: 400, reason: 'media_time_bad_request' });
+        }
+      }
+      return res.json({ data: { day: appsDay, items: familylinkAppUsage(d, appsDay) } });
     }
     const requested = req.query.user_id !== undefined ? toInt(req.query.user_id) : actor;
     if (!Number.isInteger(requested) || requested <= 0) {

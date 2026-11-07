@@ -552,6 +552,42 @@ function setStatusOk() {
   `).run();
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// GET /familylink/usage?kind=apps (A2, App-Liste des Tages)
+// ════════════════════════════════════════════════════════════════════════════
+
+test('GET /familylink/usage?kind=apps - Eltern sehen die Liste, Kind nicht (403), Tag-Format 400', async () => {
+  db.prepare(`
+    INSERT INTO familylink_children (google_uid, yuvomi_user_id, display_name, enabled)
+    VALUES (?, ?, NULL, 1)
+    ON CONFLICT(google_uid) DO UPDATE SET yuvomi_user_id = excluded.yuvomi_user_id
+  `).run(UID, kidA.id);
+  db.prepare(`
+    INSERT INTO familylink_app_usage (day, google_uid, pkg, name, minutes, fetched_at) VALUES
+      ('2026-11-06', ?, 'com.small', 'Small', 4, '2026-11-06T10:00:00Z'),
+      ('2026-11-06', ?, 'com.big', 'Big', 90, '2026-11-06T10:00:00Z')
+  `).run(UID, UID);
+  const ok = await call('GET', '/familylink/usage?kind=apps&day=2026-11-06', { actor: DAD });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.data.day, '2026-11-06');
+  assert.deepEqual(ok.body.data.items.map((i) => i.pkg), ['com.big', 'com.small'], 'minutes DESC');
+  assert.equal(ok.body.data.items[0].yuvomi_user_id, kidA.id);
+  assert.equal(ok.body.data.items[0].google_uid, UID);
+  const denied = await call('GET', '/familylink/usage?kind=apps', { actor: kidB });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.reason, 'media_time_forbidden');
+  const badDay = await call('GET', '/familylink/usage?kind=apps&day=06.11.', { actor: DAD });
+  assert.equal(badDay.status, 400);
+  assert.equal(badDay.body.reason, 'media_time_bad_request');
+  const today = await call('GET', '/familylink/usage?kind=apps', { actor: DAD });
+  assert.equal(today.status, 200);
+  assert.match(today.body.data.day, /^\d{4}-\d{2}-\d{2}$/, 'ohne Tag: das heutige Datum');
+  // Die Bestandsform (Gerate-Aggregat) bleibt unverandert erreichbar:
+  const legacy = await call('GET', `/familylink/usage?user_id=${kidA.id}`, { actor: DAD });
+  assert.equal(legacy.status, 200);
+  assert.ok('devices' in legacy.body.data, 'usage ohne kind liefert wie bisher das Geraete-Bild');
+});
+
 // Aufraeumen fuer folgende Suites (Muster oben).
 flLogin.__setFetchImpl(null);
 flLogin.__resetLoginSession();

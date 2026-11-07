@@ -6,6 +6,9 @@
  * nie fernsperren"). Der Collector (scripts/familylink/familyhub_screen.py)
  * liefert pro Kind und Geraet Limit/Verbrauch/Rest/Downtime; dieser Dienst
  * upsertet den Tagesstand nach `familylink_daily` und haelt den Status.
+ * Seit A2 liefert der Collector zusaetzlich pro Kind eine App-Liste
+ * (`children[].apps`, drei Formen: Paar-Array, Objekt-Array, Objekt-Map) -
+ * sie kommt nach `familylink_app_usage` und zaehlt nicht in `written`.
  *
  * Grundregeln (Spec, Datenschutz):
  * - Nur lesen/abfragen - ein Rueckschreibpfad zu Google existiert hier nicht.
@@ -91,6 +94,47 @@ function toNum(v) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+/** Minuten einer App-Zeile: endliche Zahl >= 0 (Zahlen-String erlaubt), sonst null. */
+function toAppMinutes(v) {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Anzeige-Name: String (<= 200) oder NULL. */
+function toAppName(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s === '' ? null : s.slice(0, 200);
+}
+
+/**
+ * report.children[].apps in eine Liste {pkg, name, minutes} normalisieren.
+ * Der Collector darf drei Formen liefern: Paar-Array [pkg, {name, minutes}],
+ * Objekt-Array {pkg, name, minutes} oder Objekt-Map pkg -> {name, minutes}.
+ * Unsaubere Eintraege (pkg kein String 1..200, minutes keine endliche Zahl
+ * >= 0) fallen hier still raus - der Ingest schreibt nur tragfaehige Zeilen.
+ */
+export function normalizeAppEntries(apps) {
+  const out = [];
+  const push = (pkgRaw, val) => {
+    if (typeof pkgRaw !== 'string') return;
+    const pkg = pkgRaw.trim();
+    if (pkg === '' || pkg.length > 200) return;
+    const minutes = toAppMinutes(val?.minutes);
+    if (minutes == null) return;
+    out.push({ pkg, name: toAppName(val?.name), minutes });
+  };
+  if (Array.isArray(apps)) {
+    for (const entry of apps) {
+      if (Array.isArray(entry)) push(entry[0], entry[1]);
+      else if (entry && typeof entry === 'object') push(entry.pkg, entry);
+    }
+  } else if (apps && typeof apps === 'object') {
+    for (const [pkg, val] of Object.entries(apps)) push(pkg, val);
+  }
+  return out;
+}
+
 /**
  * Ein Collector-Report (JSON von familyhub_screen.py --json) in
  * familylink_daily. Nur zugeordnete Kinder (familylink_children, enabled) und
@@ -98,7 +142,7 @@ function toNum(v) {
  * nicht zugeordnete bleiben ungefragt draussen. Kinder ohne Geratezeile
  * (Report-Fehler 'template nicht abhoerbar') ueberspringt der Lauf still;
  * sie sind kein 0er-Snapshot, sondern keine Aussage.
- * @returns {{written: number, childrenSeen: number, errors: number}}
+ * @returns {{written: number, usage_written: number, childrenSeen: number, errors: number}}
  */
 export function ingestFamilylinkReport(d, report) {
   if (!report || typeof report !== 'object' || !Array.isArray(report.children)) {
@@ -120,10 +164,21 @@ export function ingestFamilylinkReport(d, report) {
       downtime = excluded.downtime,
       fetched_at = excluded.fetched_at
   `);
+  // A2: App-Ebene (familylink_app_usage). eigener Zaehler - die App-Zeilen
+  // zaehlen NICHT in written (der bleibt geraete-bezogen, wie bisher).
+  const upsertApp = d.prepare(`
+    INSERT INTO familylink_app_usage (day, google_uid, pkg, name, minutes, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(day, google_uid, pkg) DO UPDATE SET
+      name = excluded.name,
+      minutes = excluded.minutes,
+      fetched_at = excluded.fetched_at
+  `);
   const childStmt = d.prepare(
     'SELECT yuvomi_user_id FROM familylink_children WHERE google_uid = ? AND enabled = 1'
   );
   let written = 0;
+  let usageWritten = 0;
   let errors = 0;
   for (const child of report.children) {
     if (!child || child.error) { errors += 1; continue; }
@@ -145,8 +200,14 @@ export function ingestFamilylinkReport(d, report) {
         child.downtime != null ? String(child.downtime) : null, fetchedAt);
       written += 1;
     }
+    // Apps (A2): nur bei zugeordneten Kindern, Form egal (Paar-Array,
+    // Objekt-Array, Objekt-Map) - unsaubere Eintraege verwirft die Norm.
+    for (const app of normalizeAppEntries(child.apps)) {
+      upsertApp.run(day, uid, app.pkg, app.name, app.minutes, fetchedAt);
+      usageWritten += 1;
+    }
   }
-  return { written, childrenSeen: report.children.length, errors };
+  return { written, usage_written: usageWritten, childrenSeen: report.children.length, errors };
 }
 
 /**
@@ -225,6 +286,32 @@ function runCollectorProcess(command) {
       try { resolve(JSON.parse(out)); } catch (e) { reject(e); }
     });
   });
+}
+
+/**
+ * Die App-Liste eines Tages (lesende Route, A2). Alle gesammelten Zeilen,
+ * sortiert minutes DESC, Limit 100. yuvomi_user_id ueber die aktive Kind-
+ * Zuordnung (enabled=1) - Kinder ohne Zuordnung bleiben mit NULL sichtbar
+ * (der Report ist die Auskunft, die Zuordnung ist Eltern-Entscheidung).
+ * Spec: keine Kind-Namen - nur uid + user-id.
+ */
+export function familylinkAppUsage(d, day) {
+  const rows = d.prepare(`
+    SELECT a.google_uid, c.yuvomi_user_id, a.pkg, a.name, a.minutes
+      FROM familylink_app_usage a
+      LEFT JOIN familylink_children c
+        ON c.google_uid = a.google_uid AND c.enabled = 1
+     WHERE a.day = ?
+     ORDER BY a.minutes DESC
+     LIMIT 100
+  `).all(day);
+  return rows.map((r) => ({
+    google_uid: r.google_uid,
+    yuvomi_user_id: r.yuvomi_user_id ?? null,
+    pkg: r.pkg,
+    name: r.name ?? null,
+    minutes: r.minutes,
+  }));
 }
 
 /**

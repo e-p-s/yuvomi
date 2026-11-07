@@ -4189,6 +4189,29 @@ export const schemas = {
           type: 'object', required: ['data'],
           properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkUsageData' } },
         },
+        MediaTimeFamilylinkAppUsageItem: {
+          type: 'object',
+          required: ['google_uid', 'pkg', 'minutes'],
+          properties: {
+            google_uid: { type: 'string', description: 'Pseudonymous Google account id (digit string from the collector) - never a child name.' },
+            yuvomi_user_id: { type: ['integer', 'null'], description: 'The mapped child (enabled mapping); null without one.' },
+            pkg: { type: 'string', minLength: 1, maxLength: 200, description: 'App package name.' },
+            name: { type: ['string', 'null'], maxLength: 200, description: 'Display name as reported, or null.' },
+            minutes: { type: 'number', minimum: 0 },
+          },
+        },
+        MediaTimeFamilylinkAppUsageData: {
+          type: 'object',
+          required: ['day', 'items'],
+          properties: {
+            day: { type: 'string', description: 'Day of the list (YYYY-MM-DD).' },
+            items: { type: 'array', maxItems: 100, items: { $ref: '#/components/schemas/MediaTimeFamilylinkAppUsageItem' }, description: 'Collected app rows of the day, minutes descending, at most 100.' },
+          },
+        },
+        MediaTimeFamilylinkAppUsageResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkAppUsageData' } },
+        },
         MediaTimeFamilylinkMappingDevice: {
           type: 'object',
           required: ['google_device_id'],

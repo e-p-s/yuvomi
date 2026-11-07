@@ -480,16 +480,24 @@ export function mediaTimePaths() {
         summary: 'Real screen time collected from Google Family Link (read only, never enforced back)',
         tag: 'MediaTime',
         params: [
-          { name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'A child; parents/admin only. Omitted: the caller themselves.' },
-          { name: 'day', in: 'query', required: false, schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, description: 'Day of the aggregate (YYYY-MM-DD). Omitted: today.' },
+          { name: 'user_id', in: 'query', required: false, schema: { type: 'integer' }, description: 'A child; parents/admin only. Omitted: the caller themselves. Ignored when kind=apps.' },
+          { name: 'day', in: 'query', required: false, schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, description: 'Day of the aggregate (YYYY-MM-DD). Omitted or empty: today.' },
+          { name: 'kind', in: 'query', required: false, schema: { type: 'string', enum: ['apps'] }, description: "'apps': the collected per-app list of the day instead of the device aggregate (parents/admin only, no user_id)." },
         ],
         description: 'Google-Family-Link-Istzeit fuer einen Tag. mapped=false ohne Zuordnung; status login_noetig, wenn der Collector\n'
           + 'keine Sitzung hat - dann gibt es KEINE Null-Snapshots, sondern den Hinweis. Die verbrauchten Minuten\n'
-          + 'zaehlen gegen das Tageskontingent des Kindes (Ersatz, nicht Zusatz, pro Geraet).',
+          + 'zaehlen gegen das Tageskontingent des Kindes (Ersatz, nicht Zusatz, pro Geraet).\n'
+          + 'kind=apps (A2, Eltern/Admin): die App-Liste des Tages (Top 100, minutes DESC) - nur Paket, Minuten,\n'
+          + 'Pseudonym-uid und zugeordnete user-id, nie Kind-Namen.',
         responses: {
           200: {
-            description: 'Family link usage for the day',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkUsageResponse' } } },
+            description: 'Family link usage for the day (device aggregate, or the app list when kind=apps)',
+            content: { 'application/json': { schema: {
+              oneOf: [
+                { $ref: '#/components/schemas/MediaTimeFamilylinkUsageResponse' },
+                { $ref: '#/components/schemas/MediaTimeFamilylinkAppUsageResponse' },
+              ],
+            } } },
           },
           400: { $ref: '#/components/responses/BadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
@@ -686,7 +694,7 @@ const CASE_REASONS = {
   },
   '/api/v1/media-time/familylink/usage': {
     get: REASON_BAD + ' (400, `user_id` or `day` is malformed), `media_time_unauthenticated` (401, no session), '
-      + '`media_time_forbidden` (403, reading another child without being a parent)',
+      + '`media_time_forbidden` (403, reading another child or kind=apps without being a parent)',
   },
   '/api/v1/media-time/familylink/report': {
     post: REASON_BAD + ' (400, Report-Koerper wird von der Ingest-Funktion abgelehnt), `media_time_unauthenticated` (401, x-familylink-token fehlt oder passt nicht)',

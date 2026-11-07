@@ -12575,6 +12575,29 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 293,
+    description: 'family link: per-app daily usage (collector app lists) for media time',
+    // A2: der Collector liefert kuenftig pro Kind eine App-Liste (Paket,
+    // Anzeige-Name, Minuten). familylink_daily bleibt das Geraete-Aggregat;
+    // diese Tabelle traegt die App-Ebene (Tag/Kind/Paket, kein Content).
+    // Google-Namen der Kinder bleiben draussen - nur die Pseudonym-uid.
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS familylink_app_usage (
+          day         TEXT    NOT NULL,
+          google_uid  TEXT    NOT NULL,
+          pkg         TEXT    NOT NULL,
+          name        TEXT,
+          minutes     REAL    NOT NULL CHECK (minutes >= 0),
+          fetched_at  TEXT    NOT NULL,
+          PRIMARY KEY (day, google_uid, pkg)
+        );
+        CREATE INDEX IF NOT EXISTS idx_familylink_app_usage_day
+          ON familylink_app_usage(day, google_uid);
+      `);
+    },
+  },
 ];
 
 /**

@@ -289,3 +289,129 @@ test('migrateLegacyStatusKeys - existieren beide, gewinnt der neue; der alte wir
     'setStatus schreibt die eigene Marke, nicht den umgezogenen Altwert');
   fl.setStatus(db, 'ok'); // bekannter Endstand fuer die Suite
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// App-Nutzung (A2): children[].apps -> familylink_app_usage
+// ════════════════════════════════════════════════════════════════════════════
+
+const appDay = '2026-11-06';
+const appRows = (day) => db.prepare(
+  'SELECT * FROM familylink_app_usage WHERE day = ? ORDER BY pkg'
+).all(day);
+
+test('apps-Ingest (a) - Paar-Array [pkg, {name, minutes}]; usage zaehlt nicht in written', () => {
+  const r = fl.ingestFamilylinkReport(db, report(appDay, [
+    { userId: UID, devices: [], apps: [
+      ['com.example.game', { name: 'Game', minutes: 42.5 }],
+      ['com.example.video', { name: null, minutes: 10 }],
+    ] },
+  ]));
+  assert.equal(r.written, 0, 'keine Geraetezeile - written bleibt geraete-bezogen (Spec)');
+  assert.equal(r.usage_written, 2);
+  const rows = appRows(appDay);
+  assert.equal(rows.length, 2);
+  const game = rows.find((x) => x.pkg === 'com.example.game');
+  assert.equal(game.minutes, 42.5);
+  assert.equal(game.name, 'Game');
+  assert.equal(game.google_uid, UID);
+  assert.equal(rows.find((x) => x.pkg === 'com.example.video').name, null, 'name NULL ist erlaubt');
+});
+
+test('apps-Ingest (b) - Objekt-Map pkg -> {name, minutes}', () => {
+  const day = '2026-11-05';
+  const r = fl.ingestFamilylinkReport(db, report(day, [
+    { userId: UID, devices: [], apps: {
+      'com.a.map': { name: 'Map A', minutes: 5 },
+      'com.b.map': { minutes: '7' }, // Zahlen-String: robust normalisiert
+    } },
+  ]));
+  assert.equal(r.usage_written, 2);
+  const rows = appRows(day);
+  assert.equal(rows.length, 2);
+  assert.equal(rows.find((x) => x.pkg === 'com.b.map').minutes, 7);
+  assert.equal(rows.find((x) => x.pkg === 'com.b.map').name, null);
+});
+
+test('apps-Ingest (c) - unsaubere Eintraege werden verworfen (pkg leer/Nicht-String, minutes null/negativ)', () => {
+  const day = '2026-11-04';
+  const r = fl.ingestFamilylinkReport(db, report(day, [
+    { userId: UID, devices: [], apps: [
+      { pkg: 'ok.pkg', name: 'OK', minutes: 3 },
+      { pkg: '', minutes: 5 },               // pkg leer
+      { pkg: '   ', minutes: 5 },            // pkg nur Whitespace
+      { pkg: 123, minutes: 5 },              // pkg kein String
+      { pkg: 'null.min', minutes: null },    // minutes null (kein 0er-Snapshot)
+      { pkg: 'neg.min', minutes: -2 },       // minutes negativ
+      { pkg: 'str.min', minutes: 'abc' },    // minutes keine endliche Zahl
+      ['pair.pkg', { name: 'Pair', minutes: 1 }], // Mischung mit Paar-Form bleibt gueltig
+    ] },
+  ]));
+  assert.equal(r.usage_written, 2, 'nur die tragfaehigen Zeilen');
+  const pkgs = appRows(day).map((x) => x.pkg);
+  assert.deepEqual(pkgs, ['ok.pkg', 'pair.pkg']);
+});
+
+test('apps-Ingest (d) - Upsert ersetzt Minuten fuer gleiche (day, uid, pkg)', () => {
+  const before = fl.ingestFamilylinkReport(db, report(appDay, [
+    { userId: UID, devices: [], apps: [['com.example.game', { name: 'Game', minutes: 42.5 }]] },
+  ]));
+  assert.equal(before.usage_written, 1);
+  const first = db.prepare(
+    "SELECT * FROM familylink_app_usage WHERE day = ? AND pkg = 'com.example.game'"
+  ).get(appDay);
+  const again = fl.ingestFamilylinkReport(db, report(appDay, [
+    { userId: UID, devices: [], apps: [['com.example.game', { name: 'Game v2', minutes: 60 }]] },
+  ]));
+  assert.equal(again.usage_written, 1, 'der zweite Lauf zaehlt den Upsert erneut');
+  const rows = db.prepare(
+    "SELECT COUNT(*) AS n FROM familylink_app_usage WHERE day = ? AND pkg = 'com.example.game'"
+  ).get(appDay);
+  assert.equal(rows.n, 1, 'keine Doppelzeile (PK day, google_uid, pkg)');
+  const now = db.prepare(
+    "SELECT * FROM familylink_app_usage WHERE day = ? AND pkg = 'com.example.game'"
+  ).get(appDay);
+  assert.equal(now.minutes, 60, 'Minuten ersetzt');
+  assert.equal(now.name, 'Game v2');
+  assert.ok(String(now.fetched_at) >= String(first.fetched_at), 'fetched_at laeuft mit');
+});
+
+test('apps-Ingest - nicht zugeordnete Kinder schreiben auch keine App-Zeile', () => {
+  const day = '2026-11-03';
+  const r = fl.ingestFamilylinkReport(db, report(day, [
+    { userId: '7777777777', devices: [], apps: [['com.fremd', { minutes: 9 }]] },
+  ]));
+  assert.equal(r.usage_written, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM familylink_app_usage WHERE day = ?').get(day).n, 0);
+});
+
+test('familylinkAppUsage (e) - Route-Leselogik: sortiert minutes DESC, yuvomi_user_id via Zuordnung, sonst NULL', () => {
+  const day = '2026-11-02';
+  // Kind ohne Zuordnung (uid direkt eingefuegt) und ein deaktiviertes Kind.
+  const offChild = kid('FlAppDisabled');
+  mapChild(offChild, '6666660001');
+  db.prepare('UPDATE familylink_children SET enabled = 0 WHERE google_uid = ?').run('6666660001');
+  const mapped = db.prepare(
+    'SELECT yuvomi_user_id AS id FROM familylink_children WHERE google_uid = ?'
+  ).get(UID).id;
+  fl.ingestFamilylinkReport(db, report(day, [
+    { userId: UID, devices: [], apps: [
+      ['small.pkg', { name: 'Small', minutes: 4 }],
+      ['big.pkg', { name: 'Big', minutes: 90 }],
+    ] },
+  ]));
+  db.prepare(`
+    INSERT INTO familylink_app_usage (day, google_uid, pkg, name, minutes, fetched_at) VALUES
+      (?, '7777777777', 'orphan.pkg', NULL, 50, '2026-11-02T10:00:00Z'),
+      (?, '6666660001', 'off.pkg', 'Aus', 20, '2026-11-02T10:00:00Z')
+  `).run(day, day);
+  const items = fl.familylinkAppUsage(db, day);
+  assert.deepEqual(items.map((i) => i.pkg), ['big.pkg', 'orphan.pkg', 'off.pkg', 'small.pkg'],
+    'minutes DESC, alle gesammelten Zeilen (auch ohne aktive Zuordnung)');
+  assert.equal(items[0].yuvomi_user_id, mapped);
+  assert.equal(items[1].yuvomi_user_id, null, 'Kind ohne Zuordnung: NULL');
+  assert.equal(items[2].yuvomi_user_id, null, 'deaktivierte Zuordnung: NULL (enabled=1 Bedingung)');
+  assert.equal(items[3].name, 'Small');
+  assert.deepEqual(Object.keys(items[0]).sort(),
+    ['google_uid', 'minutes', 'name', 'pkg', 'yuvomi_user_id'],
+    'keine Kind-Namen im Datensatz (Spec): nur uid + user-id + App-Felder');
+});
