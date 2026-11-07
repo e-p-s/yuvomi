@@ -144,6 +144,15 @@ check("pending otp", flp.pending_state() == "otp")
 flp._pending["expiry"] = time.time() - 1
 check("pending abgelaufen -> null", flp.pending_state() is None)
 
+# Debug-Log-Sanititaet: Eingaben duerfen nie durchkommen (Switch ~/.familyhub/debug).
+check("mask entfernt E-Mail", "geheim@gmx" not in flp._mask("weiter mit geheim@gmx", ("geheim@gmx",)))
+check("probe_summary sanitisiert url/aria/text", "geheim@gmx" not in flp._probe_summary(
+    {"url": "https://accounts.google.com/x?e=geheim@gmx",
+     "fields": [{"type": "password", "aria": "E-Mail geheim@gmx"}],
+     "text": "Angemeldet als geheim@gmx", "accounts": 1},
+    ("geheim@gmx",)))
+check("probe_summary haelt Null-Sonde aus", isinstance(flp._probe_summary(None), str))
+
 if failures:
     print("FAIL:", "; ".join(failures))
     sys.exit(1)

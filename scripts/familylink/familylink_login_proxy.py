@@ -93,6 +93,10 @@ _spec.loader.exec_module(cap)
 
 LOGIN_SECRET_FILE = os.path.expanduser("~/.familyhub/login_secret")
 PUSH_TOKEN_FILE = os.path.expanduser("~/.familyhub/push_token")
+# Debug-Schalter: existiert die Datei ~/.familyhub/debug, protokolliert der
+# Auto-Login jeden Zustandswechsel (URL, Feldtypen, Konten, erster Textsatz —
+# E-Mail masked, Passwoerter/Codes werden NIE gedruckt). Aus = aus.
+DEBUG_FLAG = os.path.expanduser("~/.familyhub/debug")
 YUVOMI_URL = os.environ.get("YUVOMI_URL", "http://172.30.95.198:3000")
 REPORT_PATH = "/api/v1/media-time/familylink/report"
 HARD_MAX_TTL = 15 * 60  # harte Obergrenze einer Sitzung in Sekunden
@@ -119,6 +123,37 @@ def read_login_secret():
     except OSError:
         return None
     return secret or None
+
+
+def _debug_on():
+    """Debug-Schalter = Existenz der Datei ~/.familyhub/debug (an/aus ohne
+    Code-Aenderung; der Laeufer prueft bei jeder Zeile, ein Neustart ist
+    nicht noetig)."""
+    return os.path.exists(DEBUG_FLAG)
+
+
+def _mask(text, masks):
+    """Keine Eingaben im Log: jede in masks gegebene Zeichenkette (E-Mail,
+    Code) wird aus text entfernt. Passwoerter erreichen das Log prinzipbedingt
+    nie — sie werden nie als Text gehalten."""
+    out = str(text or "")
+    for m in masks:
+        if m and len(m) >= 3:
+            out = out.replace(m, "***")
+    return out
+
+
+def _probe_summary(dom, masks=()):
+    """Einzeilige, sanitisierte Zusammenfassung einer Sondenerkennung — der
+    Kern jeder Debug-Ausgabe und jeder Timeout-Meldung."""
+    d = dom if isinstance(dom, dict) else {}
+    types = sorted({(f.get("type") if isinstance(f, dict) else str(f)).lower()
+                    for f in (d.get("fields") or [])})
+    arias = sorted({_mask(f.get("aria") if isinstance(f, dict) else "", masks)
+                    for f in (d.get("fields") or []) if isinstance(f, dict) and f.get("aria")})
+    text = re.sub(r"\s+", " ", _mask(d.get("text") or "", masks))[:80]
+    return (f"url={_mask(d.get('url') or '', masks)[:90]} felder={types} "
+            f"aria={arias[:3]} konten={d.get('accounts')} text={text!r}")
 
 
 def bearer_ok(header_value, secret):
@@ -331,6 +366,7 @@ JS_CODE_CLEAR = """
 
 _auto_lock = threading.Lock()
 _pending = None  # {'state': 'otp'|'challenge', 'expiry': epoch} oder None
+_last_email = None  # nur als Mask fuer Logzeilen, nie Log-Inhalt
 
 
 def pending_state():
@@ -376,15 +412,35 @@ def _probe(ws):
     return dom if isinstance(dom, dict) else {}
 
 
-def _wait_for(ws, wanted, timeout):
-    """Poll (0.8s) bis ein gewuenschter Zustand erreicht ist; 'timeout' sonst."""
+def _dbg(msg):
+    """Debug-Zeile nur, wenn der Schalter (~/.familyhub/debug) gesetzt ist."""
+    if _debug_on():
+        print(f"[login-flow] {time.strftime('%H:%M:%S')} {msg}", flush=True)
+
+
+def _dbg_always(msg):
+    """Zeile, die auch ohne Schalter bleibt (seltene, sanitisierte Endmeldung)."""
+    print(f"[login-flow] {time.strftime('%H:%M:%S')} {msg}", flush=True)
+
+
+def _wait_for(ws, wanted, timeout, masks=()):
+    """Poll (0.8s) bis ein gewuenschter Zustand erreicht ist; 'timeout' sonst.
+    Mit Debug-Schalter wird jeder Wechsel protokolliert; ein Timeout druckt die
+    Sonde immer (sanisiert — masks enthaelt die Eingaben, die nicht erscheinen
+    dürfen). Das ist der Weg, warum ein Lauf stecken blieb, ohne dass man
+    Passwoerter loggen muss."""
     end = time.time() + timeout
+    last = None
     while True:
         dom = _probe(ws)
         st = classify_page(dom.get("url") or "", dom)
+        if st != last:
+            _dbg(f"Zustand {last} -> {st} | {_probe_summary(dom, masks)}")
+            last = st
         if st in wanted:
             return st
         if time.time() >= end:
+            _dbg_always(f"Zustands-Timeout nach {timeout}s | {_probe_summary(dom, masks)}")
             return "timeout"
         time.sleep(0.8)
 
@@ -441,15 +497,36 @@ def _dispatch_terminal(ws, st):
 def _run_login_flow(email, password):
     global _pending
     _pending = None
+    global _last_email
+    _last_email = email or None
+    masks = (email,)
+    _dbg(f"Auto-Login startet (Konto {_mask(email, masks)})")
     ws = _attach_ws(navigate=True)
     try:
-        st = _wait_for(ws, ("email", "password", "otp", "success", "bad_password", "challenge"), 12)
+        st = _wait_for(ws, ("email", "password", "otp", "success", "bad_password", "challenge"), 12, masks)
+        if st == "timeout":
+            # Haufigster Blindflug: das Profil ist bei Google noch angemeldet und
+            # die Seite zeigt die Kontenauswahl. Ein Konto -> wir klicken es und
+            # warten erneut; zwei oder mehr -> Entscheidung, die ein Mensch
+            # im Fenster trifft (challenge).
+            dom = _probe(ws)
+            url = dom.get("url") or ""
+            n = int(dom.get("accounts") or 0)
+            if "chooser" in url and n >= 1:
+                _dbg(f"Kontenauswahl mit {n} Konto(n)")
+                if n >= 2:
+                    return _dispatch_terminal(ws, "challenge")
+                c = cap.ev(ws, JS_FIELD_CENTER % json.dumps("[data-email]"))
+                if isinstance(c, dict) and "x" in c:
+                    _click_xy(ws, c["x"], c["y"])
+                    st = _wait_for(ws, ("email", "password", "otp", "success", "bad_password", "challenge"), 12, masks)
         if st == "email":
             cap.ev(ws, cap.JS_FILL % ("null", json.dumps(email)))
             time.sleep(0.6)
             cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next"))
-            st = _wait_for(ws, ("password", "otp", "success", "bad_password", "challenge"), 12)
+            st = _wait_for(ws, ("password", "otp", "success", "bad_password", "challenge"), 12, masks)
         if st not in ("password", "otp", "success", "bad_password", "challenge"):
+            _dbg_always(f"unklarer Zustand nach Vorlauf ({st}) — Viewer uebernimmt")
             return _dispatch_terminal(ws, "challenge")  # timeout/unklar: manuell weiter
         if st == "password":
             # Vorgabe: Input.insertText ERST nach dem Klick aufs Feld — sonst
@@ -463,7 +540,7 @@ def _run_login_flow(email, password):
                 cap.ev(ws, cap.JS_FILL % (json.dumps('input[type="password"]'), json.dumps(password)))
             time.sleep(0.6)
             cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next|anmelden|einloggen"))
-            st = _wait_for(ws, TERMINALS, 12)
+            st = _wait_for(ws, TERMINALS, 12, masks)
         return _dispatch_terminal(ws, st if st in TERMINALS else "challenge")
     finally:
         try:
@@ -473,10 +550,12 @@ def _run_login_flow(email, password):
 
 
 def _run_code_flow(code):
+    masks = (_last_email,)  # E-Mail taucht im Seitentext auf — nie ins Log
     ws = _attach_ws(navigate=False)  # die Seite steht auf OTP — nicht wegnavigieren
     try:
         dom = _probe(ws)
         st = classify_page(dom.get("url") or "", dom)
+        _dbg(f"Code-Lauf startet, Zustand {st} | {_probe_summary(dom, masks)}")
         if st in ("success", "bad_password", "challenge"):
             return _dispatch_terminal(ws, st)
         c = cap.ev(ws, JS_CODE_CENTER)
@@ -488,7 +567,7 @@ def _run_code_flow(code):
         ws.call("Input.insertText", {"text": code})
         time.sleep(0.6)
         cap.ev(ws, cap.JS_CLICK % json.dumps("weiter|next"))
-        st = _wait_for(ws, TERMINALS, 12)
+        st = _wait_for(ws, TERMINALS, 12, masks)
         if st == "success":
             return _finish_ok(ws)
         if st in ("bad_password", "challenge"):
