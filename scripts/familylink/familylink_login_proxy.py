@@ -1251,10 +1251,10 @@ class Handler(BaseHTTPRequestHandler):
                     result = auto_login(email, password, None)
                 else:
                     return self._reply(400, json.dumps({"error": "bad_body"}).encode())
-            except Exception:
+            except Exception as e:
                 # Kein Grundtext hierher — er koennte Seiten-URLs tragen; die
                 # Art steht im Log (Methode und Pfad ohne Query), Daten nie.
-                sys.stderr.write("login/auto:FLOW fehlgeschlagen\n")
+                sys.stderr.write("login/auto:FLOW fehlgeschlagen %s\n" % type(e).__name__)
                 return self._reply(500, json.dumps({"error": "auto_failed"}).encode())
             return self._reply(200, json.dumps({"result": result}).encode())
         if u.path == "/login/input":
