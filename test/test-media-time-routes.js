@@ -1,5 +1,5 @@
 /**
- * Test: Medienzeit-Routen-Schicht (server/routes/media-time.js)
+ * Test: Medienzeit-Routen-Schicht (server/features/media-time/routes.js)
  * Zweck: End-to-End ueber den echten Router - die Suite test/test-media-time.js
  *        prueft die Service-Schicht, diese hier die HTTP-Handler: Geraet
  *        anlegen (POST /devices, Token einmalig), tracker/sync mit Sessions
@@ -20,8 +20,8 @@ import assert from 'node:assert/strict';
 import express from 'express';
 
 const dbmod = await import('../server/db.js');
-const { default: mediaTimeRouter } = await import('../server/routes/media-time.js');
-const svc = await import('../server/services/media-time.js');
+const { default: mediaTimeRouter } = await import('../server/features/media-time/routes.js');
+const svc = await import('../server/features/media-time/service.js');
 const db = dbmod.get();
 
 // ── Nutzer (IDs deterministisch ab 1: eigener Prozess je Testdatei) ──────────────

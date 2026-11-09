@@ -10,12 +10,12 @@
  * Eigene Datei: der OpenAPI-Routen-Tracer (test/openapi-routes.js) ordnet
  *        alle Router-Eintragspfade eine Datei einem Mount zu - zwei Router
  *        in einer Datei wuerden die Pfade vermischen.
- * Abhaengigkeiten: server/services/familylink.js, server/services/media-time.js.
+ * Abhaengigkeiten: server/features/media-time/familylink.js, server/features/media-time/service.js.
  */
 import express from 'express';
-import * as db from '../db.js';
-import { ingestFamilylinkReport, familylinkStatus, setStatus, notifyFamilylinkLoginNeeded } from '../services/familylink.js';
-import { hashDeviceToken } from '../services/media-time.js';
+import * as db from '../../db.js';
+import { ingestFamilylinkReport, familylinkStatus, setStatus, notifyFamilylinkLoginNeeded } from './familylink.js';
+import { hashDeviceToken } from './service.js';
 
 export const familylinkReportRouter = express.Router();
 

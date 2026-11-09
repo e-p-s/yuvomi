@@ -1,5 +1,5 @@
 /**
- * Modul: Medienzeit - die Regel-Engine (server/services/media-time.js)
+ * Modul: Medienzeit - die Regel-Engine (server/features/media-time/service.js)
  * Zweck: Die Klassifikation und die Kontingent-Rechnung, ohne HTTP - die
  *        Kernzusatze des Treuhender-Modells: ein unbekanntes Paket frisst NIE
  *        still Kontingent (fail-open, 'unknown'), ein Systembaustein wird nie
@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
 const dbmod = await import('../server/db.js');
-const svc = await import('../server/services/media-time.js');
+const svc = await import('../server/features/media-time/service.js');
 
 const db = dbmod.get();
 

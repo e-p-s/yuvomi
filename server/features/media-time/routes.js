@@ -3,7 +3,7 @@
  * Zweck: Prefix /api/v1/media-time. Der Tracker meldet Sessions (Gerate-Token),
  *        Eltern/Admin verwalten Kontingente, Ausnahmen und Quiet-Hours
  *        (Session-Cookie, media_manage-Berechtigung). docs/medienzeit-konzept.md.
- * Abhaengigkeiten: express, server/db.js, server/services/media-time.js
+ * Abhaengigkeiten: express, server/db.js, server/features/media-time/service.js
  *
  * ZWEI Identitaeten, zwei Wege:
  *   - Tracker-Pfade (/tracker/*) laufen mit einem Gerate-Token aus
@@ -20,11 +20,11 @@ import crypto from 'node:crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 
-import * as db from '../db.js';
-import { createLogger } from '../logger.js';
-import { familylinkStatus, familylinkUsage, familylinkAppUsage, runFamilylinkIngest, setStatus, FAMILYLINK_STATUS_KEYS } from '../services/familylink.js';
-import { startFamilylinkLoginSession, postFamilylinkLogin } from '../services/familylink-login.js';
-import { isAdminRequest } from '../middleware/require-admin.js';
+import * as db from '../../db.js';
+import { createLogger } from '../../logger.js';
+import { familylinkStatus, familylinkUsage, familylinkAppUsage, runFamilylinkIngest, setStatus, FAMILYLINK_STATUS_KEYS } from './familylink.js';
+import { startFamilylinkLoginSession, postFamilylinkLogin } from './familylink-login.js';
+import { isAdminRequest } from '../../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
   MAX_SESSIONS_PER_SYNC,
@@ -55,7 +55,7 @@ import {
   mediaTimeDayKey,
   perDeviceUsage,
   householdWallTime,
-} from '../services/media-time.js';
+} from './service.js';
 
 const log = createLogger('MediaTime');
 const router = express.Router();

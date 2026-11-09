@@ -847,6 +847,13 @@ const REASONS_WITHOUT_SENTENCE = new Set([
   // Anmeldung und Einrichtung: die Seiten sagen ihren eigenen Satz nach dem Status.
   'account_cannot_sign_in', 'setup_completed', 'required',
   'browser_session_required',
+  // Medienzeit (Feature-Modul): Riegel und Kind-Pruefung - die Regeln-Seite und
+  // die Tageskarte fuehren ihre eigenen Saetze; das Geraet-Endpoint antwortet
+  // gegenueber dem Tracker, nicht einem Menschen.
+  'media_time_forbidden', 'media_time_not_a_child', 'media_time_disabled',
+  // Konsequenzen und Aufgaben-Freigabe (eigene Schalter): der Dialog sagt den
+  // Grund, bevor die Anfrage ueberhaupt geht - der Grund ist Backstop.
+  'rewards_penalties_disabled', 'task_approval_admin_only',
   // Angemeldete Geraete: der native Client liest den Grund selbst, die Web-App
   // sieht ihn nie, weil sie mit einer Sitzung arbeitet.
   'device_credential', 'device_credential_required', 'session_required',
@@ -978,9 +985,23 @@ const REASONS_PASSED_THROUGH = new Map([
   // Konfiguration, 422 bei geschlossener pending, sonst 502) - eine 403 baut
   // keine der beiden Stellen; die 403 der Route (media_time_forbidden) steht als
   // Literal im Riegel requireManager.
-  ['routes/media-time.js: r.reason', { sites: 2, at403: [],
+  ['features/media-time/routes.js: refusal.reason', { sites: 8, at403: [
+    ['media_time_forbidden', 'features/media-time/routes.js'],
+    ['media_time_not_a_child', 'features/media-time/routes.js'],
+  ], why: 'managerRefusal/childRefusal: 403 mit diesem Grund oder 404 ohne' }],
+  ['features/media-time/routes.js: err.reason ?? \'media_time_bad_request\'', { sites: 1, at403: [
+    ['media_time_forbidden', 'features/media-time/routes.js'],
+    ['media_time_not_a_child', 'features/media-time/routes.js'],
+  ], why: 'Catch-Zweig: Status aus refusal (403 moeglich), sonst feste 400 mit Fallback-Grund' }],
+  ['features/media-time/routes.js: latestQuotaNoteReason(d, requested, state.day)', { sites: 1, at403: [],
+    why: 'Transparenz-Feld in der 200-Antwort (Notiz zum Tageskontingent), kein Fehlergrund' }],
+  ['routes/rewards.js: ledgerReason', { sites: 1, at403: [],
+    why: 'Buchungstext im Punktekonto (Konsequenz-Abzug), keine Antwort' }],
+  ['routes/rewards.js: wer eine private Aufgabe nicht sehen darf', { sites: 1, at403: [],
+    why: 'Treffer in einem SQL-Kommentar des Ledger-Strings, kein Grund einer Antwort' }],
+  ['features/media-time/routes.js: r.reason', { sites: 2, at403: [],
     why: 'postFamilylinkLogin/startFamilylinkLoginSession: 503 (not_configured), 422 (login_expired) oder 502 (collector_unreachable)' }],
-  ['routes/media-time.js: s.reason', { sites: 1, at403: [],
+  ['features/media-time/routes.js: s.reason', { sites: 1, at403: [],
     why: 'challenge-Zweig: startFamilylinkLoginSession kennt nur 503 (not_configured) und 502 (collector_unreachable)' }],
   ['routes/weather.js: WEATHER_REASON.NOT_CONFIGURED', { sites: 1, at403: [], why: 'Antwort 200 ohne Daten' }],
   ['routes/weather.js: WEATHER_REASON.UPSTREAM_ERROR', { sites: 5, at403: [], why: 'Antwort 200 ohne Daten (Wetter 3x, Ortssuche 2x)' }],
@@ -1019,6 +1040,9 @@ function nonLiteralReasonSites(root = serverRoot, source = null) {
       if (rel === '' && name === 'openapi') continue;
       const url = new URL(name, dir);
       if (statSync(url).isDirectory()) { walk(new URL(`${name}/`, dir), `${rel}${name}/`); continue; }
+      // Schema-Bausteine des Feature-Moduls sind Spec-Texte, keine Antwortgruende
+      // (derselbe Ausschluss wie das openapi-Verzeichnis oben).
+      if (rel.startsWith('features/') && name === 'openapi-schemas.js') continue;
       if (name.endsWith('.js')) scan(`${rel}${name}`, readFileSync(url, 'utf8'));
     }
   }(root, ''));
@@ -1170,6 +1194,11 @@ const PLAIN_REFUSALS = new Set([
   'You cannot change a receipt you may not see.', 'Household category management is not allowed.',
   // Nur mit API-Token erreichbar, nie aus der App.
   'Token scope does not permit this operation.',
+  // Konsequenzen-Riegel (routes/rewards.js): reine Berechtigungsauskunft,
+  // ohne Zusatzinfo - der Satz selbst ist die ganze Meldung.
+  'Only parents can issue consequences.', 'Consequences apply to children only.',
+  'A consequence needs a child as target.',
+  'Only the issuing parent or an admin can retract a consequence.',
 ]);
 
 test('jeder 403-Satz ohne reason sagt nur, dass die Berechtigung fehlt', () => {

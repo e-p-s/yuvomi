@@ -1,5 +1,5 @@
 /**
- * Test: Family-Link-Routen (server/routes/media-time.js, familylink-Block)
+ * Test: Family-Link-Routen (server/features/media-time/routes.js, familylink-Block)
  * Zweck: Die HTTP-Schicht der Istzeit-Einspeisung - usage (Kind nur fuer sich,
  * Eltern fuer alle, Tag-Format 400), mapping (Elternrecht, uid-Format,
  * Geraet-fremdes-Kind 404, null loescht), ingest-Knopf: ein Lauf ohne
@@ -16,9 +16,9 @@ import assert from 'node:assert/strict';
 import express from 'express';
 
 const dbmod = await import('../server/db.js');
-const { default: mediaTimeRouter } = await import('../server/routes/media-time.js');
-const { familylinkReportRouter } = await import('../server/routes/familylink-report.js');
-const svc = await import('../server/services/media-time.js');
+const { default: mediaTimeRouter } = await import('../server/features/media-time/routes.js');
+const { familylinkReportRouter } = await import('../server/features/media-time/report-routes.js');
+const svc = await import('../server/features/media-time/service.js');
 const db = dbmod.get();
 
 const ADMIN = { id: 1, role: 'admin' };
@@ -243,7 +243,7 @@ function postReport(tok, body) {
     body: JSON.stringify(body),
   });
 }
-const flSvc = await import('../server/services/familylink.js');
+const flSvc = await import('../server/features/media-time/familylink.js');
 const statusRow = () => db.prepare(
   'SELECT value FROM sync_config WHERE key = ?').get(flSvc.FAMILYLINK_STATUS_KEYS.status)?.value ?? null;
 
@@ -309,7 +309,7 @@ test('GET /settings - familylink_status_at und familylink_last_report_at zeigen 
  // der exportierte Hook des Dienstes (Muster holidays.js __setFetchImpl)
 // ════════════════════════════════════════════════════════════════════════════
 
-const flLogin = await import('../server/services/familylink-login.js');
+const flLogin = await import('../server/features/media-time/familylink-login.js');
 
 test('POST /familylink/login-session - Konfiguration fehlt: 503 familylink_not_configured', async () => {
   delete process.env.FAMILYLINK_COLLECTOR_BASE;

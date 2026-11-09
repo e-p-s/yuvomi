@@ -23,7 +23,7 @@
 
 import crypto from 'node:crypto';
 
-import { householdTimeZone, todayKey, utcToWall, daysBetweenDateKeys } from '../utils/timezone.js';
+import { householdTimeZone, todayKey, utcToWall, daysBetweenDateKeys } from '../../utils/timezone.js';
 
 /**
  * Das Yuvomi-eigene Paket ist hart ausgenommen (fix, nicht loeschbar): das Kind

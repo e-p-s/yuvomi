@@ -1,5 +1,5 @@
 /**
- * Test: Family-Link-Istzeit (server/services/familylink.js)
+ * Test: Family-Link-Istzeit (server/features/media-time/familylink.js)
  * Zweck: Einbau-Spec (HANDOVER.md, Migration 291) als Pruefstein - der Ingest
  *        schreibt nur zugeordnete Kinder, ein Fehlerlauf (401/kein JSON) setzt
  *        den Status login_noetig und schreibt NIE 0er-Snapshots, und die
@@ -16,8 +16,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const dbmod = await import('../server/db.js');
-const svc = await import('../server/services/media-time.js');
-const fl = await import('../server/services/familylink.js');
+const svc = await import('../server/features/media-time/service.js');
+const fl = await import('../server/features/media-time/familylink.js');
 const db = dbmod.get();
 
 const UID = '9001234567';

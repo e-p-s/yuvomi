@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Medienzeit als Feature-Modul (interner Umbau).** Die Serverseite der
+  Medienzeit (Routen, Report-Push, Regel-Engine, Family-Link-Dienst,
+  Ingest-Scheduler, Spec-Bausteine) lebt jetzt gesammelt unter
+  `server/features/media-time/`; in den Kern-Dateien bleiben nur
+  Registrierungs-Haken (index.js: drei Imports und ein Scheduler-Aufruf,
+  openapi/schemas.js: ein Spread). Das Ziel: Upstream-Merges streifen
+  kuenftig keine grossen eigenen Blocke mehr. Die Migrationen bleiben
+  bewusst in db.js - das Append-only-Gate liest dort den Quelltext.
+
 - **Medienzeit: Sessions nachlesen und berichtigen, Geraet-Kontingente.** Eltern
   sehen die angezogenen Nutzungssessions eines Tages (GET `/media-time/sessions`,
   Tag-Filter, `editable` nur bei manuellen Buchungen), korrigieren sie

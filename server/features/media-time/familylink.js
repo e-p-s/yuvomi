@@ -24,11 +24,11 @@
 
 import { spawn } from 'node:child_process';
 
-import { createLogger } from '../logger.js';
-import { activeAccountSql } from './account-state.js';
-import { pushService as defaultPushService } from './push.js';
-import { createNotificationChannelStore } from './notification-channels.js';
-import { defaultProviders } from './notifications.js';
+import { createLogger } from '../../logger.js';
+import { activeAccountSql } from '../../services/account-state.js';
+import { pushService as defaultPushService } from '../../services/push.js';
+import { createNotificationChannelStore } from '../../services/notification-channels.js';
+import { defaultProviders } from '../../services/notifications.js';
 
 const log = createLogger('Familylink');
 
