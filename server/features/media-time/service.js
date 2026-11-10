@@ -335,9 +335,18 @@ export function dayUsage(d, userId, dayKey) {
       'SELECT COUNT(*) AS n FROM media_time_devices WHERE user_id = ? AND revoked_at IS NULL'
     ).get(userId).n;
     if (!ownDevices) {
-      const all = d.prepare(
+      // Der consumed_min der Tageszeile ist nur die Schaetzung "Limit
+      // ueberschritten" (0, solange das Limit nicht erreicht ist) - die echte
+      // Istzeit wohnt in den App-Sitzungen (familylink_app_usage). Es gilt der
+      // groessere der beiden Werte, nie die Summe: dieselbe Zeit waere sonst
+      // doppelt gezahlt.
+      const daily = d.prepare(
         'SELECT COALESCE(SUM(consumed_min), 0) AS m FROM familylink_daily WHERE google_uid = ? AND day = ?'
       ).get(fl.google_uid, dayKey).m;
+      const apps = d.prepare(
+        'SELECT COALESCE(SUM(minutes), 0) AS m FROM familylink_app_usage WHERE google_uid = ? AND day = ?'
+      ).get(fl.google_uid, dayKey).m;
+      const all = Math.max(daily, apps);
       if (all > 0) {
         return {
           charged_min: Math.round(all),

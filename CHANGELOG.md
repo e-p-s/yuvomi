@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Istzeit aus App-Sitzungen, Anmeldung gültig als Statuswort.** Kinder ohne
+  eigenes Medienzeit-Gerät zahlten bisher gegen die Tageszeile des Sammlers -
+  die meldet aber nur die Limit-Überschreitung (solange das Limit hält: 0),
+  echte Nutzungszeit steht in den App-Sitzungen. Es gilt jetzt der größere der
+  beiden Werte, nie die Summe. Der gesunde Sammler-Status sagt zudem ausdrücklich
+  „Anmeldung gültig" statt nur „läuft".
+
+
 - **Family-Link: Anmeldung jederzeit aus der App.** War der Sammler gesund,
   zeigte die Medienzeit-Seite nur die ruhige Zeile - ein Weg, sich erneut mit
   E-Mail, Passwort und zweitem Code anzumelden (Kontowechsel, wenn Google

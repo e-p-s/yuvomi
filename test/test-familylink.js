@@ -185,6 +185,39 @@ test('dayUsage - ohne Google-Zeile bleibt die Session die Auskunft', () => {
   assert.equal(u.familylink_min, 0);
 });
 
+test('dayUsage - Kind ohne eigenes Geraet: App-Sitzungen sind die Istzeit', () => {
+  const childId = kid('FlAppsOnly');
+  mapChild(childId, '9008765432');
+  // Die Tageszeile meldet nur das Limit (consumed 0, solange es nicht
+  // ueberschritten ist) - die echte Istzeit liegt in den App-Sitzungen.
+  db.prepare(`
+    INSERT INTO familylink_daily (google_uid, google_device_id, day, limit_min, consumed_min, fetched_at)
+    VALUES ('9008765432', 'gdev-rot1', ?, 60, 0, ?)
+  `).run(dayKey, new Date().toISOString());
+  db.prepare(`
+    INSERT INTO familylink_app_usage (day, google_uid, pkg, name, minutes, fetched_at)
+    VALUES (?, '9008765432', 'com.example.game', 'Game', 37.5, ?)
+  `).run(dayKey, new Date().toISOString());
+  const u = svc.dayUsage(db, childId, dayKey);
+  assert.equal(u.charged_min, 38, 'App-Minuten zahlen als Istzeit (gerundet)');
+  assert.equal(u.familylink_min, 38, 'die Auskunft nennt dieselbe Zahl');
+});
+
+test('dayUsage - Limitueberschreitung bleibt die Auskunft, wenn sie hoeher ist', () => {
+  const childId = kid('FlOverLimit');
+  mapChild(childId, '9008765433');
+  db.prepare(`
+    INSERT INTO familylink_daily (google_uid, google_device_id, day, limit_min, consumed_min, fetched_at)
+    VALUES ('9008765433', 'gdev-rot2', ?, 60, 120, ?)
+  `).run(dayKey, new Date().toISOString());
+  db.prepare(`
+    INSERT INTO familylink_app_usage (day, google_uid, pkg, name, minutes, fetched_at)
+    VALUES (?, '9008765433', 'com.example.video', 'Video', 30, ?)
+  `).run(dayKey, new Date().toISOString());
+  const u = svc.dayUsage(db, childId, dayKey);
+  assert.equal(u.charged_min, 120, 'Maximum, nicht Summe - dieselbe Zeit zaehlt nie doppelt');
+});
+
 test('dayUsage - Kind ohne Zuordnung sieht nie Google-Werte', () => {
   const childId = kid('FlUnmapped');
   const other = db.prepare('SELECT google_uid FROM familylink_children LIMIT 1').get().google_uid;
