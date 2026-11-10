@@ -789,7 +789,8 @@
         "approvalQueueNotice_one": "{{count}} check-in čeká na potvrzení.",
         "approvalQueueNotice_few": "{{count}} check-iny čekají na potvrzení.",
         "approvalQueueToggle": "Jen čekající",
-        "createdByDetail": "Vytvořil {{name}}",
+        "createdByComment": "Vytvořil {{name}} dne {{date}} v {{time}}",
+        "createdByCommentNoTime": "Vytvořil {{name}}",
         "task_approval_admin_only": "Úlohy schvaluje nebo zamítá pouze správce.",
         "task_approval_not_pending": "Tento úkol zrovna nečeká na schválení."
     },

@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} check-ins wachten op bevestiging.",
         "approvalQueueNotice_one": "{{count}} check-in wacht op bevestiging.",
         "approvalQueueToggle": "Alleen openstaande tonen",
-        "createdByDetail": "Gemaakt door {{name}}",
+        "createdByComment": "Gemaakt door {{name}} op {{date}} om {{time}}",
+        "createdByCommentNoTime": "Gemaakt door {{name}}",
         "task_approval_admin_only": "Alleen een beheerder keurt taken goed of wijst ze af.",
         "task_approval_not_pending": "Deze taak wacht op dit moment niet op goedkeuring."
     },

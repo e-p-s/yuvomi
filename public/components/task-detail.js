@@ -835,7 +835,9 @@ function commentsNode(task, ctx) {
       const res = await api.get(`/tasks/${task.id}/comments`);
       const comments = res.data ?? [];
       list.replaceChildren();
-      if (!comments.length) {
+      const createdNote = createdByCommentRow(task, ctx);
+      if (createdNote) list.appendChild(createdNote);
+      if (!comments.length && !createdNote) {
         const empty = document.createElement('p');
         empty.className = 'task-comments__status';
         empty.textContent = t('tasks.commentsEmpty');
@@ -960,9 +962,10 @@ function taskReminderSummary(reminders) {
  */
 function taskDetailHead(task, ctx = {}) {
   const due = formatDueDate(task.due_date, task.due_time, task.status === 'done' || isArchived(task));
+  // Der Ersteller steht seit der Haushaltsanforderung als erster Kommentar im
+  // Thread (createdByCommentRow), nicht mehr als Kopfzeile - dort war er ohne
+  // Zeitstempel und ausserhalb der Diskussion.
   const facts = [];
-  const creator = createdByHint(task, ctx);
-  if (creator) facts.push(creator);
   return {
     subtitle: due?.label ?? '',
     subtitleLabel: t('tasks.dueDateLabel'),
@@ -973,16 +976,19 @@ function taskDetailHead(task, ctx = {}) {
 }
 
 /**
- * "Angelegt von <Name>" als Fact-Zeile des Kopfes, sonst null.
+ * Der erste Kommentar des Threads: wer die Aufgabe wann angelegt hat.
  *
- * DER SCHALTER WIRD FESTGELESEN, nicht nachgeladen: diese Ansicht zeichnet
- * ihren Kopf in einem Schwung, und ein Text, der nach dem Oeffnen
- * einspringt, verschiebt alles darunter. Der Wert kommt aus dem
- * Praeferenz-Cache (settings/preferences-cache.js), den Router-Start und
- * Settings-Besuche fuellen; war dort nie eine Antwort, bleibt die Anzeige aus -
- * die Richtung des Defaults (aus), nicht ein geratenes An.
+ *icht ein echter Kommentar in der Tabelle, sondern aus `created_by` und
+ * `created_at` der Aufgabe gezeichnet - so gilt die Auskunft auch fuer Aufgaben,
+ * die vor dem Schalter angelegt wurden, und der Schalter (`task_created_by_
+ * visible`, Default AUS) filtert die Anzeige, ohne Daten zu schreiben.
+ *
+ * DER SCHALTER WIRD FESTGELESEN, nicht nachgeladen: der Wert kommt aus dem
+ * Praeferenz-Cache (settings/preferences-cache.js); war dort nie eine Antwort,
+ * bleibt die Anzeige aus - die Richtung des Defaults (aus), nicht ein geratenes
+ * An. Ohne Aufloesung des Erstellers auf einen Namen zeigt die Zeile nichts.
  */
-function createdByHint(task, ctx) {
+function createdByCommentRow(task, ctx) {
   const creatorId = task?.created_by;
   if (creatorId == null) return null;
   const show = ctx.showCreatedBy
@@ -990,10 +996,18 @@ function createdByHint(task, ctx) {
   if (show !== true) return null;
   const person = (ctx.users ?? []).find((u) => String(u.id) === String(creatorId));
   const name = (person?.display_name ?? task.created_by_name ?? '').trim();
-  // Ohne Aufloesung kein Name: "Angelegt von" allein beantwortet die Frage
-  // nicht, und eine erfundene waere schlimmer als keine.
+  // Ohne Aufloesung kein Name: eine erfundene waere schlimmer als keine.
   if (!name) return null;
-  return t('tasks.createdByDetail', { name });
+  const row = document.createElement('div');
+  row.className = 'task-comment task-comment--system';
+  const text = document.createElement('p');
+  text.className = 'task-comment__text';
+  const at = new Date(task.created_at);
+  text.textContent = Number.isFinite(at.getTime())
+    ? t('tasks.createdByComment', { name, date: dateText(at), time: formatTime(at) })
+    : t('tasks.createdByCommentNoTime', { name });
+  row.appendChild(text);
+  return row;
 }
 
 /**
@@ -1855,4 +1869,4 @@ function seriesHistoryNode(task) {
  * der sich die Nur-lesen-Regel (#467) an dieser Ansicht MESSEN laesst - alles
  * andere hier haengt an `openDetailView` und damit am echten DOM.
  */
-export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit, approvalNoticeView, resolveTaskApproval, REJECT_NOTE_MAX, taskDetailHead, createdByHint, rotationDetailRow };
+export const __test = { subtaskListNode, descriptionNode, documentListNode, doerChoices, wireDetailDoerMenu, wireDetailMoreMenu, DOER_BUTTON_ID, completeFor, advanceTaskStatus, toggleTaskArchive, toggleDescriptionCheck, commentRowNode, startCommentEdit, approvalNoticeView, resolveTaskApproval, REJECT_NOTE_MAX, taskDetailHead, createdByCommentRow, rotationDetailRow };

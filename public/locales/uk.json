@@ -846,7 +846,8 @@
         "approvalQueueNotice_few": "{{count}} чекіна очікують на підтвердження.",
         "approvalQueueNotice_many": "{{count}} чекінів очікують на підтвердження.",
         "approvalQueueToggle": "Лише очікуючі",
-        "createdByDetail": "Створив(ла): {{name}}",
+        "createdByComment": "Створив(ла) {{name}} {{date}} о {{time}}",
+        "createdByCommentNoTime": "Створив(ла) {{name}}",
         "task_approval_admin_only": "Завдання затверджує або відхиляє лише адміністратор.",
         "task_approval_not_pending": "Це завдання зараз не чекає на затвердження."
     },

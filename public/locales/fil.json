@@ -744,7 +744,8 @@
         "approvalQueueNotice": "{{count}} check-in ang naghihintay ng kumpirmasyon.",
         "approvalQueueNotice_one": "{{count}} check-in ang naghihintay ng kumpirmasyon.",
         "approvalQueueToggle": "Ipakita lang ang naghihintay",
-        "createdByDetail": "Ginawa ni {{name}}",
+        "createdByComment": "Ginawa ni {{name}} noong {{date}} nang {{time}}",
+        "createdByCommentNoTime": "Ginawa ni {{name}}",
         "task_approval_admin_only": "Ang tagapangasiwa lang ang pumapayag o tumatanggi ng gawain.",
         "task_approval_not_pending": "Hindi ngayon naghihintay ng pagpapatibay ang gawaing ito."
     },

@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} check-in đang chờ xác nhận.",
         "approvalQueueNotice_one": "{{count}} check-in đang chờ xác nhận.",
         "approvalQueueToggle": "Chỉ hiện đang chờ",
-        "createdByDetail": "Tạo bởi {{name}}",
+        "createdByComment": "{{name}} tạo lúc {{date}} {{time}}",
+        "createdByCommentNoTime": "{{name}} tạo",
         "task_approval_admin_only": "Chỉ quản trị viên duyệt hoặc từ chối công việc.",
         "task_approval_not_pending": "Công việc này hiện không chờ duyệt."
     },

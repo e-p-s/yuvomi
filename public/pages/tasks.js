@@ -1424,6 +1424,7 @@ function renderModalContent({ task = null, users = [], reminder = null } = {}) {
           <yuvomi-datepicker type="date" id="task-start-date" name="start_date"
                  value="${esc(formatDateInput(task?.start_date))}"></yuvomi-datepicker>
         </div>
+        ${state.pointsEditable !== false ? `
         <div class="form-group">
           <label class="label" for="task-points">${t('tasks.pointsLabel')}</label>
           <input class="input" type="number" id="task-points" name="points" inputmode="numeric"
@@ -1432,7 +1433,7 @@ function renderModalContent({ task = null, users = [], reminder = null } = {}) {
           <p class="task-field-hint">${prefillPoints
             ? t('tasks.pointsDefaultHint', { count: prefillPoints })
             : t('tasks.pointsHint')}</p>
-        </div>
+        </div>` : ''}
       </div>
 
       <div class="form-group task-tags-field">
@@ -6837,6 +6838,7 @@ async function ensureAwayMeta(user) {
       state.categories    = meta.categories ?? state.categories;
       state.allTags       = meta.tags       ?? state.allTags;
       state.defaultPoints = Number(meta.default_points) || state.defaultPoints;
+      state.pointsEditable = meta.points_editable !== false;
     } catch { /* Ansicht steht auch ohne - nur weniger aufgeloest, siehe die Aufrufer. */ }
   }
   if (user) {
@@ -7154,6 +7156,7 @@ export async function render(container, { user, signal } = {}) {
     state.categories = meta.categories ?? [];
     state.allTags = meta.tags ?? [];
     state.defaultPoints = Number(meta.default_points) || 0;
+    state.pointsEditable = meta.points_editable !== false;
     state.subtasksExpandedByDefault = preferencesData.data?.tasks_subtasks_expanded === true;
     applyNewTaskDefaults(preferencesData.data);
   } catch (err) {

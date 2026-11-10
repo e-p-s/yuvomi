@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} registros esperan confirmación.",
         "approvalQueueNotice_one": "{{count}} registro espera confirmación.",
         "approvalQueueToggle": "Mostrar solo pendientes",
-        "createdByDetail": "Creada por {{name}}",
+        "createdByComment": "Creada por {{name}} el {{date}} a las {{time}}",
+        "createdByCommentNoTime": "Creada por {{name}}",
         "task_approval_admin_only": "Solo un administrador aprueba o rechaza tareas.",
         "task_approval_not_pending": "Esta tarea no espera aprobación en este momento."
     },

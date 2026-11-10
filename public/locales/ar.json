@@ -906,7 +906,8 @@
         "approvalQueueNotice_few": "{{count}} تسجيلات بانتظار التأكيد.",
         "approvalQueueNotice_many": "{{count}} تسجيلًا بانتظار التأكيد.",
         "approvalQueueToggle": "عرض المعلّقة فقط",
-        "createdByDetail": "أُنشئت بواسطة {{name}}",
+        "createdByComment": "أنشأها {{name}} في {{date}} الساعة {{time}}",
+        "createdByCommentNoTime": "أنشأها {{name}}",
         "task_approval_admin_only": "لا يوافق على المهام أو يرفضها إلا المدير.",
         "task_approval_not_pending": "هذه المهمة لا تنتظر موافقة في هذه اللحظة."
     },

@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} bejelentkezés megerősítésre vár.",
         "approvalQueueNotice_one": "{{count}} bejelentkezés megerősítésre vár.",
         "approvalQueueToggle": "Csak a függőben lévők",
-        "createdByDetail": "Létrehozta: {{name}}",
+        "createdByComment": "{{name}} hozta létre {{date}} {{time}}",
+        "createdByCommentNoTime": "{{name}} hozta létre",
         "task_approval_admin_only": "Csak rendszergazada hagyja jóvá vagy utasítja el a feladatokat.",
         "task_approval_not_pending": "Ez a feladat most nem vár jóváhagyásra."
     },

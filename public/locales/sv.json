@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} incheckningar väntar på bekräftelse.",
         "approvalQueueNotice_one": "{{count}} incheckning väntar på bekräftelse.",
         "approvalQueueToggle": "Visa bara väntande",
-        "createdByDetail": "Skapad av {{name}}",
+        "createdByComment": "Skapad av {{name}} den {{date}} kl. {{time}}",
+        "createdByCommentNoTime": "Skapad av {{name}}",
         "task_approval_admin_only": "Endast en administrator godkanner eller avslar uppgifter.",
         "task_approval_not_pending": "Denna uppgift väntar inte på godkännande just nu."
     },

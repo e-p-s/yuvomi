@@ -2302,6 +2302,13 @@
   color: var(--color-text-primary);
 }
 
+/* Der synthetische Ersteller-Kommentar: zurueckhaltender als echte Beitraege,
+   damit klar bleibt, dass die Zeile vom System gezeichnet wird. */
+.task-comment--system .task-comment__text {
+  font-style: italic;
+  opacity: 0.75;
+}
+
 .task-comment__when {
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);

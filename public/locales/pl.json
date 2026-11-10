@@ -864,7 +864,8 @@
         "approvalQueueNotice_few": "{{count}} zameldowania czekają na zatwierdzenie.",
         "approvalQueueNotice_many": "{{count}} zameldowań czeka na zatwierdzenie.",
         "approvalQueueToggle": "Tylko oczekujące",
-        "createdByDetail": "Utworzył(a): {{name}}",
+        "createdByComment": "Utworzył {{name}}, {{date}} o {{time}}",
+        "createdByCommentNoTime": "Utworzył {{name}}",
         "task_approval_admin_only": "Tylko administrator zatwierdza lub odrzuca zadania.",
         "task_approval_not_pending": "To zadanie właśnie nie czeka na zatwierdzenie."
     },

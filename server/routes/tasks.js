@@ -186,6 +186,20 @@ function defaultTaskPoints() {
   return clampPoints(row?.value);
 }
 
+/**
+ * Haushalt-Regel: Aufgaben, die ein Kind sich selbst gibt, tragen keine Punkte.
+ * Beschraenkt ist ausschliesslich family_role 'child' - alle anderen Mitglieder
+ * (Eltern, Grosseltern, sonstige) duerfen Punktwerte setzen. Ein Kind kann
+ * Aufgaben anlegen und bearbeiten, der Punktwert bleibt dabei immer 0;
+ * spaetere Punkte vergibt ein Elternteil.
+ */
+function actorMaySetPoints(req) {
+  const actor = req.authUserId || req.session?.userId;
+  if (!actor) return false;
+  const row = db.get().prepare('SELECT family_role FROM users WHERE id = ?').get(actor);
+  return !!row && row.family_role !== 'child';
+}
+
 // Erledigte Aufgaben dürfen nicht umbepunktet werden: genau für 'done' hält der
 // reward_ledger eine earn-Buchung über den damaligen Punktwert
 // (awardForCompletion in server/services/rewards.js); ein nachträglicher Wechsel
@@ -1307,9 +1321,11 @@ router.post('/', (req, res) => {
     // Ohne expliziten Wert greift der Haushalt-Standard (#578) — aber nur für
     // Hauptaufgaben: Subtasks sind Checklisten-Punkte der Elternaufgabe und
     // würden den Punktewert sonst vervielfachen. Eine ausdrückliche 0 bleibt 0.
-    const points = req.body.points === undefined && !parent_task_id
-      ? defaultTaskPoints()
-      : clampPoints(req.body.points);
+    const points = !actorMaySetPoints(req)
+      ? 0
+      : (req.body.points === undefined && !parent_task_id
+        ? defaultTaskPoints()
+        : clampPoints(req.body.points));
     const visibility = normalizeVisibility(req.body.visibility);
 
     // Status beim Anlegen (#807). Das Feld stand im Dialog nur im
@@ -1499,7 +1515,9 @@ router.put('/:id', (req, res) => {
       countdown       = task.countdown,
     } = req.body;
 
-    const points = req.body.points !== undefined ? clampPoints(req.body.points) : task.points;
+    const points = req.body.points !== undefined && actorMaySetPoints(req)
+      ? clampPoints(req.body.points)
+      : task.points;
     const visibility = req.body.visibility !== undefined
       ? normalizeVisibility(req.body.visibility, task.visibility)
       : task.visibility;
@@ -3014,6 +3032,9 @@ router.get('/meta/options', (req, res) => {
       // mitgeliefert, damit dafür kein zweiter Aufruf nötig ist (#586).
       tags: allTags(db.get(), req.authUserId || req.session.userId),
       default_points: defaultTaskPoints(),
+      // Fuer die Oberflaeche: Kindern den Punkteeingabeblock ausblenden
+      // (Durchsetzung liegt trotzdem immer auf dem Server).
+      points_editable: actorMaySetPoints(req),
     });
   } catch (err) {
     log.error('GET /meta/options error:', err);

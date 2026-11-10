@@ -744,7 +744,8 @@
         "approvalQueueNotice": "{{count}}개의 체크인이 확인 대기 중입니다.",
         "approvalQueueNotice_one": "{{count}}개의 체크인이 확인 대기 중입니다.",
         "approvalQueueToggle": "대기 중인 항목만 표시",
-        "createdByDetail": "만든 사람: {{name}}",
+        "createdByComment": "{{name}}님이 {{date}} {{time}}에 생성",
+        "createdByCommentNoTime": "{{name}}님이 생성",
         "task_approval_admin_only": "관리자만 작업을 승인하거나 거부할 수 있습니다.",
         "task_approval_not_pending": "이 작업은 지금 승인을 기다리지 않습니다."
     },

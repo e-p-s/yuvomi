@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} 條打卡等待確認。",
         "approvalQueueNotice_one": "{{count}} 條打卡等待確認。",
         "approvalQueueToggle": "僅顯示待確認",
-        "createdByDetail": "建立者：{{name}}",
+        "createdByComment": "由 {{name}} 於 {{date}} {{time}} 建立",
+        "createdByCommentNoTime": "由 {{name}} 建立",
         "task_approval_admin_only": "只有管理員才能核准或拒絕任務。",
         "task_approval_not_pending": "此任務當前未在等待核准。"
     },

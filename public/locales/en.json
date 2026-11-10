@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} check-ins are awaiting confirmation.",
         "approvalQueueNotice_one": "{{count}} check-in is awaiting confirmation.",
         "approvalQueueToggle": "Show pending only",
-        "createdByDetail": "Created by {{name}}",
+        "createdByComment": "Created by {{name}} on {{date}} at {{time}}",
+        "createdByCommentNoTime": "Created by {{name}}",
         "task_approval_admin_only": "Only an administrator approves or rejects tasks.",
         "task_approval_not_pending": "This task is not awaiting approval right now."
     },

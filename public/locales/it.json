@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} check-in in attesa di conferma.",
         "approvalQueueNotice_one": "{{count}} check-in in attesa di conferma.",
         "approvalQueueToggle": "Mostra solo in attesa",
-        "createdByDetail": "Creata da {{name}}",
+        "createdByComment": "Creata da {{name}} il {{date}} alle {{time}}",
+        "createdByCommentNoTime": "Creata da {{name}}",
         "task_approval_admin_only": "Solo un amministratore approva o rifiuta i compiti.",
         "task_approval_not_pending": "Questo compito non è in attesa di approvazione in questo momento."
     },

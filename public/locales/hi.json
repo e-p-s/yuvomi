@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} चेक-इन पुष्टि की प्रतीक्षा में हैं।",
         "approvalQueueNotice_one": "{{count}} चेक-इन पुष्टि की प्रतीक्षा में है।",
         "approvalQueueToggle": "केवल लंबित दिखाएँ",
-        "createdByDetail": "{{name}} ने बनाया",
+        "createdByComment": "{{name}} ने बनाई, {{date}} को {{time}} पर",
+        "createdByCommentNoTime": "{{name}} ने बनाई",
         "task_approval_admin_only": "केवल प्रशासक कार्य को स्वीकृत या अस्वीकृत करते हैं।",
         "task_approval_not_pending": "यह कार्य इस समय स्वीकृति की प्रतीक्षा में नहीं है।"
     },

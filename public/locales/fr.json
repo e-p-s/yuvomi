@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} check-ins attendent une validation.",
         "approvalQueueNotice_one": "{{count}} check-in attend une validation.",
         "approvalQueueToggle": "Afficher les en attente uniquement",
-        "createdByDetail": "Créée par {{name}}",
+        "createdByComment": "Créée par {{name}} le {{date}} à {{time}}",
+        "createdByCommentNoTime": "Créée par {{name}}",
         "task_approval_admin_only": "Seul un administrateur approuve ou refuse les tâches.",
         "task_approval_not_pending": "Cette tâche n'attend pas d'approbation en ce moment."
     },

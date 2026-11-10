@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} 件のチェックインが確認待ちです。",
         "approvalQueueNotice_one": "{{count}} 件のチェックインが確認待ちです。",
         "approvalQueueToggle": "確認待ちのみ表示",
-        "createdByDetail": "作成者: {{name}}",
+        "createdByComment": "{{name}} が {{date}} {{time}} に作成",
+        "createdByCommentNoTime": "{{name}} が作成",
         "task_approval_admin_only": "タスクの承認と却下は管理者のみが行えます。",
         "task_approval_not_pending": "このタスクは今、承認を待っていません。"
     },

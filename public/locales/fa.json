@@ -744,7 +744,8 @@
         "approvalQueueNotice": "{{count}} ورود در انتظار تأیید است.",
         "approvalQueueNotice_one": "{{count}} ورود در انتظار تأیید است.",
         "approvalQueueToggle": "فقط در انتظارها",
-        "createdByDetail": "ایجادشده توسط {{name}}",
+        "createdByComment": "ساخته‌شده توسط {{name}} در {{date}} ساعت {{time}}",
+        "createdByCommentNoTime": "ساخته‌شده توسط {{name}}",
         "task_approval_admin_only": "فقط مدیر وظایف را تأیید یا رد می‌کند.",
         "task_approval_not_pending": "این وظيفة اکنون در انتظار تأیید نیست."
     },

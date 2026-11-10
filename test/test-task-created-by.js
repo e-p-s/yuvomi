@@ -107,6 +107,7 @@ const USERS = [
 const aufgabe = (over = {}) => ({
   id: 7, title: 'Muell raus', status: 'open', category: 'household',
   priority: 'none', due_date: null, due_time: null,
+  created_at: '2026-11-09T10:30:00Z',
   assigned_users: [], created_by: 1, ...over,
 });
 
@@ -117,41 +118,54 @@ const cacheWith = async (data) => {
   await prefs.getPreferences();
 };
 
-test('Default aus: die Detailansicht zeigt keinen "Angelegt von"-Text', () => {
+/** Der Text des synthetischen Ersteller-Kommentars, oder null. */
+function creatorText(task, ctx) {
+  const row = detail.createdByCommentRow(task, ctx);
+  if (!row) return null;
+  // mini-dom sammelt Kinder in childNodes (kein firstChild).
+  return (row.childNodes ?? [])[0]?.textContent ?? row.firstChild?.textContent;
+}
+
+test('Default aus: weder Kopf noch Kommentar nennen den Ersteller', () => {
   const head = detail.taskDetailHead(aufgabe(), { users: USERS, showCreatedBy: false });
   assert.deepEqual(head.facts, [], 'ohne Schalter bleibt der Kopf frei von Ersteller-Text');
+  assert.equal(creatorText(aufgabe(), { users: USERS, showCreatedBy: false }), null,
+    'ohne Schalter zeigt auch der Kommentar nichts');
 });
 
-test('Schalter an + created_by gesetzt: der Name des Anlegenden erscheint', () => {
+test('Schalter an: der erste Kommentar nennt Name und Zeit', () => {
+  const text = creatorText(aufgabe({ created_by: 2 }), { users: USERS, showCreatedBy: true });
+  assert.ok(text, 'mit Schalter zeichnet die Ansicht den Kommentar');
+  assert.ok(text.startsWith('tasks.createdByComment'),
+    'der Stub-t() liefert Schluessel plus Werte - gemessen wird die Loesung, nicht der Text');
+  assert.ok(text.includes('Papa'), 'der Name des Anlegenden loest sich auf');
+});
+
+test('Der Kopf nennt den Ersteller nie - der Kommentar ist der einzige Ort', () => {
   const head = detail.taskDetailHead(aufgabe({ created_by: 2 }), { users: USERS, showCreatedBy: true });
-  assert.equal(head.facts.length, 1);
-  assert.equal(head.facts[0], 'tasks.createdByDetail{"name":"Papa"}',
-    'der Stub-t() gibt Schluessel plus Werte zurueck - gemessen wird die Loesung, nicht der Text');
+  assert.deepEqual(head.facts, [], 'Kopf und Kommentar doppelt waere Rauschen');
 });
 
 test('created_by fehlt: nichts zu zeigen, auch mit Schalter an', () => {
-  const head = detail.taskDetailHead(aufgabe({ created_by: null }), { users: USERS, showCreatedBy: true });
-  assert.deepEqual(head.facts, [], 'eine Aufgabe ohne Ersteller nennt keinen');
+  assert.equal(creatorText(aufgabe({ created_by: null }), { users: USERS, showCreatedBy: true }), null,
+    'eine Aufgabe ohne Ersteller nennt keinen');
 });
 
 test('ohne Aufloesung kein Name: die Ansicht raet nicht', () => {
-  const head = detail.taskDetailHead(aufgabe({ created_by: 99 }), { users: USERS, showCreatedBy: true });
-  assert.deepEqual(head.facts, [], 'ein erfundener Name waere schlimmer als keiner');
+  assert.equal(creatorText(aufgabe({ created_by: 99 }), { users: USERS, showCreatedBy: true }), null,
+    'ein erfundener Name waere schlimmer als keiner');
 });
 
 test('der Schalter kommt aus dem Praeferenz-Cache, wenn der ctx ihn nicht setzt', async () => {
   await cacheWith({ task_created_by_visible: true });
-  const head = detail.taskDetailHead(aufgabe(), { users: USERS });
-  assert.equal(head.facts.length, 1, 'Cache an -> Anzeige an');
+  assert.ok(creatorText(aufgabe(), { users: USERS }), 'Cache an -> Anzeige an');
 
   await cacheWith({ task_created_by_visible: false });
-  const off = detail.taskDetailHead(aufgabe(), { users: USERS });
-  assert.deepEqual(off.facts, [], 'Cache aus -> Anzeige aus');
+  assert.equal(creatorText(aufgabe(), { users: USERS }), null, 'Cache aus -> Anzeige aus');
 
   // Kein Cache ueberhaupt: die Richtung des Defaults (aus), nicht ein geratenes An.
   prefs.resetPreferencesCache();
-  const cold = detail.taskDetailHead(aufgabe(), { users: USERS });
-  assert.deepEqual(cold.facts, [], 'ohne Antwort bleibt es beim Default aus');
+  assert.equal(creatorText(aufgabe(), { users: USERS }), null, 'ohne Antwort bleibt es beim Default aus');
 });
 
 test('savePreferences zieht den Cache nach (Speichern im Blatt wirkt sofort)', async () => {

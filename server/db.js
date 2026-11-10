@@ -12598,6 +12598,21 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 294,
+    description: 'household rule: child-created tasks carry no points',
+    // Aufgaben, die ein Kind sich selbst gegeben hat, tragen immer 0 Punkte
+    // (Regel des Haushalts; der Server erzwingt das seither bei POST/PATCH).
+    // Rueckwirkend: auch bereits angelegte Kind-Aufgaben auf 0 - erhaltene
+    // Auszahlungen bleiben unbetroffen, der Aufgabenwert ist nur die Anzeige.
+    up(database) {
+      database.exec(`
+        UPDATE tasks SET points = 0
+        WHERE points != 0
+          AND created_by IN (SELECT id FROM users WHERE family_role = 'child')
+      `);
+    },
+  },
 ];
 
 /**

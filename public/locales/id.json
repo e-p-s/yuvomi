@@ -744,7 +744,8 @@
         "approvalQueueNotice": "{{count}} check-in menunggu konfirmasi.",
         "approvalQueueNotice_one": "{{count}} check-in menunggu konfirmasi.",
         "approvalQueueToggle": "Tampilkan yang menunggu saja",
-        "createdByDetail": "Dibuat oleh {{name}}",
+        "createdByComment": "Dibuat oleh {{name}} pada {{date}} pukul {{time}}",
+        "createdByCommentNoTime": "Dibuat oleh {{name}}",
         "task_approval_admin_only": "Hanya administrator yang menyetujui atau menolak tugas.",
         "task_approval_not_pending": "Tugas ini tidak menunggu persetujuan saat ini."
     },

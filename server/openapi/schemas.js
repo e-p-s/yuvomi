@@ -1064,7 +1064,7 @@ export const schemas = {
         TaskOptionsResponse: {
           type: 'object',
           description: 'The values of the task editor and its filters. Unlike the other task answers this one has no `data` wrapper.',
-          required: ['users', 'priorities', 'statuses', 'categories', 'tags', 'default_points'],
+          required: ['users', 'priorities', 'statuses', 'categories', 'tags', 'default_points', 'points_editable'],
           properties: {
             users: {
               type: 'array',
@@ -1086,6 +1086,7 @@ export const schemas = {
               description: 'What the `status` filter and input take. `archived` stands for the archive here; a task never reads back with it.',
               items: { type: 'string', enum: ['open', 'in_progress', 'done', 'archived'] },
             },
+            points_editable: { type: 'boolean', description: 'Whether the caller may set a task\'s point value. False for children: a task a child creates carries 0 points, and points can only be granted by a parent or admin.' },
             categories: { type: 'array', items: { $ref: '#/components/schemas/TaskCategory' } },
             tags: {
               type: 'array',

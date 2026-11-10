@@ -846,7 +846,8 @@
         "approvalQueueNotice_few": "{{count}} чекина ждут подтверждения.",
         "approvalQueueNotice_many": "{{count}} чекинов ждут подтверждения.",
         "approvalQueueToggle": "Только ожидающие",
-        "createdByDetail": "Создал(а): {{name}}",
+        "createdByComment": "Создал(а) {{name}} {{date}} в {{time}}",
+        "createdByCommentNoTime": "Создал(а) {{name}}",
         "task_approval_admin_only": "Задачи утверждает или отклоняет только администратор.",
         "task_approval_not_pending": "Эта задача сейчас не ждёт утверждения."
     },

@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} check-in αναμένουν επιβεβαίωση.",
         "approvalQueueNotice_one": "{{count}} check-in αναμένει επιβεβαίωση.",
         "approvalQueueToggle": "Μόνο σε αναμονή",
-        "createdByDetail": "Δημιουργήθηκε από {{name}}",
+        "createdByComment": "Δημιουργήθηκε από {{name}} στις {{date}} ώρα {{time}}",
+        "createdByCommentNoTime": "Δημιουργήθηκε από {{name}}",
         "task_approval_admin_only": "Μόνο ένας διαχειριστής εγκρίνει ή απορρίπτει εργασίες.",
         "task_approval_not_pending": "Αυτή η εργασία δεν περιμένει έγκριση αυτή τη στιγμή."
     },

@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} giriş onay bekliyor.",
         "approvalQueueNotice_one": "{{count}} giriş onay bekliyor.",
         "approvalQueueToggle": "Yalnızca bekleyenleri göster",
-        "createdByDetail": "Oluşturan: {{name}}",
+        "createdByComment": "{{name}} tarafından {{date}} {{time}} tarihinde oluşturuldu",
+        "createdByCommentNoTime": "{{name}} tarafından oluşturuldu",
         "task_approval_admin_only": "Görevleri yalnızca bir yönetici onaylar veya reddeder.",
         "task_approval_not_pending": "Bu görev şu anda onay beklemiyor."
     },

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Aufgaben von Kindern tragen keine Punkte.** Ein Kind kann Aufgaben anlegen und
+  bearbeiten, der Punktwert bleibt dabei immer 0 - auch wenn ein Wert mitgeschickt
+  wird; Punkte vergibt ein Elternteil nachtraeglich wie bisher. Der
+  Bearbeiten-Dialog blendet das Punktfeld bei Kindern aus (`GET /tasks/meta/options`
+  liefert dafuer `points_editable`), und bestehende Aufgaben von Kindern setzt
+  Migration 294 auf 0 zurueck.
+- **Ersteller-Kommentar in der Aufgabe.** Ist der haushaltweite Schalter "Wer hat die
+  Aufgabe angelegt" an (Default aus), nennt im Aufgaben-Detail ein erster Kommentar,
+  wer die Aufgabe wann angelegt hat. Die Zeile wird aus den vorhandenen Daten
+  gezeichnet - sie gilt auch fuer Aufgaben, die vor dem Schalter angelegt wurden.
 - **Medienzeit als Feature-Modul (interner Umbau).** Die Serverseite der
   Medienzeit (Routen, Report-Push, Regel-Engine, Family-Link-Dienst,
   Ingest-Scheduler, Spec-Bausteine) lebt jetzt gesammelt unter

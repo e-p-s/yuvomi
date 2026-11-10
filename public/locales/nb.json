@@ -726,7 +726,8 @@
         "approvalQueueNotice": "{{count}} innsjekker venter på bekreftelse.",
         "approvalQueueNotice_one": "{{count}} innsjekk venter på bekreftelse.",
         "approvalQueueToggle": "Vis kun ventende",
-        "createdByDetail": "Opprettet av {{name}}",
+        "createdByComment": "Opprettet av {{name}} {{date}} kl. {{time}}",
+        "createdByCommentNoTime": "Opprettet av {{name}}",
         "task_approval_admin_only": "Bare en administrator godkjenner eller avslar oppgaver.",
         "task_approval_not_pending": "Denne oppgaven venter ikke pa godkjenning akkurat naa."
     },
