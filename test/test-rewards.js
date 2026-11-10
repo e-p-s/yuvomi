@@ -232,22 +232,22 @@ test('Serie: der Deckel gilt je Person (#1603)', () => {
   const b2 = getBalance(db, child2);
   const a = makeTask(10, [child1, child2]);
   complete(a, '2031-04-01T09:00:00Z');
-  assert.equal(getBalance(db, child1), b1 + 10);
-  assert.equal(getBalance(db, child2), b2 + 10, 'mehrere Zugewiesene: jede Person bekommt ihre eine Gutschrift');
+  assert.equal(getBalance(db, child1), b1 + 5);
+  assert.equal(getBalance(db, child2), b2 + 5, 'mehrere Zugewiesene: Punkte werden geteilt, jede Person bekommt ihre eine Gutschrift');
 
   // Die zweite Instanz erledigt nachweislich child2 - child2 ist für heute
   // schon vergütet, child1 wird nicht benannt und bekommt auch nichts.
   const b = makeFollowup(a, 10, [child1, child2]);
   complete(b, '2031-04-01T10:00:00Z', { doneBy: child2 });
-  assert.equal(getBalance(db, child1), b1 + 10);
-  assert.equal(getBalance(db, child2), b2 + 10);
+  assert.equal(getBalance(db, child1), b1 + 5);
+  assert.equal(getBalance(db, child2), b2 + 5);
 
   // Eine Person, die heute für diese Serie noch nichts bekommen hat, bekommt es.
   const x = makeTask(10, [child1]);
   complete(x, '2031-04-02T09:00:00Z');
   const y = makeFollowup(x, 10, [child1]);
   complete(y, '2031-04-02T10:00:00Z', { doneBy: child2 });
-  assert.equal(getBalance(db, child2), b2 + 20, 'child1 war vergütet, child2 für diese Serie heute noch nicht');
+  assert.equal(getBalance(db, child2), b2 + 15, 'child1 war vergütet, child2 für diese Serie heute noch nicht');
   db.prepare('DELETE FROM reward_participants WHERE user_id = ?').run(child2);
 });
 

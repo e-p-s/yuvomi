@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Mehrere Zuständige teilen sich die Punkte.** Wird eine Aufgabe von zwei
+  oder mehr zugewiesenen Personen gemeinsam erledigt, wird der Punktwert
+  geteilt: möglichst gleich, der Rest geht in Zuweisungsreihenfolge nach vorn
+  (5 Punkte an zwei = 3 + 2). Eine einzelne zugewiesene Person und eine
+  benannt erledigende Person erhalten weiter den vollen Wert. Das
+  Wiedereröffnen nimmt wie bisher genau die gebuchten Beträge zurück, bei
+  Teilung also pro Person deren Anteil.
+
 - **Freigabe-Default als Einstellung, Default an.** In den Einstellungen
   (Gruppe Aufgaben/Praemien) gibt es jetzt den Schalter "Freigabe durch Eltern
   erforderlich": neue Aufgaben starten dann freigabepflichtig, ohne Angabe

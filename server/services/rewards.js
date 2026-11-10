@@ -348,13 +348,28 @@ export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null,
     // Bestaetigungstag (die Freigabe aendert nichts daran, wann erledigt wurde).
     const decay = lateDecay(d, task, completedOn ?? today);
     const since = ledgerTimestamp(new Date(now.getTime() - SERIES_LOOKBACK_MS));
+    // Vorfilter: wer kommt ueberhaupt in Frage (Netto-Idempotenz, Serien-Deckel).
+    const active = [];
     for (const uid of new Set(targets)) {
       if (net.get(taskId, uid).net > 0) continue;
       const paidToday = seriesEarns.all({ series, user: uid, task: taskId, since })
         .some((row) => utcToWall(row.created_at, zone)?.date === today);
       if (paidToday) continue;
-      ins.run(uid, decay.awarded, task.title || null, taskId, actingUserId || null, ledgerTimestamp(now), series, decay.days, decay.base);
+      active.push(uid);
     }
+    if (!active.length) return;
+    // Haushaltsregel 2026-11-10: mehrere Zustaendige teilen sich die Punkte -
+    // moeglichst gleich, Unterschied hoechstens 1, der Rest geht in
+    // Zuweisungsreihenfolge nach vorn. Eine Person (oder die benannte
+    // erledigende Person) erhaelt weiter den vollen Wert; base_points bleibt
+    // der Aufgabenwert, die Aufteilung zeigt sich im Delta der Zeilen.
+    const share = Math.floor(decay.awarded / active.length);
+    const rest = decay.awarded % active.length;
+    active.forEach((uid, i) => {
+      const amount = share + (i < rest ? 1 : 0);
+      if (amount <= 0) return;
+      ins.run(uid, amount, task.title || null, taskId, actingUserId || null, ledgerTimestamp(now), series, decay.days, decay.base);
+    });
   })();
 }
 
