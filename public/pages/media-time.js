@@ -2522,7 +2522,7 @@ const FL_LOGIN_ERRORS = {
  * Passwort lebt dabei nur im Eingabefeld: nie in state, nie in localStorage.
  * Dieser Schalter sagt, welchen Schritt des Formulars die Anzeige zeigt; er
  * gilt fuer diese Seite und wird bei jedem Neuaufbau der Gruppe zurueckgesetzt. */
-let _flAuthMode = 'form'; // 'form' | 'otp' | 'challenge'
+let _flAuthMode = 'form'; // 'form' | 'otp' | 'challenge' | 'relogin'
 
 /* Der Merker laeuft mit, bis das Fenster zu ist oder die Viewer-Zeit ablauft;
  * ein zweiter Anmeldeverschnitt loescht den vorigen Merker. */
@@ -2755,11 +2755,23 @@ function wireFlAuth(form, host) {
 
 /* Der Block haengt an der settings-Antwort: 'ok' ist eine ruhige Zeile,
  * 'expired' und 'setup' zeigen dasselbe Zugangsdaten-Formular - einmal
- * ausfuellen, danach laeuft die Verbindung von allein. Die Schrittfolge und
+ * ausfuellen, danach laeuft die Verbindung von allein. Im 'ok'-Zustand steht
+ * derselbe Weg bereit, wenn er gewollt ist: der Knopf holt das Formular
+ * unter der ruhigen Zeile hervor (Konto-Wechsel, wenn Google still abmeldet). Die Schrittfolge und
  * der Fenster-Knopf wohnen ganz unten in der Gruppe (Experten-Details). */
 function flStatusBlockHtml(s) {
   const kind = flCollectorState(s);
   if (kind === 'ok') {
+    /* Wer sich (neu) anmelden will, sieht das Formular trotz ruhigem Zustand -
+     * dasselbe Formular, das sonst nur bei 'expired' und 'setup' shows. */
+    if (_flAuthMode === 'relogin' || _flAuthMode === 'otp') {
+      return `${flAuthFormHtml(s)}
+      <div class="mt-row-actions">
+        <button class="btn btn--ghost btn--sm" type="button" data-action="mt-fl-relogin-cancel">
+          <span>${esc(t('common.back'))}</span>
+        </button>
+      </div>`;
+    }
     const mins = Math.max(0, Math.round((Date.now() - Date.parse(s.familylink_last_report_at || '')) / 60000));
     const line = mins < 1
       ? t('mediaTime.flRunningJustNow')
@@ -2768,7 +2780,12 @@ function flStatusBlockHtml(s) {
       <p class="mt-fl-status__line">
         <i class="mt-fl-status__icon" data-lucide="check-circle-2" aria-hidden="true"></i>
         <span>${esc(line)}</span>
-      </p>`;
+      </p>
+      <div class="mt-row-actions">
+        <button class="btn btn--ghost btn--sm" type="button" data-action="mt-fl-relogin">
+          <i data-lucide="refresh-cw" aria-hidden="true"></i><span>${esc(t('mediaTime.flLoginCta'))}</span>
+        </button>
+      </div>`;
   }
   const heading = kind === 'expired' ? t('mediaTime.flExpiredTitle') : t('mediaTime.flSetupTitle');
   /* familylink_status_at ist der Nachweis, dass der Status selbst frisch
@@ -2799,6 +2816,10 @@ function renderFlStatus(host) {
   box.replaceChildren();
   box.insertAdjacentHTML('beforeend', flStatusBlockHtml(state.settings || {}));
   icons(box);
+  box.querySelector('[data-action="mt-fl-relogin"]')?.addEventListener('click', () => {
+    _flAuthMode = 'relogin';
+    renderFlStatus(host);
+  });
   const form = box.querySelector('#mt-fl-auth-form');
   if (form) wireFlAuth(form, host);
 }
@@ -3337,3 +3358,11 @@ export async function update({ path, user } = {}) {
   }
   return true;
 }
+
+/* Testflaeche (Muster wie __test in tasks.js): der Statusblock als Funktion,
+ * der Formularmodus als Schalter - derselbe Weg, den renderFlStatus geht. */
+export const __test = {
+  flStatusBlockHtml,
+  setAuthMode(mode) { _flAuthMode = mode; },
+  getAuthMode() { return _flAuthMode; },
+};

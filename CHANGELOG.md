@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Family-Link: Anmeldung jederzeit aus der App.** War der Sammler gesund,
+  zeigte die Medienzeit-Seite nur die ruhige Zeile - ein Weg, sich erneut mit
+  E-Mail, Passwort und zweitem Code anzumelden (Kontowechsel, wenn Google
+  still abmeldet), fehlte. Der Knopf „Jetzt anmelden" holt jetzt auch im
+  gesunden Zustand das Zugangsdaten-Formular hervor; der Code-Schritt und der
+  Rueckweg folgen. Eigens gemessen in einer neuen UI-Suite.
+
 - **Mehrere Zuständige teilen sich die Punkte.** Wird eine Aufgabe von zwei
   oder mehr zugewiesenen Personen gemeinsam erledigt, wird der Punktwert
   geteilt: möglichst gleich, der Rest geht in Zuweisungsreihenfolge nach vorn
