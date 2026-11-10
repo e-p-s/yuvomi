@@ -18,6 +18,7 @@ Usage:
   python3 familyhub_media.py --json     # + Rohdateien ~/.familyhub/child_<uid>.json
   python3 familyhub_media.py --learn    # alle Templates neu abhören (nach Login-Wechsel)
 """
+import datetime
 import hashlib
 import json
 import os
@@ -266,42 +267,39 @@ def learn_child_templates(ws, uid, sid, member_idx=None):
     return have
 
 
-def parse_usage(data):
-    """appsandusage → {pkg: {name, minutes}}. Sessions: positionale Arrays mit
-    usage-String '<sek>s' und Paketname (aus data[0]-Deckblatt)."""
+def parse_usage(data, day=None):
+    """appsandusage -> {pkg: {name, minutes}} fuer den gegebenen Tag.
+
+    Datenform (verifiziert 10.11. an echten Antworten; die fruehe Annahme
+    'data[0]-Deckblatt + <sek>s-Strings' existiert so nicht — der alte Parser
+    lieferte deshalb seit je 0 Apps):
+      data[1] = App-Verzeichnis [pkg, name, icon, ...]
+      data[6] = Sitzungen [[dauer_sekunden, ...], [pkg], gerat, 0, [Jahr, Monat, Tag]]
+    Nur Sitzungen des Tages (Geraetelokalzeit) zaehlen; Feld 1 ist ein
+    Zeitstempel-ms-Wert, KEINE Dauer (10.11.-Gegenprobe: Summe ergaebe
+    tagelang)."""
     apps = {}
-    if not isinstance(data, list) or not data:
+    if not isinstance(data, list) or len(data) < 7:
         return apps
     names = {}
-    if isinstance(data[0], list):
-        for a in data[0]:
+    if isinstance(data[1], list):
+        for a in data[1]:
             if isinstance(a, list) and len(a) > 1 and isinstance(a[0], str):
                 names[a[0]] = a[1] if isinstance(a[1], str) else a[0]
-
-    def find_pkg(node):
-        if isinstance(node, list):
-            if node and isinstance(node[0], str) and node[0] in names:
-                return node[0]
-            for c in node:
-                r = find_pkg(c)
-                if r:
-                    return r
-        return None
-
-    def walk(node):
-        if isinstance(node, list):
-            strs = [x for x in node if isinstance(x, str) and re.fullmatch(r"[\d.]+s", str(x))]
-            if strs:
-                pkg = find_pkg(node)
-                if pkg:
-                    apps[pkg] = apps.get(pkg, 0) + sum(float(s[:-1]) for s in strs)
-            for c in node:
-                walk(c)
-
-    for i in range(1, len(data)):
-        walk(data[i])
-    return {pkg: {"name": names.get(pkg, pkg), "minutes": round(s / 60, 1)}
-            for pkg, s in apps.items()}
+    today = day or datetime.date.today()
+    tag = [today.year, today.month, today.day]
+    sessions = data[6] if isinstance(data[6], list) else []
+    for s in sessions:
+        try:
+            dur = int(str(s[0][0]))
+            pkg = s[1][0]
+            d = s[4]
+        except (IndexError, TypeError, ValueError):
+            continue
+        if isinstance(d, list) and d[:3] == tag[:3]:
+            apps[pkg] = apps.get(pkg, 0) + dur
+    return {pkg: {"name": names.get(pkg, pkg), "minutes": round(sec / 60, 1)}
+            for pkg, sec in apps.items()}
 
 
 def report(as_json=False, force_learn=False):
