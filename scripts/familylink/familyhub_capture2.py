@@ -126,7 +126,35 @@ def page_target():
     return best
 
 
+def kill_chromium():
+    """Profil-Chromium beenden (erst sanft, dann hart) und auf Port-Ende warten.
+    Grund: ein lauschender, aber erstarrter CDP-Socket haelt chromium_running()
+    fuer True — neue Clients laufen in TimeoutError (belegt 2026-11-10)."""
+    subprocess.call(["pkill", "-f", "--user-data-dir=" + PROFILE])
+    for _ in range(10):
+        if not chromium_running():
+            return True
+        time.sleep(1)
+    subprocess.call(["pkill", "-KILL", "-f", "--user-data-dir=" + PROFILE])
+    for _ in range(5):
+        if not chromium_running():
+            return True
+        time.sleep(1)
+    return False
+
+
 def ensure_page(url):
+    try:
+        return _ensure_page_once(url)
+    except (TimeoutError, OSError):
+        # Erstarte Browser-Leiche: der lauschende CDP-Port akzeptiert noch
+        # Verbindungen, antwortet aber nicht. Neu starten und einmal erneut.
+        kill_chromium()
+        ensure_chromium()
+        return _ensure_page_once(url)
+
+
+def _ensure_page_once(url):
     t = page_target()
     ws = WS(t["webSocketDebuggerUrl"]) if t else None
     if ws is None:

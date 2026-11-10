@@ -66,6 +66,7 @@ export async function startFamilylinkLoginSession() {
     try {
       await fetchImpl(`${base}/login/cancel`, {
         method: 'POST',
+        signal: AbortSignal.timeout(5000),
         headers: { authorization: `Bearer ${secret}` },
       });
     } catch { /* best effort */ }
@@ -76,6 +77,7 @@ export async function startFamilylinkLoginSession() {
   try {
     const res = await fetchImpl(`${base}/login/start`, {
       method: 'POST',
+      signal: AbortSignal.timeout(25000),
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${secret}`,
@@ -120,6 +122,7 @@ export async function postFamilylinkLogin({ email, password, code } = {}) {
   try {
     res = await fetchImpl(`${base}/login/auto`, {
       method: 'POST',
+      signal: AbortSignal.timeout(90000),
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${secret}`,

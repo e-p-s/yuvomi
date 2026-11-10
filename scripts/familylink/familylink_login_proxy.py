@@ -1146,7 +1146,18 @@ class Handler(BaseHTTPRequestHandler):
             return None
 
     def _authed(self):
-        return bearer_ok(self.headers.get("Authorization"), read_login_secret())
+        ok = bearer_ok(self.headers.get("Authorization"), read_login_secret())
+        if not ok:
+            # Diagnose ohne Klartext: Längen + MD5-Präfixe zeigen, welche Seite
+            # nicht passt (Header fehlend? Secret-Datei leer? andere Datei?).
+            h = self.headers.get("Authorization") or ""
+            s = read_login_secret() or ""
+            import hashlib
+            sys.stderr.write(
+                "auth_fail: hdr_len=%d hdr_md5=%s secret_len=%d secret_md5=%s\n"
+                % (len(h), hashlib.md5(h.encode()).hexdigest()[:8],
+                   len(s), hashlib.md5(s.encode()).hexdigest()[:8]))
+        return ok
 
     # — GET ———————————————————————————————————————————————————————————
 
