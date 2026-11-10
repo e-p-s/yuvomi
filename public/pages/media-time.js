@@ -1590,49 +1590,54 @@ function openBookingModal(presetChildId = null, existing = null) {
           <button type="submit" class="btn btn--primary" id="mt-booking-submit">${esc(existing ? t('common.save') : t('common.add'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const errEl = panel.querySelector('#mt-booking-error');
-      const submit = panel.querySelector('#mt-booking-submit');
-      const fail = (msg) => { errEl.textContent = msg; errEl.hidden = false; };
-      const selChild = Number(panel.querySelector('#mt-booking-child').value) || userId;
-      const devRaw = panel.querySelector('#mt-booking-device').value;
-      const note = String(panel.querySelector('#mt-booking-note').value || '').trim() || null;
-      const body = { user_id: selChild, device_id: devRaw === '' ? null : Number(devRaw), note };
-      const active = panel.querySelector('.mt-mode__btn--on')?.dataset.mode || 'duration';
-      if (active === 'period') {
-        const st = parseTimeInput(panel.querySelector('#mt-booking-start').value);
-        const en = parseTimeInput(panel.querySelector('#mt-booking-end').value);
-        if (!st || !en) { fail(t('mediaTime.bookingTimeProblem')); return; }
-        if (en <= st) { fail(t('mediaTime.bookingTimeOrder')); return; }
-        const day = localDayKey();
-        body.start_at = new Date(`${day}T${st}:00`).toISOString();
-        body.end_at = new Date(`${day}T${en}:00`).toISOString();
-      } else {
-        const minutes = Number.parseInt(panel.querySelector('#mt-booking-minutes').value, 10);
-        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
-          fail(t('mediaTime.bookingMinutesProblem'));
-          return;
-        }
-        body.minutes = minutes;
-      }
-      submit.disabled = true;
-      try {
-        if (existing) {
-          await api.patch(`/media-time/sessions/${encodeURIComponent(existing.id)}`, body);
+    onSave: (panel) => {
+      const form = panel.querySelector('#mt-booking-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = panel.querySelector('#mt-booking-error');
+        const submit = panel.querySelector('#mt-booking-submit');
+        const fail = (msg) => { errEl.textContent = msg; errEl.hidden = false; };
+        const selChild = Number(panel.querySelector('#mt-booking-child').value) || userId;
+        const devRaw = panel.querySelector('#mt-booking-device').value;
+        const note = String(panel.querySelector('#mt-booking-note').value || '').trim() || null;
+        const body = { user_id: selChild, device_id: devRaw === '' ? null : Number(devRaw), note };
+        const active = panel.querySelector('.mt-mode__btn--on')?.dataset.mode || 'duration';
+        if (active === 'period') {
+          const st = parseTimeInput(panel.querySelector('#mt-booking-start').value);
+          const en = parseTimeInput(panel.querySelector('#mt-booking-end').value);
+          if (!st || !en) { fail(t('mediaTime.bookingTimeProblem')); return; }
+          if (en <= st) { fail(t('mediaTime.bookingTimeOrder')); return; }
+          const day = localDayKey();
+          body.start_at = new Date(`${day}T${st}:00`).toISOString();
+          body.end_at = new Date(`${day}T${en}:00`).toISOString();
         } else {
-          await api.post('/media-time/sessions', body);
+          const minutes = Number.parseInt(panel.querySelector('#mt-booking-minutes').value, 10);
+          if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
+            fail(t('mediaTime.bookingMinutesProblem'));
+            return;
+          }
+          body.minutes = minutes;
         }
-        if (!isModalContextCurrent(modalContext)) return;
-        closeModal({ force: true, context: modalContext });
-        toast(t('mediaTime.bookingSaved'));
-        await reloadAfterSave(async () => {
-          await renderCurrentTab(_container, { direction: 0 });
-          refocusAfterRender();
-        });
-      } catch (e) {
-        submit.disabled = false;
-        fail(mediaTimeErrorSentence(e));
-      }
+        submit.disabled = true;
+        try {
+          if (existing) {
+            await api.patch(`/media-time/sessions/${encodeURIComponent(existing.id)}`, body);
+          } else {
+            await api.post('/media-time/sessions', body);
+          }
+          if (!isModalContextCurrent(modalContext)) return;
+          closeModal({ force: true, context: modalContext });
+          toast(t('mediaTime.bookingSaved'));
+          await reloadAfterSave(async () => {
+            await renderCurrentTab(_container, { direction: 0 });
+            refocusAfterRender();
+          });
+        } catch (e) {
+          submit.disabled = false;
+          fail(mediaTimeErrorSentence(e));
+        }
+      });
     },
   });
   /* Kind wechseln = Geraeteliste wechseln; der Umschalter schiebt die Felder.
@@ -1732,32 +1737,37 @@ function openBudgetModal(childId) {
           <button type="submit" class="btn btn--primary" id="mt-budget-submit">${esc(t('common.save'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const errEl = panel.querySelector('#mt-budget-error');
-      const submit = panel.querySelector('#mt-budget-submit');
-      const minutes = Number.parseInt(panel.querySelector('#mt-budget-minutes').value, 10);
-      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
-        errEl.textContent = t('mediaTime.budgetProblem');
-        errEl.hidden = false;
-        return;
-      }
-      const body = { daily_minutes: minutes, enabled: row ? row.enabled !== false : true };
-      if (maxCap != null) body.max_daily_minutes = maxCap;
-      submit.disabled = true;
-      try {
-        await api.put(`/media-time/quotas/${encodeURIComponent(childId)}`, body);
-        if (!isModalContextCurrent(modalContext)) return;
-        closeModal({ force: true, context: modalContext });
-        toast(t('mediaTime.budgetSaved'));
-        await reloadAfterSave(async () => {
-          await renderCurrentTab(_container, { direction: 0 });
-          refocusAfterRender();
-        });
-      } catch (err) {
-        submit.disabled = false;
-        errEl.textContent = mediaTimeErrorSentence(err);
-        errEl.hidden = false;
-      }
+    onSave: (panel) => {
+      const form = panel.querySelector('#mt-budget-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = panel.querySelector('#mt-budget-error');
+        const submit = panel.querySelector('#mt-budget-submit');
+        const minutes = Number.parseInt(panel.querySelector('#mt-budget-minutes').value, 10);
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+          errEl.textContent = t('mediaTime.budgetProblem');
+          errEl.hidden = false;
+          return;
+        }
+        const body = { daily_minutes: minutes, enabled: row ? row.enabled !== false : true };
+        if (maxCap != null) body.max_daily_minutes = maxCap;
+        submit.disabled = true;
+        try {
+          await api.put(`/media-time/quotas/${encodeURIComponent(childId)}`, body);
+          if (!isModalContextCurrent(modalContext)) return;
+          closeModal({ force: true, context: modalContext });
+          toast(t('mediaTime.budgetSaved'));
+          await reloadAfterSave(async () => {
+            await renderCurrentTab(_container, { direction: 0 });
+            refocusAfterRender();
+          });
+        } catch (err) {
+          submit.disabled = false;
+          errEl.textContent = mediaTimeErrorSentence(err);
+          errEl.hidden = false;
+        }
+      });
     },
   });
   setTimeout(() => {
@@ -1800,32 +1810,37 @@ function openDeviceLimitModal(childId, deviceId, deviceName) {
           <button type="submit" class="btn btn--primary" id="mt-limit-submit">${esc(t('common.save'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const errEl = panel.querySelector('#mt-limit-error');
-      const submit = panel.querySelector('#mt-limit-submit');
-      const minutes = Number.parseInt(panel.querySelector('#mt-limit-minutes').value, 10);
-      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
-        errEl.textContent = t('mediaTime.budgetProblem');
-        errEl.hidden = false;
-        return;
-      }
-      submit.disabled = true;
-      try {
-        await api.put(`/media-time/quotas/${encodeURIComponent(childId)}`, {
-          device_id: deviceId, daily_minutes: minutes,
-        });
-        if (!isModalContextCurrent(modalContext)) return;
-        closeModal({ force: true, context: modalContext });
-        toast(t('mediaTime.deviceLimitSaved'));
-        await reloadAfterSave(async () => {
-          await renderCurrentTab(_container, { direction: 0 });
-          refocusAfterRender();
-        });
-      } catch (err) {
-        submit.disabled = false;
-        errEl.textContent = mediaTimeErrorSentence(err);
-        errEl.hidden = false;
-      }
+    onSave: (panel) => {
+      const form = panel.querySelector('#mt-limit-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = panel.querySelector('#mt-limit-error');
+        const submit = panel.querySelector('#mt-limit-submit');
+        const minutes = Number.parseInt(panel.querySelector('#mt-limit-minutes').value, 10);
+        if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+          errEl.textContent = t('mediaTime.budgetProblem');
+          errEl.hidden = false;
+          return;
+        }
+        submit.disabled = true;
+        try {
+          await api.put(`/media-time/quotas/${encodeURIComponent(childId)}`, {
+            device_id: deviceId, daily_minutes: minutes,
+          });
+          if (!isModalContextCurrent(modalContext)) return;
+          closeModal({ force: true, context: modalContext });
+          toast(t('mediaTime.deviceLimitSaved'));
+          await reloadAfterSave(async () => {
+            await renderCurrentTab(_container, { direction: 0 });
+            refocusAfterRender();
+          });
+        } catch (err) {
+          submit.disabled = false;
+          errEl.textContent = mediaTimeErrorSentence(err);
+          errEl.hidden = false;
+        }
+      });
     },
   });
 }
@@ -1888,47 +1903,52 @@ function openAdjustModal(childId = null) {
           <button type="submit" class="btn btn--primary" id="mt-adjust-submit">${esc(t('mediaTime.adjustConfirm'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const deltaEl = panel.querySelector('#mt-adjust-delta');
-      const reasonEl = panel.querySelector('#mt-adjust-reason');
-      const errEl = panel.querySelector('#mt-adjust-error');
-      const submit = panel.querySelector('#mt-adjust-submit');
-      const fail = (msg) => {
-        errEl.textContent = msg;
-        errEl.hidden = false;
-      };
-      const delta = Math.trunc(Number(deltaEl.value));
-      if (!Number.isInteger(delta) || delta === 0 || delta < -1440 || delta > 1440) {
-        fail(t('mediaTime.adjustDeltaProblem'));
-        return;
-      }
-      const reason = String(reasonEl.value ?? '').trim();
-      if (reason.length < 3 || reason.length > 300) {
-        fail(t('mediaTime.adjustReasonProblem'));
-        return;
-      }
-      // Die Rueckfrage nennt das Ergebnis, nicht die Absicht: von ... nach ...
-      const confirmed = await confirmOverModal({
-        title: t('mediaTime.adjustConfirmTitle', {
-          from: fmtNum(quota),
-          to: fmtNum(Math.max(0, quota + delta)),
-        }),
-        detail: t('mediaTime.adjustConfirmDetail', { reason }),
-        confirmLabel: t('mediaTime.adjustConfirm'),
-      });
-      if (!confirmed) return;
-      submit.disabled = true;
-      try {
-        await api.put(`/media-time/quotas/${encodeURIComponent(target)}/day`, {
-          delta_minutes: delta,
-          reason,
+    onSave: (panel) => {
+      const form = panel.querySelector('#mt-adjust-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const deltaEl = panel.querySelector('#mt-adjust-delta');
+        const reasonEl = panel.querySelector('#mt-adjust-reason');
+        const errEl = panel.querySelector('#mt-adjust-error');
+        const submit = panel.querySelector('#mt-adjust-submit');
+        const fail = (msg) => {
+          errEl.textContent = msg;
+          errEl.hidden = false;
+        };
+        const delta = Math.trunc(Number(deltaEl.value));
+        if (!Number.isInteger(delta) || delta === 0 || delta < -1440 || delta > 1440) {
+          fail(t('mediaTime.adjustDeltaProblem'));
+          return;
+        }
+        const reason = String(reasonEl.value ?? '').trim();
+        if (reason.length < 3 || reason.length > 300) {
+          fail(t('mediaTime.adjustReasonProblem'));
+          return;
+        }
+        // Die Rueckfrage nennt das Ergebnis, nicht die Absicht: von ... nach ...
+        const confirmed = await confirmOverModal({
+          title: t('mediaTime.adjustConfirmTitle', {
+            from: fmtNum(quota),
+            to: fmtNum(Math.max(0, quota + delta)),
+          }),
+          detail: t('mediaTime.adjustConfirmDetail', { reason }),
+          confirmLabel: t('mediaTime.adjustConfirm'),
         });
-        await reloadAfterSave(refresh);
-      } catch (err) {
-        submit.disabled = false;
-        errEl.textContent = mediaTimeErrorSentence(err);
-        errEl.hidden = false;
-      }
+        if (!confirmed) return;
+        submit.disabled = true;
+        try {
+          await api.put(`/media-time/quotas/${encodeURIComponent(target)}/day`, {
+            delta_minutes: delta,
+            reason,
+          });
+          await reloadAfterSave(refresh);
+        } catch (err) {
+          submit.disabled = false;
+          errEl.textContent = mediaTimeErrorSentence(err);
+          errEl.hidden = false;
+        }
+      });
     },
   });
 }
@@ -1971,33 +1991,38 @@ function openPurchaseModal(childId = null) {
           <button type="submit" class="btn btn--primary" id="mt-purchase-submit">${esc(t('mediaTime.purchaseConfirm'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const qtyEl = panel.querySelector('#mt-purchase-qty');
-      const errEl = panel.querySelector('#mt-purchase-error');
-      const submit = panel.querySelector('#mt-purchase-submit');
-      const qty = Math.trunc(Number(qtyEl.value));
-      if (!Number.isInteger(qty) || qty < 1 || qty > PURCHASE_MAX) {
-        errEl.textContent = t('mediaTime.purchaseQtyProblem');
-        errEl.hidden = false;
-        return;
-      }
-      submit.disabled = true;
-      try {
-        const body = { quantity: qty };
-        if (state.canManage && target != null) body.user_id = target;
-        await api.post('/media-time/purchase', body);
-        toast(t('mediaTime.purchaseDoneToast', {
-          minutes: fmtNum(rate.minutes * qty),
-          points: fmtNum(rate.points * qty),
-        }));
-        await reloadAfterSave(refresh);
-      } catch (err) {
-        if (!isModalContextCurrent(modalContext)) return undefined;
-        errEl.textContent = mediaTimeErrorSentence(err);
-        errEl.hidden = false;
-        submit.disabled = false;
-      }
-      return undefined;
+    onSave: (panel) => {
+      const form = panel.querySelector('#mt-purchase-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const qtyEl = panel.querySelector('#mt-purchase-qty');
+        const errEl = panel.querySelector('#mt-purchase-error');
+        const submit = panel.querySelector('#mt-purchase-submit');
+        const qty = Math.trunc(Number(qtyEl.value));
+        if (!Number.isInteger(qty) || qty < 1 || qty > PURCHASE_MAX) {
+          errEl.textContent = t('mediaTime.purchaseQtyProblem');
+          errEl.hidden = false;
+          return;
+        }
+        submit.disabled = true;
+        try {
+          const body = { quantity: qty };
+          if (state.canManage && target != null) body.user_id = target;
+          await api.post('/media-time/purchase', body);
+          toast(t('mediaTime.purchaseDoneToast', {
+            minutes: fmtNum(rate.minutes * qty),
+            points: fmtNum(rate.points * qty),
+          }));
+          await reloadAfterSave(refresh);
+        } catch (err) {
+          if (!isModalContextCurrent(modalContext)) return undefined;
+          errEl.textContent = mediaTimeErrorSentence(err);
+          errEl.hidden = false;
+          submit.disabled = false;
+        }
+        return undefined;
+      });
     },
   });
 }
@@ -2138,24 +2163,29 @@ function openDeviceModal() {
           <button type="submit" class="btn btn--primary">${esc(t('common.add'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const errEl = panel.querySelector('#mt-device-error');
-      const name = String(panel.querySelector('#mt-device-name').value || '').trim();
-      const platform = panel.querySelector('#mt-device-platform').value;
-      const userId = Number(panel.querySelector('#mt-device-child').value) || null;
-      if (!name || !userId) {
-        errEl.textContent = t('mediaTime.deviceFormProblem');
-        errEl.hidden = false;
-        return;
-      }
-      try {
-        const res = await api.post('/media-time/devices', { name, platform, user_id: userId });
-        closeModal({ force: true, context: modalContext });
-        openTokenModal(res.data);
-      } catch (err) {
-        errEl.textContent = mediaTimeErrorSentence(err);
-        errEl.hidden = false;
-      }
+    onSave: (panel) => {
+      const form = panel.querySelector('#mt-device-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = panel.querySelector('#mt-device-error');
+        const name = String(panel.querySelector('#mt-device-name').value || '').trim();
+        const platform = panel.querySelector('#mt-device-platform').value;
+        const userId = Number(panel.querySelector('#mt-device-child').value) || null;
+        if (!name || !userId) {
+          errEl.textContent = t('mediaTime.deviceFormProblem');
+          errEl.hidden = false;
+          return;
+        }
+        try {
+          const res = await api.post('/media-time/devices', { name, platform, user_id: userId });
+          closeModal({ force: true, context: modalContext });
+          openTokenModal(res.data);
+        } catch (err) {
+          errEl.textContent = mediaTimeErrorSentence(err);
+          errEl.hidden = false;
+        }
+      });
     },
   });
 }
@@ -3150,47 +3180,52 @@ function openExceptionModal(existing) {
           <button type="submit" class="btn btn--primary">${esc(existing ? t('common.save') : t('common.add'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const errEl = panel.querySelector('#mt-exception-error');
-      const userRaw = panel.querySelector('#mt-exc-user').value;
-      const item = {
-        user_id: userRaw === '' ? null : Number(userRaw),
-        match_type: panel.querySelector('#mt-exc-match').value,
-        pattern: String(panel.querySelector('#mt-exc-pattern').value || '').trim(),
-        exempt_from: panel.querySelector('#mt-exc-exempt').value,
-        // 'duty' = Pflichtzeit (zaehlt nie gegen das Kontingent, eigener Satz in /today)
-        kind: panel.querySelector('#mt-exc-kind')?.value === 'duty' ? 'duty' : 'quota',
-        note: String(panel.querySelector('#mt-exc-note').value || '').trim() || null,
-      };
-      if (!item.pattern) {
-        errEl.textContent = t('mediaTime.exceptionPatternProblem');
-        errEl.hidden = false;
-        return;
-      }
-      try {
-        const upsert = [item];
-        let revoke = [];
-        if (existing && (existing.user_id !== item.user_id
-          || existing.match_type !== item.match_type
-          || existing.pattern !== item.pattern)) {
-          // Aendern an den Schluesseln ist eine neue Regel: die alte zieht ab,
-          // sonst stünden zwei Regeln fuer ein Kind im Tracker-Cache.
-          revoke = [existing.id];
-        }
-        const applied = await putExceptionsGuarded({ upsert, revoke });
-        if (!applied) {
-          closeModal({ force: true, context: modalContext });
+    onSave: (panel) => {
+      const form = panel.querySelector('#mt-exception-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = panel.querySelector('#mt-exception-error');
+        const userRaw = panel.querySelector('#mt-exc-user').value;
+        const item = {
+          user_id: userRaw === '' ? null : Number(userRaw),
+          match_type: panel.querySelector('#mt-exc-match').value,
+          pattern: String(panel.querySelector('#mt-exc-pattern').value || '').trim(),
+          exempt_from: panel.querySelector('#mt-exc-exempt').value,
+          // 'duty' = Pflichtzeit (zaehlt nie gegen das Kontingent, eigener Satz in /today)
+          kind: panel.querySelector('#mt-exc-kind')?.value === 'duty' ? 'duty' : 'quota',
+          note: String(panel.querySelector('#mt-exc-note').value || '').trim() || null,
+        };
+        if (!item.pattern) {
+          errEl.textContent = t('mediaTime.exceptionPatternProblem');
+          errEl.hidden = false;
           return;
         }
-        if (!isModalContextCurrent(modalContext)) return;
-        closeModal({ force: true, context: modalContext });
-        toast(t('mediaTime.exceptionSavedToast'));
-        await reloadAfterSave(() => renderCurrentTab(_container, { direction: 0 }));
-        refocusAfterRender();
-      } catch (err) {
-        errEl.textContent = mediaTimeErrorSentence(err);
-        errEl.hidden = false;
-      }
+        try {
+          const upsert = [item];
+          let revoke = [];
+          if (existing && (existing.user_id !== item.user_id
+            || existing.match_type !== item.match_type
+            || existing.pattern !== item.pattern)) {
+            // Aendern an den Schluesseln ist eine neue Regel: die alte zieht ab,
+            // sonst stünden zwei Regeln fuer ein Kind im Tracker-Cache.
+            revoke = [existing.id];
+          }
+          const applied = await putExceptionsGuarded({ upsert, revoke });
+          if (!applied) {
+            closeModal({ force: true, context: modalContext });
+            return;
+          }
+          if (!isModalContextCurrent(modalContext)) return;
+          closeModal({ force: true, context: modalContext });
+          toast(t('mediaTime.exceptionSavedToast'));
+          await reloadAfterSave(() => renderCurrentTab(_container, { direction: 0 }));
+          refocusAfterRender();
+        } catch (err) {
+          errEl.textContent = mediaTimeErrorSentence(err);
+          errEl.hidden = false;
+        }
+      });
     },
   });
   if (existing) {

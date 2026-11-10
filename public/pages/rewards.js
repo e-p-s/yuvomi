@@ -1799,34 +1799,40 @@ function openConsequenceEditModal(id, afterSave) {
           <button type="submit" class="btn btn--primary" id="rw-consequence-edit-submit">${esc(isNew ? t('common.add') : t('common.save'))}</button>
         </div>
       </form>`,
-    onSave: async (panel) => {
-      const errEl = panel.querySelector('#rw-consequence-edit-error');
-      const submit = panel.querySelector('#rw-consequence-edit-submit');
-      const title = String(panel.querySelector('#rw-consequence-edit-title').value || '').trim();
-      const points = Math.trunc(Number(panel.querySelector('#rw-consequence-edit-points').value));
-      const active = panel.querySelector('#rw-consequence-edit-active').checked;
-      if (!title || title.length > 120 || !Number.isFinite(points) || points < 1 || points > 100) {
-        if (errEl) { errEl.textContent = t('rewards.penaltyCatalogAddInvalid', { max: 100 }); errEl.hidden = false; }
-        return;
-      }
-      submit.disabled = true;
-      try {
-        const res = isNew
-          ? await api.post('/rewards/consequences', { title, points, active })
-          : await api.put(`/rewards/consequences/${id}`, { title, points, active });
-        if (res?.data) {
-          if (isNew) {
-            state.consequences = [...(state.consequences || []), res.data];
-          } else {
-            state.consequences = (state.consequences || []).map((c) => (c.id === id ? res.data : c));
-          }
-          toast(t('rewards.penaltyCatalogSavedToast'));
-          if (afterSave) afterSave();
+    onSave: (panel) => {
+      const form = panel.querySelector('#rw-consequence-edit-form');
+      if (!form) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = panel.querySelector('#rw-consequence-edit-error');
+        const submit = panel.querySelector('#rw-consequence-edit-submit');
+        const title = String(panel.querySelector('#rw-consequence-edit-title').value || '').trim();
+        const points = Math.trunc(Number(panel.querySelector('#rw-consequence-edit-points').value));
+        const active = panel.querySelector('#rw-consequence-edit-active').checked;
+        if (!title || title.length > 120 || !Number.isFinite(points) || points < 1 || points > 100) {
+          if (errEl) { errEl.textContent = t('rewards.penaltyCatalogAddInvalid', { max: 100 }); errEl.hidden = false; }
+          return;
         }
-      } catch (err) {
-        submit.disabled = false;
-        if (errEl) { errEl.textContent = rewardsErrorSentence(err); errEl.hidden = false; }
-      }
+        submit.disabled = true;
+        try {
+          const res = isNew
+            ? await api.post('/rewards/consequences', { title, points, active })
+            : await api.put(`/rewards/consequences/${id}`, { title, points, active });
+          if (res?.data) {
+            if (isNew) {
+              state.consequences = [...(state.consequences || []), res.data];
+            } else {
+              state.consequences = (state.consequences || []).map((c) => (c.id === id ? res.data : c));
+            }
+            closeModal({ force: true, context: captureModalContext() });
+            toast(t('rewards.penaltyCatalogSavedToast'));
+            if (afterSave) afterSave();
+          }
+        } catch (err) {
+          submit.disabled = false;
+          if (errEl) { errEl.textContent = rewardsErrorSentence(err); errEl.hidden = false; }
+        }
+      });
     },
   });
   // Loeschen ist die Route, die den Katalogeintrag entfernt; gebuchte
