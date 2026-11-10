@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "I genitori possono sottrarre punti per cattiva condotta (camera in disordine, grida, nanna tardi). Il motivo è obbligatorio e resta visibile al bambino e ai genitori; i fratelli non lo vedono.",
         "taskCreatedByVisibleLabel": "Mostra creatore",
         "taskCreatedByVisibleHint": "La vista dettagli del compito indica chi l'ha creato, quando il compito ha un creatore. Se disattivata, non mostra nulla.",
+        "tasksRequireApprovalLabel": "Richiede conferma di un genitore",
+        "tasksRequireApprovalHint": "I nuovi compiti richiedono la conferma di un genitore prima che i punti contino. I bambini non possono modificare l'opzione sul compito; i compiti senza punti non richiedono conferma.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

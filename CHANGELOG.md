@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Freigabe-Default als Einstellung, Default an.** In den Einstellungen
+  (Gruppe Aufgaben/Praemien) gibt es jetzt den Schalter "Freigabe durch Eltern
+  erforderlich": neue Aufgaben starten dann freigabepflichtig, ohne Angabe
+  entscheidet dieser Default - an ist die Richtung. Kinder koennen die Option
+  an der Aufgabe weder setzen noch aendern (der Server ignoriert ihren Wert
+  still); Eltern und Admins schalten sie pro Aufgabe und auch den
+  Haushaltsschalter selbst.
+- **Memo-Regel: Aufgaben ohne Punkte brauchen keine Bestaetigung.** Was keine
+  Punkte bringt, hat nichts, worueber eine Freigabe entscheiden koennte - der
+  Check-in gilt sofort. Aufgaben, die sich Kinder als Notiz selbst anlegen,
+  bleiben damit genau das: Memos, keine Antraege in der Warteschlange.
 - **Freigaben bestätigen Eltern, nicht Administratoren.** Aufgaben mit
   Freigabepflicht bestätigen oder ablehnen kann jetzt jedes Elternteil
   (`family_role` dad/mom/parent) ohne technische Admin-Rolle; die Admin-Rolle

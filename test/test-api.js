@@ -1188,6 +1188,7 @@ test('die drei Absagen aus #1640 haben ihren Satz, und jeder Satz steht in jeder
 // Saetze ohne Grund: sie sagen nur, DASS die Berechtigung fehlt.
 const PLAIN_REFUSALS = new Set([
   'Admin access required.', 'Not authorized.', 'Permission denied.', 'Forbidden.', 'Not allowed.',
+  'A parent has to change the approval default.',
   'Nicht autorisiert.', 'Keine Berechtigung', 'You cannot view this target.',
   'You cannot record entries for this person.',
   'You cannot modify this entry.', 'You cannot modify this loan.', 'You cannot modify this subscription.',

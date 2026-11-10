@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Foreldre kan trekke poenger for uønsket atferd (urerom, skriking, sengetid for seint). Årsaken er obligatorisk og vises for barnet og foreldrene; søsken ser den ikke.",
         "taskCreatedByVisibleLabel": "Vis oppretter",
         "taskCreatedByVisibleHint": "Oppgavedetaljene navngir personen som opprettet oppgaven, når oppgaven har en oppretter. Avlåst viser den ingenting.",
+        "tasksRequireApprovalLabel": "Krever godkjenning fra forelder",
+        "tasksRequireApprovalHint": "Nye oppgaver må bekreftes av en forelder før poenger teller. Barn kan ikke endre valget på oppgaven; oppgaver uten poenger trenger ingen bekreftelse.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

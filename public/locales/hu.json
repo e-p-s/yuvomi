@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "A szülők pontokat vonhatnak le rossz viselkedésért (rendetlen szoba, üvöltözés, késő lefekvés). Az ok kötelező, és a gyermek meg a szülők látják; a testvérek nem.",
         "taskCreatedByVisibleLabel": "Készítő megjelenítése",
         "taskCreatedByVisibleHint": "A feladat részletei nézet megnevezi, ki hozta létre a feladatot, ha a feladat viseli a készítőt. Kikapcsolva semmit nem mutat.",
+        "tasksRequireApprovalLabel": "Szülői megerősítés szükséges",
+        "tasksRequireApprovalHint": "Az új feladatok szülői megerősítést igényelnek, mielőtt a pontok számítanának. A gyerekek nem változtathatják meg az opciót a feladaton; pont nélküli feladatok nem igényelnek megerősítést.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

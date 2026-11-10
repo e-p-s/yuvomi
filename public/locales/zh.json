@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "父母可以因不良行为扣分（房间不整洁、吼叫、晚睡）。原因必填，且仅孩子与父母可见；兄弟姐妹看不到。",
         "taskCreatedByVisibleLabel": "显示创建者",
         "taskCreatedByVisibleHint": "任务详情页会在任务记录了创建者时显示创建人。关闭时不显示任何内容。",
+        "tasksRequireApprovalLabel": "需家长确认",
+        "tasksRequireApprovalHint": "新任务需经家长确认后积分才计入。孩子不能更改任务上的此选项；无积分的任务无需确认。",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

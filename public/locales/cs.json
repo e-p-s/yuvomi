@@ -3708,6 +3708,8 @@
         "rewardsPenaltiesHint": "Rodiče mohou strhnout body za neposlušnost (nepořádek, křik, pozdě do postele). Důvod je povinný a zůstává viditelný dítěti a rodičům; sourozenci ho nevidí.",
         "taskCreatedByVisibleLabel": "Zobrazit tvůrce",
         "taskCreatedByVisibleHint": "Detail úkolu uvádí osobu, která úkol vytvořila, pokud úkol tvůrce nese. Vypnuto nic nezobrazí.",
+        "tasksRequireApprovalLabel": "Vyžaduje potvrzení rodičem",
+        "tasksRequireApprovalHint": "Nové úlohy potřebují potvrzení rodiče, než se započítají body. Děti možnost u úlohy změnit nemohou; úlohy bez bodů potvrzení nepotřebují.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

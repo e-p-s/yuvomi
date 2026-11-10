@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Parents can deduct points for misbehaviour (untidy room, yelling, late bedtime). The reason is mandatory and stays visible to the child and parents; siblings do not see it.",
         "taskCreatedByVisibleLabel": "Show creator",
         "taskCreatedByVisibleHint": "The task detail view names the person who created the task, when the task carries a creator. Left off, it shows nothing.",
+        "tasksRequireApprovalLabel": "Require parent approval",
+        "tasksRequireApprovalHint": "New tasks need a parent's confirmation before points count. Children cannot change the option on a task; tasks without points need no confirmation.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

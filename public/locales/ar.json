@@ -3932,6 +3932,8 @@
         "rewardsPenaltiesHint": "يمكن للوالدين خصم نقاط عند سوء السلوك (غرفة غير مرتبة، صراخ، تأخر النوم). السبب إلزامي ويبقى ظاهرًا للطفل والوالدين؛ لا يراه الإخوة.",
         "taskCreatedByVisibleLabel": "إظهار المُنشئ",
         "taskCreatedByVisibleHint": "تذكر صفحة تفاصيل المهمة الشخص الذي أنشأها عندما تكون المهمة ذات مُنشئ. عند تركها مغلقة لا تعرض شيئًا.",
+        "tasksRequireApprovalLabel": "يتطلب موافقة أحد الوالدين",
+        "tasksRequireApprovalHint": "المهام الجديدة تحتاج موافقة أحد الوالدين قبل احتساب النقاط. لا يستطيع الأطفال تغيير هذا الخيار في المهمة؛ المهام بلا نقاط لا تحتاج موافقة.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

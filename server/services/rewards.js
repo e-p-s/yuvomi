@@ -309,12 +309,15 @@ function lateDecay(d, task, today) {
  */
 export function awardForCompletion(d, taskId, actingUserId, doneByUserId = null, { now = new Date(), asAdmin = false, completedOn = null } = {}) {
   const task = d.prepare('SELECT id, points, title, recurrence_series_id, due_date, requires_approval FROM tasks WHERE id = ?').get(taskId);
-  // Freigabe-Pflicht: ein Check-in durch Nicht-Admins bucht nichts, er meldet
-  // die Aufgabe nur zur Bestaetigung an (`approval_status = 'pending'`). Der
+  // Freigabe-Pflicht: ein Check-in durch Nicht-Bestaetigende bucht nichts, er
+  // meldet die Aufgabe nur zur Bestaetigung an (`approval_status = 'pending'`).
+  // Memo-Ausnahme (Haushaltsregel 2026-11-10): eine Aufgabe ohne Punkte hat
+  // nichts, worueber man entscheiden koennte - ihr Check-in gilt sofort, die
+  // Freigabepflicht blockiert das eigene Memo eines Kindes nicht. Der
   // Check-in-Tag wird festgehalten - spaetere Bestaetigung bemisst den
   // Spaetabzug daran, nicht am Bestaetigungstag. Ein Admin, der selbst abhakt,
   // bestaetigt damit zugleich (kein Selbst-Freigabe-Stau).
-  if (task && task.requires_approval) {
+  if (task && task.requires_approval && Number(task.points) > 0) {
     const stamp = ledgerTimestamp(now);
     // Wer den Check-in tat, nicht wer den Schalter drueckte: eine Admin-Korrektur
     // (done_by_user_id) soll nicht den Anschein erwecken, der Admin haette

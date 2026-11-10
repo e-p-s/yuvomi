@@ -3835,6 +3835,8 @@
         "rewardsPenaltiesHint": "Rodzice mogą odejmować punkty za złe zachowanie (nieposprzątany pokój, krzyki, późne chodzenie spać). Powód jest obowiązkowy i pozostaje widoczny dla dziecka i rodziców; rodzeństwo go nie widzi.",
         "taskCreatedByVisibleLabel": "Pokaż twórcę",
         "taskCreatedByVisibleHint": "Widok szczegółów zadania podaje osobę, która je utworzyła, jeśli zadanie ma twórcę. Wyłączony nic nie pokazuje.",
+        "tasksRequireApprovalLabel": "Wymaga potwierdzenia przez rodzica",
+        "tasksRequireApprovalHint": "Nowe zadania wymagają potwierdzenia rodzica, zanim punkty się liczą. Dzieci nie mogą zmienić tej opcji przy zadaniu; zadania bez punktów nie wymagają potwierdzenia.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

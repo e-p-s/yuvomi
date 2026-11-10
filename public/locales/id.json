@@ -3607,6 +3607,8 @@
         "rewardsPenaltiesHint": "Orang tua dapat mengurangi poin karena perilaku buruk (kamar berantakan, berteriak, tidur terlambat). Alasan wajib dan tetap terlihat oleh anak dan orang tua; saudara tidak melihatnya.",
         "taskCreatedByVisibleLabel": "Tampilkan pembuat",
         "taskCreatedByVisibleHint": "Tampilan detail tugas menyebut orang yang membuat tugas, jika tugas punya pembuat. Jika dimatikan, tidak menampilkan apa pun.",
+        "tasksRequireApprovalLabel": "Perlu persetujuan orang tua",
+        "tasksRequireApprovalHint": "Tugas baru butuh konfirmasi orang tua sebelum poin dihitung. Anak tidak dapat mengubah opsi pada tugas; tugas tanpa poin tidak butuh konfirmasi.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

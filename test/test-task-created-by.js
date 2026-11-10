@@ -89,6 +89,21 @@ globalThis.HTMLElement = globalThis.HTMLElement ?? class {};
 globalThis.customElements = globalThis.customElements ?? { define() {}, get() {} };
 globalThis.CSS = globalThis.CSS ?? { escape: String };
 
+test('tasks_require_approval: Default AN, Eltern schalten, Nicht-Eltern nicht', async () => {
+  const { get: getDb } = await import('../server/db.js');
+  const dad = getDb().prepare("INSERT INTO users (username, display_name, password_hash, role, family_role) VALUES ('papapref', 'Papa', 'x', 'member', 'dad')").run().lastInsertRowid;
+  const other = getDb().prepare("INSERT INTO users (username, display_name, password_hash, role, family_role) VALUES ('omapref', 'Oma', 'x', 'member', 'other')").run().lastInsertRowid;
+  assert.equal((await get()).body.data.tasks_require_approval, true, 'Default AN - kein Gesetz, das erst angefasst werden muss');
+  actor.userId = dad;
+  assert.equal((await put({ tasks_require_approval: false })).status, 200, 'ein Elternteil ohne Admin-Rolle schaltet');
+  assert.equal((await get()).body.data.tasks_require_approval, false, 'persistiert, als echtes Bool zurueck');
+  assert.equal((await put({ tasks_require_approval: 'ja' })).status, 400, 'Nicht-Bool bleibt 400');
+  actor.userId = other;
+  assert.equal((await put({ tasks_require_approval: true })).status, 403, 'Nicht-Eltern (family_role other) bleibt draussen');
+  actor.userId = 1;
+  await put({ tasks_require_approval: true });
+});
+
 const { installMiniDom } = await import('./mini-dom.js');
 installMiniDom();
 globalThis.document.documentElement.classList = {

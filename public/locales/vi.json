@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Cha mẹ có thể trừ điểm vì cư xử chưa tốt (phòng bừa bộn, la hét, đi ngủ muộn). Lý do là bắt buộc và vẫn hiện với trẻ và cha mẹ; anh chị em không thấy.",
         "taskCreatedByVisibleLabel": "Hiển thị người tạo",
         "taskCreatedByVisibleHint": "Màn hình chi tiết công việc nêu tên người tạo công việc nếu công việc có người tạo. Tắt thì không hiển thị gì.",
+        "tasksRequireApprovalLabel": "Cần phụ huynh xác nhận",
+        "tasksRequireApprovalHint": "Nhiệm vụ mới cần phụ huynh xác nhận trước khi điểm được tính. Trẻ em không thể thay đổi tùy chọn này trên nhiệm vụ; nhiệm vụ không có điểm không cần xác nhận.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

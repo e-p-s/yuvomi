@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "अभिभावक खराब व्यवहार (बिखरा कमरा, चिल्लाना, देर से सोना) पर घटा सकते हैं। कारण अनिवार्य है और बच्चे व अभिभावकों को दिखता है; भाई-बहन नहीं देखते।",
         "taskCreatedByVisibleLabel": "बनाने वाला दिखाएँ",
         "taskCreatedByVisibleHint": "कार्य विवरण दृश्य उस व्यक्ति का नाम दिखाता है जिसने कार्य बनाया, यदि कार्य में बनाने वाला दर्ज है। बंद रहने पर कुछ नहीं दिखता।",
+        "tasksRequireApprovalLabel": "माता-पिता की पुष्टि आवश्यक",
+        "tasksRequireApprovalHint": "नए कार्य बिना गिनती में आने से पहले माता-पिता की पुष्टि चाहते हैं। बच्चे कार्य में यह विकल्प नहीं बदल सकते; शून्य-बिंदु कार्यों को पुष्टि की आवश्यकता नहीं।",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

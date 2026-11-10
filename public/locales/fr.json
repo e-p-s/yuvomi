@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Les parents peuvent retirer des points pour un mauvais comportement (chambre en désordre, cris, coucher tardif). Le motif est obligatoire et reste visible pour l'enfant et les parents ; les frères et sœurs ne le voient pas.",
         "taskCreatedByVisibleLabel": "Afficher le créateur",
         "taskCreatedByVisibleHint": "La vue détail de la tâche indique qui l'a créée, quand la tâche porte un créateur. Désactivée, elle n'affiche rien.",
+        "tasksRequireApprovalLabel": "Approbation d'un parent requise",
+        "tasksRequireApprovalHint": "Les nouvelles tâches nécessitent la confirmation d'un parent avant que les points comptent. Les enfants ne peuvent pas modifier l'option sur une tâche ; les tâches sans points n'en ont pas besoin.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

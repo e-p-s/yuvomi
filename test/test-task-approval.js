@@ -173,7 +173,8 @@ test('Admin-Check-in bestaetigt direkt und bucht sofort', async () => {
 });
 
 test('Aufgabe ohne Freigabepflicht: Check-in bucht wie bisher', async () => {
-  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Ohne Freigabe', points: 3, assigned_to: [kid] } });
+  // Ohne Schalter greift der Haushalts-Default (AN) - hier explicit AUS, darum geht es.
+  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Ohne Freigabe', points: 3, requires_approval: false, assigned_to: [kid] } });
   const id = r.body.data.id;
   const s = await call('PATCH', `/${id}/status`, { as: KID, body: { status: 'done' } });
   assert.equal(s.status, 200);
@@ -276,11 +277,13 @@ test('Fremder darf requires_approval nicht an einer Aufgabe drehen', async () =>
   const t = task(id);
   // Der Dialog schickt die ganze Aufgabe zurueck - identische Werte muessen
   // durchgehen, damit nicht jedes Speichern als Aenderungsversuch zaehlt.
+  // Haushaltsregel 2026-11-10: Nicht-Eltern (auch Kinder als Ersteller) drehen
+  // die Freigabepflicht nicht - kein 403, der Wert wird still ignoriert.
   const tryOff = await call('PUT', `/${id}`, { as: KID, body: {
-    title: t.title, points: t.points, requires_approval: true,
+    title: t.title, points: t.points, requires_approval: !t.requires_approval,
   } });
-  assert.equal(tryOff.status, 403, 'Definition ist fuer Nicht-Inhaber zu (wie die Sperre)');
-  assert.equal(tryOff.body.reason, 'task_locked');
+  assert.equal(tryOff.status, 200, 'das Kind aendert nichts - aber es darf auch nicht scheitern, nur weil ein Formular den Schalter mitschickt');
+  assert.equal(!!task(id).requires_approval, !!t.requires_approval, 'Wert bleibt, wie er war');
   // Unveraendert mitschicken bleibt erlaubt: identischer Wert, kein 403.
   const same = await call('PUT', `/${id}`, { as: KID, body: {
     title: t.title, points: t.points, requires_approval: !!t.requires_approval,
@@ -352,4 +355,36 @@ test('Elternteil hakt selbst ab: sofort bestaetigt, Punkte sofort gebucht', asyn
   assert.equal(s.status, 200);
   assert.equal(task(id).approval_status, 'approved');
   assert.equal(earned(dadP), 6);
+});
+
+// ----------------------------------------------------------
+// Haushalts-Default + Memo-Regel (User-Anweisung 2026-11-10).
+// Der Schalter heisst `tasks_require_approval` (sync_config), Default AN;
+// Kinder koennen ihn an der Aufgabe nicht setzen - und Aufgaben ohne Punkte
+// (Memos) brauchen ueberhaupt keine Bestaetigung, denn es wird nichts gebucht.
+// ----------------------------------------------------------
+test('Default AN: neue Aufgabe ist ohne Angabe freigabepflichtig', async () => {
+  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Ohne Angabe', points: 2, assigned_to: [kid] } });
+  assert.equal(r.body.data.requires_approval, 1, 'der Haushalts-Default entscheidet, nicht ein Dialog-Zufall');
+});
+
+test('Kind kann die Freigabepflicht nicht setzen - auch nicht mit false', async () => {
+  const r = await call('POST', '/', { as: KID, body: { title: 'Memo', points: 0, requires_approval: false } });
+  assert.equal(r.body.data.requires_approval, 1, 'der Wert des Kindes wird ignoriert');
+});
+
+test('Elternteil kann sie explicit abschalten (und wieder an)', async () => {
+  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Ohne Pflicht', points: 2, requires_approval: false, assigned_to: [kid] } });
+  assert.equal(r.body.data.requires_approval, 0);
+});
+
+test('Memo-Regel: 0-Punkte-Aufgabe mit Freigabepflicht gilt beim Abhaken sofort', async () => {
+  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Nur ein Memo', points: 0, requires_approval: true, assigned_to: [kid] } });
+  const id = r.body.data.id;
+  assert.equal(r.body.data.requires_approval, 1);
+  const s = await call('PATCH', `/${id}/status`, { as: KID, body: { status: 'done' } });
+  assert.equal(s.status, 200);
+  const row = task(id);
+  assert.equal(row.status, 'done');
+  assert.notEqual(row.approval_status, 'pending', 'nichts zu buchen, nichts zu bestaetigen - das Memo bleibt ein Memo');
 });

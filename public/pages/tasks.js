@@ -1282,7 +1282,8 @@ function renderModalContent({ task = null, users = [], reminder = null } = {}) {
   const locked = isEdit ? !!task?.locked : (state.defaultLocked === true);
   // Freigabepflicht: der Check-off bleibt ohne Punkte, bis ein Administrator
   // ihn bestaetigt. Neue Aufgaben sind frei; gesetzt wird sie nur hier.
-  const requiresApproval = isEdit ? !!task?.requires_approval : false;
+  // Neuer Default aus dem Haushaltsschalter (An); Bearbeiten zeigt den Wert der Aufgabe.
+  const requiresApproval = isEdit ? !!task?.requires_approval : state.tasksRequireApprovalDefault !== false;
 
   const selectedCat = task?.category ?? FALLBACK_CATEGORY;
   const categoryOptions = state.categories.map((c) =>
@@ -1507,12 +1508,13 @@ ${syncTargetFieldHtml(task)}
       <!-- Freigabepflicht: dieselbe Frage wie bei der Sperre - wer was darf -,
            hier ueber die Punkte. Der Check-off bleibt ohne Gutschrift, bis ein
            Administrator ihn bestaetigt (Ablehnung oeffnet die Aufgabe neu). -->
+      ${state.pointsEditable !== false ? `
       <div class="form-group"${hidesPrivacyControls('tasks') ? ' hidden' : ''}>
         ${formSwitchRowHtml({
           label: t('tasks.approvalToggle'), checked: requiresApproval,
           hint: t('tasks.approvalHint'), hintId: 'task-approval-hint', attrs: { id: 'task-requires-approval', name: 'requires_approval' },
         })}
-      </div>
+      </div>` : ''}
 
       ${renderDocumentAttachField({
         attachments: (task?.documents ?? []).map((doc) => ({ document_id: doc.id, name: doc.name, mime_type: doc.mime_type })),
@@ -6839,6 +6841,7 @@ async function ensureAwayMeta(user) {
       state.allTags       = meta.tags       ?? state.allTags;
       state.defaultPoints = Number(meta.default_points) || state.defaultPoints;
       state.pointsEditable = meta.points_editable !== false;
+      state.tasksRequireApprovalDefault = meta.requires_approval_default !== false;
     } catch { /* Ansicht steht auch ohne - nur weniger aufgeloest, siehe die Aufrufer. */ }
   }
   if (user) {
@@ -7157,6 +7160,7 @@ export async function render(container, { user, signal } = {}) {
     state.allTags = meta.tags ?? [];
     state.defaultPoints = Number(meta.default_points) || 0;
     state.pointsEditable = meta.points_editable !== false;
+    state.tasksRequireApprovalDefault = meta.requires_approval_default !== false;
     state.subtasksExpandedByDefault = preferencesData.data?.tasks_subtasks_expanded === true;
     applyNewTaskDefaults(preferencesData.data);
   } catch (err) {

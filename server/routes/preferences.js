@@ -11,6 +11,16 @@ import * as db from '../db.js';
 import * as holidays from '../services/holidays.js';
 import { str, MAX_SHORT } from '../middleware/validate.js';
 import { isAdminRequest } from '../middleware/require-admin.js';
+
+/** Eltern- oder Admin-Konto? Dieselbe Definition wie server/routes/tasks.js
+ *  (actorIsParentLike) - die Freigabe-Haushaltsregel gilt auch fuer den
+ *  Schalter, der sie anschaltet. */
+function mayDecideApprovals(req) {
+  const actor = req.authUserId || req.session?.userId;
+  if (!actor) return false;
+  const row = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(actor);
+  return !!row && (row.role === 'admin' || ['dad', 'mom', 'parent'].includes(row.family_role));
+}
 import { getSupportedLocales, isRegionTag, isSupportedLocale, resolveHouseholdLocale, supportedLocaleFor } from '../utils/i18n.js';
 import { householdTimeZone, isValidTimeZone } from '../utils/timezone.js';
 import { retitleBirthdayEvents } from '../services/birthdays.js';
@@ -693,6 +703,8 @@ router.get('/', (req, res) => {
         // Wunsch nach dieser Auskunft soll den Schalter nie sehen muessen
         // (dieselbe umgekehrte Logik wie bei den Konsequenzen).
         task_created_by_visible: cfgGet('task_created_by_visible') === '1',
+        // Freigabepflicht neuer Aufgaben: Default AN - nur ein gesetztes '0' schaltet sie ab.
+        tasks_require_approval: cfgGet('tasks_require_approval') !== '0',
         // Standard-Erinnerungsliste fuer neue Aufgaben (per-user, #695) -
         // dieselbe Form wie calendar_default_target, damit beide Dialoge ihr
         // Ziel gleich benennen.
@@ -765,7 +777,7 @@ router.put('/', (req, res) => {
   try {
     database = db.get();
     database.exec('BEGIN');
-    const { visible_meal_types, meal_type_names, currency, date_format, time_format, week_start, region, timezone, timezone_hint_dismissed, language, app_name, dashboard_widgets, dashboard_today_glance, dashboard_widgets_phone, dashboard_widgets_default, dashboard_today_glance_default, disabled_modules, hidden_modules, module_order, mobile_nav_order, housekeeping_payment_tasks, budget_mode, calendar_default_duration, calendar_default_reminders, calendar_default_assign_me, calendar_default_target, health_cycle_enabled, health_cycle_enabled_user, health_prevention_notify_caregivers, rewards_require_approval, rewards_penalties_enabled, media_time_enabled, media_time_quiet_hours_global, media_time_exchange_rate, media_time_hard_cap, tasks_subtasks_expanded, tasks_default_points, tasks_default_target, tasks_default_visibility, tasks_default_locked, tasks_late_decay_enabled, task_created_by_visible, schedule_hidden_templates, countdown_grace_days, weather_provider, weather_lat, weather_lon, weather_city, weather_units, weather_auto_locate, weather_user, holiday_country, holiday_subdivision, holiday_group, holiday_show_public, holiday_show_school, holiday_public_color, holiday_school_color } = req.body;
+    const { visible_meal_types, meal_type_names, currency, date_format, time_format, week_start, region, timezone, timezone_hint_dismissed, language, app_name, dashboard_widgets, dashboard_today_glance, dashboard_widgets_phone, dashboard_widgets_default, dashboard_today_glance_default, disabled_modules, hidden_modules, module_order, mobile_nav_order, housekeeping_payment_tasks, budget_mode, calendar_default_duration, calendar_default_reminders, calendar_default_assign_me, calendar_default_target, health_cycle_enabled, health_cycle_enabled_user, health_prevention_notify_caregivers, rewards_require_approval, rewards_penalties_enabled, media_time_enabled, media_time_quiet_hours_global, media_time_exchange_rate, media_time_hard_cap, tasks_subtasks_expanded, tasks_default_points, tasks_default_target, tasks_default_visibility, tasks_default_locked, tasks_late_decay_enabled, task_created_by_visible, tasks_require_approval, schedule_hidden_templates, countdown_grace_days, weather_provider, weather_lat, weather_lon, weather_city, weather_units, weather_auto_locate, weather_user, holiday_country, holiday_subdivision, holiday_group, holiday_show_public, holiday_show_school, holiday_public_color, holiday_school_color } = req.body;
 
     // Welche Quickstart-Vorlagen der Schichtplan-Schnellstart zeigt - wie
     // disabled_modules haushaltweit und admin-only, nicht wie hidden_modules
@@ -1346,6 +1358,19 @@ router.put('/', (req, res) => {
       cfgSet('task_created_by_visible', task_created_by_visible ? '1' : '0');
     }
 
+    // Freigabepflicht neuer Aufgaben (Haushaltsregel 2026-11-10): Default AN.
+    // Es ist Eltern-Entscheidung, nicht die der technischen Admin-Rolle -
+    // dieselbe Definition wie an der Freigabe-Route selbst.
+    if (tasks_require_approval !== undefined) {
+      if (!mayDecideApprovals(req)) {
+        return res.status(403).json({ error: 'A parent has to change the approval default.', code: 403 });
+      }
+      if (typeof tasks_require_approval !== 'boolean') {
+        return res.status(400).json({ error: 'tasks_require_approval must be a boolean', code: 400 });
+      }
+      cfgSet('tasks_require_approval', tasks_require_approval ? '1' : '0');
+    }
+
     if (tasks_subtasks_expanded !== undefined) {
       if (!isAdminRequest(req)) {
         return res.status(403).json({ error: 'Admin access required.', code: 403 });
@@ -1668,6 +1693,8 @@ router.put('/', (req, res) => {
         // Wunsch nach dieser Auskunft soll den Schalter nie sehen muessen
         // (dieselbe umgekehrte Logik wie bei den Konsequenzen).
         task_created_by_visible: cfgGet('task_created_by_visible') === '1',
+        // Freigabepflicht neuer Aufgaben: Default AN - nur ein gesetztes '0' schaltet sie ab.
+        tasks_require_approval: cfgGet('tasks_require_approval') !== '0',
         // Standard-Erinnerungsliste fuer neue Aufgaben (per-user, #695) -
         // dieselbe Form wie calendar_default_target, damit beide Dialoge ihr
         // Ziel gleich benennen.

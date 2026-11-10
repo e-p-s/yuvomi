@@ -49,7 +49,8 @@ const { openTaskDetail, __test: detailTest } = await import('../public/component
 test('der Dialog bietet den Freigabe-Schalter an und setzt ihn am bestehenden Task', () => {
   const leer = tasks.renderModalContent({ task: null, users: [] });
   assert.match(leer, /id="task-requires-approval"/, 'der Schalter fehlt im Neuanlage-Formular');
-  assert.doesNotMatch(leer, /id="task-requires-approval"[^>]*\bchecked\b/, 'eine neue Aufgabe ist frei');
+  // Haushalts-Default 2026-11-10: eine neue Aufgabe startet freigabepflichtig (an).
+  assert.match(leer, /id="task-requires-approval"[^>]*\bchecked\b/, 'der Default des Haushalts setzt den Schalter beim Neuen');
 
   const bearbeitet = tasks.renderModalContent({
     task: { id: 5, title: 'Muell raus', status: 'open', requires_approval: 1, locked: 0 },

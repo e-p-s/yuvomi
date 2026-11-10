@@ -3607,6 +3607,8 @@
         "rewardsPenaltiesHint": "والدین می‌توانند به‌خاطر بدرفتاری امتیاز کم کنند (اتاق نامرتب، داد و بیداد، دیر خوابیدن). دلیل الزامی است و برای کودک و والدین دیده می‌شود؛ خواهر و برادر آن را نمی‌بینند.",
         "taskCreatedByVisibleLabel": "نمایش ایجادکننده",
         "taskCreatedByVisibleHint": "نمای جزئیات تسک نام کسی را که تسک را ایجاد کرده نشان می‌دهد، اگر تسک ایجادکننده داشته باشد. خاموش باشد چیزی نشان نمی‌دهد.",
+        "tasksRequireApprovalLabel": "نیازمند تأیید یکی از والدین",
+        "tasksRequireApprovalHint": "وظایف جدید پیش از محاسبهٔ امتیاز به تأیید یکی از والدین نیاز دارند. کودکان نمی‌توانند این گزینه را در وظیفه تغییر دهند؛ وظایف بدون امتیاز به تأیید نیاز ندارند.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

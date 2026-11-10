@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Ebeveynler kötü davranış için (dağınık oda, bağırma, geç yatma) puan düşebilir. Neden zorunludur ve çocukla ebeveynlere görünür kalır; kardeşler görmez.",
         "taskCreatedByVisibleLabel": "Oluşturanı göster",
         "taskCreatedByVisibleHint": "Görev ayrıntısı görünümü, görev bir oluşturucu taşıyorsa onu oluşturan kişiyi söyler. Kapalıyken hiçbir şey göstermez.",
+        "tasksRequireApprovalLabel": "Ebeveyn onayı gerekli",
+        "tasksRequireApprovalHint": "Yeni görevler, puanlar sayılmadan önce bir ebeveynin onayını gerektirir. Çocuklar görevde bu seçeneği değiştiremez; puanı olmayan görevler onay gerektirmez.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

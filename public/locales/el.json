@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Οι γονείς μπορούν να αφαιρέσουν πόντους για κακή συμπεριφορά (ατακσία, φωνές, αργός ύπνος). Ο λόγος είναι υποχρεωτικός και μένει ορατός στο παιδί και στους γονείς· τα αδέλφια δεν τον βλέπουν.",
         "taskCreatedByVisibleLabel": "Εμφάνιση δημιουργού",
         "taskCreatedByVisibleHint": "Η προβολή λεπτομερειών της εργασίας αναφέρει το πρόσωπο που την δημιούργησε, όταν η εργασία έχει δημιουργό. Αν είναι απενεργοποιημένη, δεν δείχνει τίποτα.",
+        "tasksRequireApprovalLabel": "Απαιτείται έγκριση γονέα",
+        "tasksRequireApprovalHint": "Οι νέες εργασίες χρειάζονται έγκριση γονέα πριν μετρήσουν οι πόντοι. Τα παιδιά δεν μπορούν να αλλάξουν την επιλογή· οι εργασίες χωρίς πόντους δεν θέλουν έγκριση.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

@@ -3607,6 +3607,8 @@
         "rewardsPenaltiesHint": "Ang mga magulang ay pwedeng magbawas ng puntos masamang pag-uugali (magulong kwarto, sigawan, late matulog). Kinakailangan ang dahilan at nakikita ng bata at magulang; hindi ito nakikita ng kapatid.",
         "taskCreatedByVisibleLabel": "Ipakita ang gumawa",
         "taskCreatedByVisibleHint": "Sinasabi ng detail view ng gawin kung sino ang gumawa nito kung may likha ang gawin. Kapaka nakalagay na off, walang ipinapakita.",
+        "tasksRequireApprovalLabel": "Kailangan ng pahintulot ng magulang",
+        "tasksRequireApprovalHint": "Ang bagong gawain ay nangangailangan ng pagkumpirma ng magulang bagobilang ang puntos. Hindi maaaring baguhin ng mga bata ang opsyon; ang gawaing walang puntos ay walang kailangang pahintulot.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

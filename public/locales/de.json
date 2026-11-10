@@ -3607,6 +3607,8 @@
         "rewardsPenaltiesHint": "Eltern können auf Fehlverhalten Punkte abziehen (schlechtes Zimmer, Geschrei, zu spät ins Bett). Der Grund ist Pflicht und bleibt für das Kind und die Eltern sichtbar; Geschwister sehen ihn nicht.",
         "taskCreatedByVisibleLabel": "Ersteller anzeigen",
         "taskCreatedByVisibleHint": "Die Aufgabendetailseite nennt die Person, die die Aufgabe angelegt hat, wenn sie einen Ersteller trägt. Aus gelassen zeigt sie nichts.",
+        "tasksRequireApprovalLabel": "Freigabe durch Eltern erforderlich",
+        "tasksRequireApprovalHint": "Neue Aufgaben müssen von einem Elternteil bestätigt werden, bevor Punkte zählen. Kinder können die Option an der Aufgabe nicht ändern; Aufgaben ohne Punkte brauchen keine Bestätigung.",
         "rewardsConsequenceListLabel": "Konsequenzen-Vorlagen",
         "rewardsConsequenceActiveLabel": "Aktiv",
         "rewardsConsequenceAddLabel": "Neue Konsequenz-Vorlage",

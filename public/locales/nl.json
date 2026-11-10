@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Ouders kunnen punten inkorten bij wangedrag (rommelige kamer, geschreeuw, te laat naar bed). De reden is verplicht en blijft zichtbaar voor het kind en de ouders; broers/zussen zien die niet.",
         "taskCreatedByVisibleLabel": "Maker weergeven",
         "taskCreatedByVisibleHint": "De taakdetailview noemt de persoon die de taak maakte, als de taak een maker heeft. Uitgezet toont het niets.",
+        "tasksRequireApprovalLabel": "Bevestiging door ouder vereist",
+        "tasksRequireApprovalHint": "Nieuwe taken moeten door een ouder bevestigd worden voordat punten tellen. Kinderen kunnen de optie bij de taak niet wijzigen; taken zonder punten hebben geen bevestiging nodig.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

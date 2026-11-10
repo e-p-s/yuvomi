@@ -216,6 +216,17 @@ function actorIsParentLike(req) {
   return !!row && (row.role === 'admin' || ['dad', 'mom', 'parent'].includes(row.family_role));
 }
 
+/**
+ * Haushalt-Default fuer die Freigabepflicht neuer Aufgaben (Settings-Schalter
+ * `tasks_require_approval`): Default AN - nur ein gesetztes '0' schaltet ab.
+ * Kinder koennen die Option weder beim Anlegen noch beim Bearbeiten aendern
+ * (Router ignoriert ihren Wert); ein Eltern-/Admin-Konto setzt sie pro Aufgabe.
+ */
+function tasksRequireApprovalDefault() {
+  const row = db.get().prepare("SELECT value FROM sync_config WHERE key = 'tasks_require_approval'").get();
+  return row?.value !== '0';
+}
+
 // Erledigte Aufgaben dürfen nicht umbepunktet werden: genau für 'done' hält der
 // reward_ledger eine earn-Buchung über den damaligen Punktwert
 // (awardForCompletion in server/services/rewards.js); ein nachträglicher Wechsel
@@ -1435,7 +1446,9 @@ router.post('/', (req, res) => {
         title.trim(), description, category, priority, status,
         start_date, due_date, due_time, firstUid, req.authUserId || req.session.userId, parent_task_id,
         is_recurring ? 1 : 0, recurrence_rule, recurrence_from_completion ? 1 : 0, points, visibility,
-        countdown ? 1 : 0, req.body.locked ? 1 : 0, req.body.requires_approval ? 1 : 0
+        countdown ? 1 : 0, req.body.locked ? 1 : 0, (actorIsParentLike(req) && req.body.requires_approval !== undefined
+          ? (req.body.requires_approval ? 1 : 0)
+          : (tasksRequireApprovalDefault() ? 1 : 0))
       );
       setAssignments(db.get(), result.lastInsertRowid, userIds);
       if (rotationIn.mode !== undefined || rotationIn.pool !== undefined) {
@@ -1589,7 +1602,10 @@ router.put('/:id', (req, res) => {
     // Normalisiert auf 0/1: die Aufgabe kommt als 0/1 aus der Datenbank, der
     // Leib ist ein Boolean - ohne diese Norm vergliche ich Boolean gegen 1 und
     // halte jedes unveraenderte Mitschicken fuer eine Aenderung.
-    const requiresApprovalRequested = req.body.requires_approval !== undefined
+    // Die Freigabepflicht ist Eltern-Domaene (Haushaltsregel 2026-11-10): ein
+    // Kind, das den Schalter mitschickt (Formular hin oder her), aendert ihn
+    // nicht - kein Fehler, der Wert bleibt einfach unangetastet.
+    const requiresApprovalRequested = req.body.requires_approval !== undefined && actorIsParentLike(req)
       ? (req.body.requires_approval ? 1 : 0) : null;
     const requiresApproval = requiresApprovalRequested ?? (task.requires_approval ? 1 : 0);
 
@@ -1617,17 +1633,9 @@ router.put('/:id', (req, res) => {
     // Aufgabe zurueck, und "Feld mitgeschickt = Aenderungsversuch" wuerde
     // deshalb genau das abweisen, was offen bleiben soll: das Abhaken aus dem
     // Bearbeiten-Formular schickt Titel und Termin unveraendert mit.
-    // Die Freigabepflicht ist Definition, auch an einer UNGESPERRTEN Aufgabe:
-    // niemand ausser Ersteller:in und Bestaetigenden (Eltern, Admins) darf
-    // nachtraeglich bestimmen, dass ein Check-in einer Bestaetigung braucht
-    // (oder nicht). Die Sperre selbst vergleicht mayEditTaskDefinition unten
-    // nur, wenn sie greift - dieser Guard gilt immer.
-        if (requiresApprovalRequested !== null
-        && requiresApprovalRequested !== (task.requires_approval ? 1 : 0)
-        && !actorIsParentLike(req)
-        && task.created_by !== (req.authUserId || req.session?.userId)) {
-      return res.status(403).json({ ...LOCKED_ERROR, code: 403, reason: 'task_locked' });
-    }
+    // (Der frihere 403-Guard fuer das Umschalten der Freigabepflicht ist mit
+    // der Eltern-Regel ueberfluessig: Nicht-Eltern erreichen den Wert gar
+    // nicht mehr, er wird still ignoriert.)
             if (!mayEditTaskDefinition(task, req)) {
       const wanted = {
         title: title.trim(), description, category, priority,
@@ -3051,6 +3059,7 @@ router.get('/meta/options', (req, res) => {
       // Fuer die Oberflaeche: Kindern den Punkteeingabeblock ausblenden
       // (Durchsetzung liegt trotzdem immer auf dem Server).
       points_editable: actorMaySetPoints(req),
+      requires_approval_default: tasksRequireApprovalDefault(),
     });
   } catch (err) {
     log.error('GET /meta/options error:', err);

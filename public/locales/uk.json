@@ -3817,6 +3817,8 @@
         "rewardsPenaltiesHint": "Батьки можуть знімати бали за небажану поведінку (непорядок, крики, пізній відбій). Причина обов'язкова й залишається видною дитині та батькам; брати й сестри її не бачать.",
         "taskCreatedByVisibleLabel": "Показувати автора",
         "taskCreatedByVisibleHint": "Деталі задачі називають людину, яка її створила, якщо у задачі є автор. Якщо вимкнено, нічого не показують.",
+        "tasksRequireApprovalLabel": "Потрібне підтвердження батьком",
+        "tasksRequireApprovalHint": "Нові завдання потребують підтвердження батьком, перш ніж бали зарахуються. Діти не можуть змінити опцію на завданні; завдання без балів не потребують підтвердження.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

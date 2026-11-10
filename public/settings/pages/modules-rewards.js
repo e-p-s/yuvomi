@@ -61,6 +61,17 @@ function renderPage(container, preferences) {
           descriptionId: 'task-created-by-visible-hint',
           attrs: { id: 'task-created-by-visible', 'aria-describedby': 'task-created-by-visible-hint' },
         })}
+        <!-- FREIGABEPFLICHT (Default AN): neue Aufgaben muessen von einem
+             Elternteil bestaetigt werden, bevor Punkte zaehlen. Kinder koennen
+             die Option an der Aufgabe nicht aendern; Aufgaben ohne Punkte
+             (Memos) brauchen keine Bestaetigung. -->
+        ${settingSwitchRowHtml({
+          label: t('settings.tasksRequireApprovalLabel'),
+          checked: preferences.tasks_require_approval !== false,
+          description: t('settings.tasksRequireApprovalHint'),
+          descriptionId: 'tasks-require-approval-hint',
+          attrs: { id: 'tasks-require-approval', 'aria-describedby': 'tasks-require-approval-hint' },
+        })}
         <!-- EIN SPEICHERMODELL AUF DER SEITE (Re-Critique 2026-09-27, A7 P2-8):
              der Schalter daneben speichert sofort, also tut es das Zahlenfeld
              auch - beim Verlassen und mit Enter. Ein eigener Speichern-Knopf nur
@@ -168,6 +179,21 @@ function bindEvents(container, preferences) {
       window.yuvomi?.showToast(errorSentence(error, 'settings.preferenceSaveFailed'), 'danger');
     } finally {
       createdByToggle.disabled = false;
+    }
+  });
+  // Freigabepflicht neuer Aufgaben (Default AN) - ein fehlender Wert haelt an.
+  const requireApprovalToggle = container.querySelector('#tasks-require-approval');
+  requireApprovalToggle?.addEventListener('change', async () => {
+    requireApprovalToggle.disabled = true;
+    try {
+      await savePreferences({ tasks_require_approval: requireApprovalToggle.checked });
+      preferences.tasks_require_approval = requireApprovalToggle.checked;
+      window.yuvomi?.showToast(t('settings.rewardsSaved'), 'success');
+    } catch (error) {
+      requireApprovalToggle.checked = !requireApprovalToggle.checked;
+      window.yuvomi?.showToast(errorSentence(error, 'settings.preferenceSaveFailed'), 'danger');
+    } finally {
+      requireApprovalToggle.disabled = false;
     }
   });
 

@@ -3817,6 +3817,8 @@
         "rewardsPenaltiesHint": "Родители могут снимать баллы за плохое поведение (неубранная комната, крики, поздний отбой). Причина обязательна и остаётся видна ребёнку и родителям; братья и сёстры её не видят.",
         "taskCreatedByVisibleLabel": "Показывать автора",
         "taskCreatedByVisibleHint": "Детали задачи называют человека, который её создал, если у задачи есть автор. Если выключено, ничего не показывается.",
+        "tasksRequireApprovalLabel": "Требуется подтверждение родителем",
+        "tasksRequireApprovalHint": "Новые задачи требуют подтверждения родителем, прежде чем баллы зачтутся. Дети не могут змінити опцію на завданні; задачи без баллов подтверждения не требуют.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

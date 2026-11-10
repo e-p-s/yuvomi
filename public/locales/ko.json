@@ -3607,6 +3607,8 @@
         "rewardsPenaltiesHint": "부모는 잘못된 행동(어지러운 방, 고함, 늦은 잠자리)에 포인트를 차감할 수 있습니다. 이유는 필수이며 아이와 부모에게만 보입니다. 형제는 볼 수 없습니다.",
         "taskCreatedByVisibleLabel": "만든 사람 표시",
         "taskCreatedByVisibleHint": "작업 상세 화면은 작업을 만든 사람이 기록되어 있으면 그 사람을 표시합니다. 끄면 아무것도 표시되지 않습니다.",
+        "tasksRequireApprovalLabel": "부모 확인 필요",
+        "tasksRequireApprovalHint": "새 작업은 점수에 반영되기 전에 부모의 확인이 필요합니다. 아이는 작업에서 이 옵션을 바꿀 수 없으며, 점이 없는 작업은 확인이 필요 없습니다.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

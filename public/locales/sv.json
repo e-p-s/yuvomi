@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Föräldrar kan dra ifrån poäng för oönskat beteende (ostädat rum, skrikande, sen läggdags). Anledningen är obligatorisk och syns för barnet och föräldrarna; syskon ser den inte.",
         "taskCreatedByVisibleLabel": "Visaskaparen",
         "taskCreatedByVisibleHint": "Visningen av arbetsdetaljer namnger personen som skapade arbetsuppgiften när den har en skapare. Avstängd visar den ingenting.",
+        "tasksRequireApprovalLabel": "Kräver godkännande av förälder",
+        "tasksRequireApprovalHint": "Nya uppgifter måste bekräftas av en förälder innan poängen räknas. Barn kan inte ändra alternativet på uppgiften; uppgifter utan poäng behöver ingen bekräftelse.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

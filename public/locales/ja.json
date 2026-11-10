@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "保護者は不正な行動（部屋が散らかっている、怒鳴る、就寝が遅い）で点を減らせます。理由は必須で、子どもと保護者にだけ表示されます。兄弟には表示されません。",
         "taskCreatedByVisibleLabel": "作成者を表示",
         "taskCreatedByVisibleHint": "タスク詳細ビューは、作成者が記録されている場合に作成した人を表示します。オフの場合は何も表示しません。",
+        "tasksRequireApprovalLabel": "保護者の確認が必要",
+        "tasksRequireApprovalHint": "新しいタスクは、ポイントが算入される前に保護者の確認が必要です。子どもはタスクのこのオプションを変更できません。ポイントのないタスクは確認不要です。",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",

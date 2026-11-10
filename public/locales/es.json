@@ -3589,6 +3589,8 @@
         "rewardsPenaltiesHint": "Los padres pueden restar puntos por mal comportamiento (cuarto sin orden, gritos, acostarse tarde). El motivo es obligatorio y sigue visible para el niño y los padres; los hermanos no lo ven.",
         "taskCreatedByVisibleLabel": "Mostrar creador",
         "taskCreatedByVisibleHint": "La vista de detalles de la tarea indica quién la creó, cuando la tarea tiene creador. Desactivada, no muestra nada.",
+        "tasksRequireApprovalLabel": "Requiere aprobación de un progenitor",
+        "tasksRequireApprovalHint": "Las tareas nuevas necesitan la confirmación de un progenitor antes de contar puntos. Los hijos no pueden cambiar la opción en la tarea; las tareas sin puntos no requieren confirmación.",
         "rewardsConsequenceListLabel": "Consequence templates",
         "rewardsConsequenceActiveLabel": "Active",
         "rewardsConsequenceAddLabel": "New consequence template",
