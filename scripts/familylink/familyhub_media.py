@@ -220,36 +220,49 @@ def members(tpls, sid):
     return kids
 
 
-def learn_child_templates(ws, uid, sid):
-    """appsandusage + appliedTimeLimits des Kindes abhören: Seite ansteuern."""
+def learn_child_templates(ws, uid, sid, member_idx=None):
+    """appsandusage + appliedTimeLimits des Kindes abhoren: Seite ansteuern.
+
+    Die Mitglieder-Seite hat eine kleine Index-Adresse (member/1, member/2 ...),
+    nicht die Konten-UID - der Filter unten laeuft trotzdem ueber die UID, weil
+    die batchexecute-Requests people/<uid> tragen. Ohne index werden alle
+    Mitglieder-Durchgaenge probiert, bis einer die UID liefert."""
     want = ["appsandusage", "appliedTimeLimits"]
     have = {}
     ws.call("Fetch.enable", {"patterns": [
         {"urlPattern": "*kidsmanagement*v1/*", "requestStage": "Request"}]})
     ws.call("Page.enable")
-    ws.call("Page.navigate", {"url": f"https://familylink.google.com/member/{uid}/screenTime"})
-    t0 = time.time()
-    ws.s.settimeout(90)
-    while time.time() - t0 < 90 and want:
-        try:
-            m = ws._recv()
-        except Exception:
-            break
-        if m.get("method") == "Fetch.requestPaused":
-            p = m["params"]
-            req = p["request"]
-            ws.call("Fetch.continueRequest", {"requestId": p["requestId"]})
-            u = req["url"]
-            if f"/people/{uid}/" in u and req.get("headers", {}).get("Cookie"):
-                for name in list(want):
-                    if ENDPOINTS[name] in u:
-                        want.remove(name)
-                        have[name] = {"url": u, "headers": req["headers"],
-                                      "saved": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                      "uid": uid}
-                        json.dump(have[name], open(tpl_path(name), "w"), indent=1)
-                        os.chmod(tpl_path(name), 0o600)
-    ws.call("Fetch.disable")
+    # Index-Adressen probieren (1..4): nur der richtige liefert die Requests
+    # dieser UID; der Filter unten entscheidet, nicht geraten.
+    cands = [member_idx] if member_idx else [1, 2, 3, 4]
+    try:
+        for idx in cands:
+            if not want:
+                break
+            ws.call("Page.navigate", {"url": f"https://familylink.google.com/member/{idx}/screenTime"})
+            t0 = time.time()
+            ws.s.settimeout(45)
+            while time.time() - t0 < 45 and want:
+                try:
+                    m = ws._recv()
+                except Exception:
+                    break
+                if m.get("method") == "Fetch.requestPaused":
+                    p = m["params"]
+                    req = p["request"]
+                    ws.call("Fetch.continueRequest", {"requestId": p["requestId"]})
+                    u = req["url"]
+                    if f"/people/{uid}/" in u and req.get("headers", {}).get("Cookie"):
+                        for name in list(want):
+                            if ENDPOINTS[name] in u:
+                                want.remove(name)
+                                have[name] = {"url": u, "headers": req["headers"],
+                                              "saved": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                              "uid": uid}
+                                json.dump(have[name], open(tpl_path(name), "w"), indent=1)
+                                os.chmod(tpl_path(name), 0o600)
+    finally:
+        ws.call("Fetch.disable")
     return have
 
 

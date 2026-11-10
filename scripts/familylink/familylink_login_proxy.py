@@ -373,6 +373,56 @@ JS_OPTION_CENTER = """
 # Google-Texte der Weg-Umschaltung (deutsch/englisch, ohne Umlaute gemischt).
 RE_TRY_OTHER = "anderen weg|anderer weg|try another way|anderweitig"
 RE_PROMPT_OPTION = r"tap ?yes|(tippen|tappe).*(ja|yes)|prompt|aufforderung"
+# TOTP (Authenticator-App): Geheimnis liegt NIE im Repo, nur in dieser Datei.
+TOTP_SECRET_PATH = os.path.expanduser("~/.familyhub/totp_secret")
+RE_TOTP_OPTION = r"authenticator|einmal(?:code|passwort)|totp|sicherheits-?app"
+
+
+def _totp_code():
+    """6-stelliger Code (RFC 6238, SHA1, 30s Schritt) aus der Datei-Datei.
+    None wenn kein Geheimnis hinterlegt oder nicht dekodierbar."""
+    import base64 as _b32
+    import hashlib as _hl
+    import hmac as _hm
+    import struct as _st
+    try:
+        with open(TOTP_SECRET_PATH) as f:
+            raw = f.read().strip().replace(" ", "").replace("-", "").upper()
+    except OSError:
+        return None
+    if not raw:
+        return None
+    try:
+        key = _b32.b32decode(raw + "=" * (-len(raw) % 8))
+    except Exception:
+        return None
+    counter = int(time.time() // 30)
+    d = _hm.new(key, _st.pack(">Q", counter), _hl.sha1).digest()
+    o = d[-1] & 0x0F
+    v = (d[o] & 0x7F) << 24 | d[o + 1] << 16 | d[o + 2] << 8 | d[o + 3]
+    return "%06d" % (v % 1000000)
+
+
+def _switch_to_totp(ws, masks=()):
+    """Von Code-/Challenge-Seite zur Authenticator-Eingabe wechseln
+    ('Anderen Weg versuchen' -> Authenticator-Option). Gibt den Zustand zurück."""
+    try:
+        cap.ev(ws, JS_CLICK_WIDE % json.dumps(RE_TRY_OTHER))
+    except Exception:
+        pass
+    for _ in range(10):
+        btns = cap.ev(ws, JS_OPTIONS)
+        btns = [str(b) for b in btns] if isinstance(btns, list) else []
+        hit = next((b for b in btns
+                    if re.search(RE_TOTP_OPTION, b, re.I)), None)
+        if hit:
+            c = cap.ev(ws, JS_OPTION_CENTER % json.dumps(RE_TOTP_OPTION))
+            if isinstance(c, dict) and "x" in c:
+                _click_xy(ws, c["x"], c["y"])
+            return _wait_for(ws, ("otp", "success", "bad_password",
+                                  "challenge"), 15, masks)
+        time.sleep(1.0)
+    return "none"
 
 JS_FIELD_CENTER = """
 ((sel) => {
@@ -685,7 +735,7 @@ def _drain_usage(ws, med, uid, seconds):
     return None
 
 
-def _dispatch_terminal(ws, st, tried_prompt=False):
+def _dispatch_terminal(ws, st, tried_prompt=False, tried_totp=False):
     """Eine Terminal-Erkenntnis in die Auto-Antwort uebersetzen."""
     if st == "success":
         out = _finish_ok(ws)
@@ -695,6 +745,35 @@ def _dispatch_terminal(ws, st, tried_prompt=False):
     if st == "bad_password":
         return _finish_bad_password(ws)
     if st == "otp":
+        # TOTP-Automatik: mit hinterlegem Authenticator-Geheimnis loest der
+        # Proxy den Code selbst — kein Handy, kein Tippen, kein Warten.
+        if not tried_totp:
+            code = _totp_code()
+            if code:
+                sw = _switch_to_totp(ws, (_last_email,))
+                if sw in ("otp", "none"):
+                    out = _run_code_flow(_totp_code() or code)
+                    if out == "ok":
+                        return "ok"
+                    # Code verglueht/abgelehnt: ein zweiter Versuch mit
+                    # frischem Fenster-Code, sonst zurueck zum bisherigen Pfad.
+                    code2 = _totp_code()
+                    if code2 and code2 != code:
+                        out = _run_code_flow(code2)
+                        if out == "ok":
+                            return "ok"
+                    st_now = _wait_for(ws, TERMINALS + ("prompt",), 3,
+                                       (_last_email,))
+                    if st_now in TERMINALS or st_now == "prompt":
+                        return _dispatch_terminal(ws, st_now,
+                                                 tried_prompt=tried_prompt,
+                                                 tried_totp=True)
+                    _open_pending("otp")
+                    return "otp_needed"
+                if sw in TERMINALS or sw == "prompt":
+                    return _dispatch_terminal(ws, sw,
+                                              tried_prompt=tried_prompt,
+                                              tried_totp=True)
         # Nutzer will das Tippen am Handy ("Ja, das bin ich"), nicht SMS.
         # Erster Versuch: von der Code-Seite dorthin umschalten — gelingt das,
         # wird bis PROMPT_WAIT_SECONDS auf den Klick gewartet.
@@ -1169,6 +1248,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ok": True,
                 "session": active_session() is not None,
                 "pending": pending_state(),
+                "totp": os.path.exists(TOTP_SECRET_PATH),
             }).encode())
         if u.path in ("/login/view", "/login/stream"):
             sess = active_session()
@@ -1268,6 +1348,86 @@ class Handler(BaseHTTPRequestHandler):
                 sys.stderr.write("login/auto:FLOW fehlgeschlagen %s\n" % type(e).__name__)
                 return self._reply(500, json.dumps({"error": "auto_failed"}).encode())
             return self._reply(200, json.dumps({"result": result}).encode())
+        if u.path == "/login/totp":
+            # POST {secret}: Basis32-Geheimnis der Authenticator-App setzen.
+            # POST {}: Konfiguration abfragen. Das Geheimnis verlaesst den
+            # Rechner nie — Antworten tragen nur True/False.
+            if not self._authed():
+                return self._reply(401, json.dumps({"error": "unauthorized"}).encode())
+            body = self._json_in() or {}
+            secret = body.get("secret")
+            if secret is None:
+                return self._reply(200, json.dumps({
+                    "configured": os.path.exists(TOTP_SECRET_PATH)}).encode())
+            if not (isinstance(secret, str)
+                    and re.fullmatch(r"[A-Za-z2-7]{16,128}",
+                                     secret.replace(" ", "").replace("-", ""))):
+                return self._reply(400, json.dumps({"error": "bad_secret"}).encode())
+            try:
+                os.makedirs(os.path.dirname(TOTP_SECRET_PATH), exist_ok=True)
+                tmp = TOTP_SECRET_PATH + ".tmp"
+                with open(tmp, "w") as f:
+                    f.write(secret.strip().upper())
+                os.chmod(tmp, 0o600)
+                os.replace(tmp, TOTP_SECRET_PATH)
+            except OSError:
+                return self._reply(500, json.dumps({"error": "write_failed"}).encode())
+            return self._reply(200, json.dumps({"configured": True}).encode())
+        if u.path == "/login/cookie":
+            # Session-Import statt Passwortweg: Cookies aus einem already
+            # angemeldeten Browser (Name=Wert; Name=Wert ...). Gueltig nur bei
+            # anschliessend erreichbar familylink.google.com.
+            if not self._authed():
+                return self._reply(401, json.dumps({"error": "unauthorized"}).encode())
+            body = self._json_in() or {}
+            raw = body.get("cookies")
+            if not (isinstance(raw, str) and 20 < len(raw) < 8000):
+                return self._reply(400, json.dumps({"error": "bad_cookies"}).encode())
+            pairs = []
+            for part in raw.split(";"):
+                part = part.strip()
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    k, v = k.strip(), v.strip()
+                    if re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", k) and v:
+                        pairs.append((k, v))
+            if not pairs or not any(k == "SID" for k, _ in pairs):
+                return self._reply(400, json.dumps({"error": "bad_cookies"}).encode())
+            try:
+                ws = _attach_ws(navigate=False)
+            except Exception:
+                return self._reply(500, json.dumps({"error": "browser_failed"}).encode())
+            try:
+                for k, v in pairs:
+                    ws.call("Network.setCookie", {
+                        "name": k, "value": v, "domain": ".google.com",
+                        "secure": True, "sameSite": "None", "path": "/"})
+                ws.call("Page.navigate", {
+                    "url": "https://familylink.google.com/member/1/screenTime"})
+                time.sleep(9)
+                dom = _probe(ws)
+                url = (dom.get("url") or "")
+                if "accounts.google.com" in url or not url:
+                    return self._reply(200, json.dumps(
+                        {"result": "invalid"}).encode())
+                cookies = cap.get_all_cookies(ws)
+                write_session_json(cookies)
+                _dbg_always("Cookie-Login: Google-Session uebernommen")
+                threading.Thread(
+                    target=lambda: os.system(
+                        "flock -n /tmp/familylink-push.lock bash /mnt/tank/"
+                        "coding/privat/yuvomi-fork/scripts/familylink/"
+                        "familylink_push.sh >>/tmp/cookie_push.log 2>&1"),
+                    daemon=True).start()
+                return self._reply(200, json.dumps({"result": "ok"}).encode())
+            except Exception:
+                return self._reply(500, json.dumps(
+                    {"error": "cookie_import_failed"}).encode())
+            finally:
+                try:
+                    ws.s.close()
+                except Exception:
+                    pass
         if u.path == "/login/input":
             t = (urllib.parse.parse_qs(u.query).get("t") or [""])[0]
             sess = active_session()
