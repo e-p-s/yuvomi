@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Bocka av den där så fortsätter serien",
         "errorForeignSeries": "Den här uppgiften upprepas i en annan app. Bocka av den där så fortsätter serien.",
         "approvalToggle": "Godkännande krävs",
-        "approvalHint": "En administratör bekräftar avbockningen innan poängen bokförs.",
+        "approvalHint": "Avbockningen räknas när en förälder bekräftar den.",
         "approvalBadge": "Godkännande krävs",
         "approvalPendingBadge": "Väntar på bekräftelse",
-        "approvalPendingBanner": "Avbockad - väntar på en administratörs bekräftelse.",
+        "approvalPendingBanner": "Avbockad - väntar på bekräftelse från en förälder.",
         "approvalRejectReasonLabel": "Avvisningsskäl",
         "approvalApproveButton": "Godkänn",
         "approvalRejectButton": "Avvisa",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Visa bara väntande",
         "createdByComment": "Skapad av {{name}} den {{date}} kl. {{time}}",
         "createdByCommentNoTime": "Skapad av {{name}}",
-        "task_approval_admin_only": "Endast en administrator godkanner eller avslar uppgifter.",
+        "task_approval_admin_only": "Endast en förälder godkänner eller avvisar uppgifter.",
         "task_approval_not_pending": "Denna uppgift väntar inte på godkännande just nu."
     },
     "shopping": {

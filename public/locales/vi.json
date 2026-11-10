@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Đánh dấu hoàn thành ở đó để chuỗi tiếp tục",
         "errorForeignSeries": "Việc này lặp lại trong một ứng dụng khác. Hãy đánh dấu hoàn thành ở đó để chuỗi tiếp tục.",
         "approvalToggle": "Cần phê duyệt",
-        "approvalHint": "Quản trị viên xác nhận việc tick trước khi điểm được ghi nhận.",
+        "approvalHint": "Đánh dấu chỉ được tính khi phụ huynh xác nhận.",
         "approvalBadge": "Cần phê duyệt",
         "approvalPendingBadge": "Đang chờ xác nhận",
-        "approvalPendingBanner": "Đã tick - đang chờ quản trị viên xác nhận.",
+        "approvalPendingBanner": "Đã đánh dấu - chờ phụ huynh xác nhận.",
         "approvalRejectReasonLabel": "Lý do từ chối",
         "approvalApproveButton": "Phê duyệt",
         "approvalRejectButton": "Từ chối",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Chỉ hiện đang chờ",
         "createdByComment": "{{name}} tạo lúc {{date}} {{time}}",
         "createdByCommentNoTime": "{{name}} tạo",
-        "task_approval_admin_only": "Chỉ quản trị viên duyệt hoặc từ chối công việc.",
+        "task_approval_admin_only": "Chỉ phụ huynh mới duyệt hoặc từ chối nhiệm vụ.",
         "task_approval_not_pending": "Công việc này hiện không chờ duyệt."
     },
     "shopping": {

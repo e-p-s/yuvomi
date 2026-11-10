@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "请在该应用中勾选完成，系列才会继续",
         "errorForeignSeries": "此任务在其他应用中重复。请在该应用中勾选完成，系列才会继续。",
         "approvalToggle": "需要审批",
-        "approvalHint": "管理员确认打卡后才计入积分。",
+        "approvalHint": "需经家长确认后才计入打卡。",
         "approvalBadge": "需要审批",
         "approvalPendingBadge": "等待确认",
-        "approvalPendingBanner": "已勾选 - 等待管理员确认。",
+        "approvalPendingBanner": "已打卡 - 等待家长确认。",
         "approvalRejectReasonLabel": "拒绝原因",
         "approvalApproveButton": "批准",
         "approvalRejectButton": "拒绝",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "仅显示待确认",
         "createdByComment": "由 {{name}} 于 {{date}} {{time}} 创建",
         "createdByCommentNoTime": "由 {{name}} 创建",
-        "task_approval_admin_only": "只有管理员才能批准或拒绝任务。",
+        "task_approval_admin_only": "只有家长可以批准或拒绝任务。",
         "task_approval_not_pending": "此任务当前未在等待批准。"
     },
     "shopping": {

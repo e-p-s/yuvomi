@@ -731,10 +731,10 @@
         "foreignSeriesDetail": "I-tsek ito roon para magpatuloy ang serye",
         "errorForeignSeries": "Umuulit ang gawaing ito sa ibang app. I-tsek ito roon para magpatuloy ang serye.",
         "approvalToggle": "Kailangan ng pahintulot",
-        "approvalHint": "Ang administrator ang kumpirmahin ang check-off bago ilagay ang puntos.",
+        "approvalHint": "Bilang ang check-off kapag pinagkatiwala ng isang magulang.",
         "approvalBadge": "Kailangan ng pahintulot",
         "approvalPendingBadge": "Naghihintay ng kumpirmasyon",
-        "approvalPendingBanner": "Nakontrol - naghihintay ng kumpirmasyon ng administrator.",
+        "approvalPendingBanner": "Natchek - naghihintay ng pagpapahintulot ng magulang.",
         "approvalRejectReasonLabel": "Dahilan ng pagtanggi",
         "approvalApproveButton": "Pahintulutan",
         "approvalRejectButton": "Tanggihan",
@@ -746,7 +746,7 @@
         "approvalQueueToggle": "Ipakita lang ang naghihintay",
         "createdByComment": "Ginawa ni {{name}} noong {{date}} nang {{time}}",
         "createdByCommentNoTime": "Ginawa ni {{name}}",
-        "task_approval_admin_only": "Ang tagapangasiwa lang ang pumapayag o tumatanggi ng gawain.",
+        "task_approval_admin_only": "Isang magulang lang ang pumapayag o tumatanggi sa gawain.",
         "task_approval_not_pending": "Hindi ngayon naghihintay ng pagpapatibay ang gawaing ito."
     },
     "shopping": {

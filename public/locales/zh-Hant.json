@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "請在該 App 中勾選完成，系列才會繼續",
         "errorForeignSeries": "此任務在其他 App 中重複。請在該 App 中勾選完成，系列才會繼續。",
         "approvalToggle": "需要審批",
-        "approvalHint": "管理員確認後才計入積分。",
+        "approvalHint": "需經家長確認後才計入打卡。",
         "approvalBadge": "需要審批",
         "approvalPendingBadge": "等待確認",
-        "approvalPendingBanner": "已勾選 - 等待管理員確認。",
+        "approvalPendingBanner": "已打卡 - 等待家長確認。",
         "approvalRejectReasonLabel": "拒絕原因",
         "approvalApproveButton": "批准",
         "approvalRejectButton": "拒絕",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "僅顯示待確認",
         "createdByComment": "由 {{name}} 於 {{date}} {{time}} 建立",
         "createdByCommentNoTime": "由 {{name}} 建立",
-        "task_approval_admin_only": "只有管理員才能核准或拒絕任務。",
+        "task_approval_admin_only": "只有家長可以核准或拒絕任務。",
         "task_approval_not_pending": "此任務當前未在等待核准。"
     },
     "shopping": {

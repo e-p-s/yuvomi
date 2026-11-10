@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Márcala allí para que la serie continúe",
         "errorForeignSeries": "Esta tarea se repite en otra app. Márcala como hecha allí para que la serie continúe.",
         "approvalToggle": "Requiere aprobación",
-        "approvalHint": "Un administrador confirma el registro antes de sumar los puntos.",
+        "approvalHint": "El marcado cuenta cuando un progenitor lo confirma.",
         "approvalBadge": "Aprobación requerida",
         "approvalPendingBadge": "Pendiente de confirmación",
-        "approvalPendingBanner": "Marcada - esperando la confirmación de un administrador.",
+        "approvalPendingBanner": "Marcado - pendiente de la confirmación de un progenitor.",
         "approvalRejectReasonLabel": "Motivo del rechazo",
         "approvalApproveButton": "Aprobar",
         "approvalRejectButton": "Rechazar",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Mostrar solo pendientes",
         "createdByComment": "Creada por {{name}} el {{date}} a las {{time}}",
         "createdByCommentNoTime": "Creada por {{name}}",
-        "task_approval_admin_only": "Solo un administrador aprueba o rechaza tareas.",
+        "task_approval_admin_only": "Solo un progenitor aprueba o rechaza tareas.",
         "task_approval_not_pending": "Esta tarea no espera aprobación en este momento."
     },
     "shopping": {

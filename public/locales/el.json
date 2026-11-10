@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Σημειώστε την εκεί για να συνεχιστεί η σειρά",
         "errorForeignSeries": "Αυτή η εργασία επαναλαμβάνεται σε άλλη εφαρμογή. Σημειώστε την εκεί ως ολοκληρωμένη για να συνεχιστεί η σειρά.",
         "approvalToggle": "Απαιτείται έγκριση",
-        "approvalHint": "Ο διαχειριστής επιβεβαιώνει την ολοκλήρωση πριν καταχωρηθούν οι πόντοι.",
+        "approvalHint": "Η σημείωση ολοκλήρωσης μετράει μετά την έγκριση ενός γονέα.",
         "approvalBadge": "Απαιτείται έγκριση",
         "approvalPendingBadge": "Σε αναμονή επιβεβαίωσης",
-        "approvalPendingBanner": "Ολοκληρώθηκε - σε αναμονή επιβεβαίωσης από διαχειριστή.",
+        "approvalPendingBanner": "Ολοκληρώθηκε - αναμονή έγκρισης γονέα.",
         "approvalRejectReasonLabel": "Λόγος απόρριψης",
         "approvalApproveButton": "Έγκριση",
         "approvalRejectButton": "Απόρριψη",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Μόνο σε αναμονή",
         "createdByComment": "Δημιουργήθηκε από {{name}} στις {{date}} ώρα {{time}}",
         "createdByCommentNoTime": "Δημιουργήθηκε από {{name}}",
-        "task_approval_admin_only": "Μόνο ένας διαχειριστής εγκρίνει ή απορρίπτει εργασίες.",
+        "task_approval_admin_only": "Μόνο ένας γονέας εγκρίνει ή απορρίπτει εργασίες.",
         "task_approval_not_pending": "Αυτή η εργασία δεν περιμένει έγκριση αυτή τη στιγμή."
     },
     "shopping": {

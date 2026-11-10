@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "सीरीज़ जारी रखने के लिए इसे वहीं पूरा चिह्नित करें",
         "errorForeignSeries": "यह कार्य किसी दूसरे ऐप में दोहराता है। सीरीज़ जारी रखने के लिए इसे वहीं पूरा चिह्नित करें।",
         "approvalToggle": "स्वीकृति आवश्यक",
-        "approvalHint": "प्रशासक के पुष्टि करने पर ही अंक जुड़ेंगे।",
+        "approvalHint": "माता-पिता की पुष्टि के बाद ही चेक-ऑफ़ गिना जाएगा।",
         "approvalBadge": "स्वीकृति आवश्यक",
         "approvalPendingBadge": "पुष्टि की प्रतीक्षा में",
-        "approvalPendingBanner": "चिह्नित - प्रशासक की पुष्टि की प्रतीक्षा में।",
+        "approvalPendingBanner": "चेक हुआ - माता-पिता की पुष्टि की प्रतीक्षा में।",
         "approvalRejectReasonLabel": "अस्वीकृति का कारण",
         "approvalApproveButton": "स्वीकृत करें",
         "approvalRejectButton": "अस्वीकृत करें",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "केवल लंबित दिखाएँ",
         "createdByComment": "{{name}} ने बनाई, {{date}} को {{time}} पर",
         "createdByCommentNoTime": "{{name}} ने बनाई",
-        "task_approval_admin_only": "केवल प्रशासक कार्य को स्वीकृत या अस्वीकृत करते हैं।",
+        "task_approval_admin_only": "केवल माता-पिता ही कार्य स्वीकार या अस्वीकार करते हैं।",
         "task_approval_not_pending": "यह कार्य इस समय स्वीकृति की प्रतीक्षा में नहीं है।"
     },
     "shopping": {

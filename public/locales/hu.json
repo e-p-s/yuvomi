@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Ott pipáld ki, hogy a sorozat folytatódjon",
         "errorForeignSeries": "Ez a feladat egy másik alkalmazásban ismétlődik. Ott pipáld ki, hogy a sorozat folytatódjon.",
         "approvalToggle": "Jóváhagyás szükséges",
-        "approvalHint": "Az admin a kipipálás jóváhagyása után írja jóvá a pontokat.",
+        "approvalHint": "A bepipálás csak a szülő megerősítése után számít.",
         "approvalBadge": "Jóváhagyás szükséges",
         "approvalPendingBadge": "Megerősítésre vár",
-        "approvalPendingBanner": "Kipipálva - admin megerősítésére vár.",
+        "approvalPendingBanner": "Bepipálva - szülő megerősítésére vár.",
         "approvalRejectReasonLabel": "Elutasítás oka",
         "approvalApproveButton": "Jóváhagyás",
         "approvalRejectButton": "Elutasítás",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Csak a függőben lévők",
         "createdByComment": "{{name}} hozta létre {{date}} {{time}}",
         "createdByCommentNoTime": "{{name}} hozta létre",
-        "task_approval_admin_only": "Csak rendszergazada hagyja jóvá vagy utasítja el a feladatokat.",
+        "task_approval_admin_only": "Csak egy szülő hagy jóvá vagy utasít el feladatokat.",
         "task_approval_not_pending": "Ez a feladat most nem vár jóváhagyásra."
     },
     "shopping": {

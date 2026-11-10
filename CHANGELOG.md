@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Freigaben bestätigen Eltern, nicht Administratoren.** Aufgaben mit
+  Freigabepflicht bestätigen oder ablehnen kann jetzt jedes Elternteil
+  (`family_role` dad/mom/parent) ohne technische Admin-Rolle; die Admin-Rolle
+  wirkt wie bisher weiter, Kinder und übrige Mitglieder nicht. Ein Elternteil,
+  der eine freigabepflichtige Aufgabe selbst abhakt, bestätigt sie im selben
+  Schritt. Die Warteschlangen-Ansicht (`?approval=pending`) und das Umschalten
+  der Freigabepflicht folgen derselben Regel. Die Texte sagen überall
+  "Elternteil" statt "Administrator" (in allen Sprachdateien).
 - **Aufgaben von Kindern tragen keine Punkte.** Ein Kind kann Aufgaben anlegen und
   bearbeiten, der Punktwert bleibt dabei immer 0 - auch wenn ein Wert mitgeschickt
   wird; Punkte vergibt ein Elternteil nachtraeglich wie bisher. Der

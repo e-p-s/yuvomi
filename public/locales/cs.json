@@ -775,10 +775,10 @@
         "foreignSeriesDetail": "Odškrtněte ji tam, aby série pokračovala",
         "errorForeignSeries": "Tento úkol se opakuje v jiné aplikaci. Odškrtněte ho tam, aby série pokračovala.",
         "approvalToggle": "Vyžaduje schválení",
-        "approvalHint": "Body se připíšou až po potvrzení správcem.",
+        "approvalHint": "Odškrtnutí se započítá, až ho potvrdí rodič.",
         "approvalBadge": "Vyžaduje schválení",
         "approvalPendingBadge": "Čeká na potvrzení",
-        "approvalPendingBanner": "Zaškrtnuto - čeká na potvrzení správcem.",
+        "approvalPendingBanner": "Odškrtnuto - čeká na potvrzení rodičem.",
         "approvalRejectReasonLabel": "Důvod zamítnutí",
         "approvalApproveButton": "Schválit",
         "approvalRejectButton": "Zamítnout",
@@ -791,7 +791,7 @@
         "approvalQueueToggle": "Jen čekající",
         "createdByComment": "Vytvořil {{name}} dne {{date}} v {{time}}",
         "createdByCommentNoTime": "Vytvořil {{name}}",
-        "task_approval_admin_only": "Úlohy schvaluje nebo zamítá pouze správce.",
+        "task_approval_admin_only": "Úlohy schvaluje nebo zamítá pouze rodič.",
         "task_approval_not_pending": "Tento úkol zrovna nečeká na schválení."
     },
     "shopping": {

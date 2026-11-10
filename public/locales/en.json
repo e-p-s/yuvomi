@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Tick it off there so the series continues",
         "errorForeignSeries": "This task repeats in another app. Tick it off there so the series continues.",
         "approvalToggle": "Requires approval",
-        "approvalHint": "An administrator confirms the check-off before points are booked.",
+        "approvalHint": "The check-off counts once a parent confirms it.",
         "approvalBadge": "Approval required",
         "approvalPendingBadge": "Awaiting confirmation",
-        "approvalPendingBanner": "Checked off - waiting for an administrator to confirm.",
+        "approvalPendingBanner": "Checked off - waiting for a parent to confirm.",
         "approvalRejectReasonLabel": "Reason of rejection",
         "approvalApproveButton": "Approve",
         "approvalRejectButton": "Reject",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Show pending only",
         "createdByComment": "Created by {{name}} on {{date}} at {{time}}",
         "createdByCommentNoTime": "Created by {{name}}",
-        "task_approval_admin_only": "Only an administrator approves or rejects tasks.",
+        "task_approval_admin_only": "Only a parent approves or rejects tasks.",
         "task_approval_not_pending": "This task is not awaiting approval right now."
     },
     "shopping": {

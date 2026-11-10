@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Marque-a como feita lá para a série continuar",
         "errorForeignSeries": "Esta tarefa repete-se noutra app. Marque-a como feita lá para a série continuar.",
         "approvalToggle": "Aprovação necessária",
-        "approvalHint": "Um administrador confirma o registo antes de os pontos serem creditados.",
+        "approvalHint": "O registo conta após confirmação de um encarregado.",
         "approvalBadge": "Aprovação necessária",
         "approvalPendingBadge": "A aguardar confirmação",
-        "approvalPendingBanner": "Concluída - a aguardar confirmação de um administrador.",
+        "approvalPendingBanner": "Assinalado - à espera da confirmação de um encarregado.",
         "approvalRejectReasonLabel": "Motivo da recusa",
         "approvalApproveButton": "Aprovar",
         "approvalRejectButton": "Recusar",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Mostrar apenas pendentes",
         "createdByComment": "Criada por {{name}} em {{date}} às {{time}}",
         "createdByCommentNoTime": "Criada por {{name}}",
-        "task_approval_admin_only": "Apenas um administrador aprova ou rejeita tarefas.",
+        "task_approval_admin_only": "Apenas um encarregado aprova ou rejeita tarefas.",
         "task_approval_not_pending": "Esta tarefa não está à espera de aprovação neste momento."
     },
     "shopping": {

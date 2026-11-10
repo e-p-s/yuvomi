@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Vink hem daar af zodat de reeks doorloopt",
         "errorForeignSeries": "Deze taak herhaalt zich in een andere app. Vink hem daar af zodat de reeks doorloopt.",
         "approvalToggle": "Goedkeuring vereist",
-        "approvalHint": "Een beheerder bevestigt het afvinken voordat de punten worden bijgeschreven.",
+        "approvalHint": "Het vinkje telt pas na bevestiging door een ouder.",
         "approvalBadge": "Goedkeuring vereist",
         "approvalPendingBadge": "Wacht op bevestiging",
-        "approvalPendingBanner": "Aangevinkt - wacht op bevestiging door een beheerder.",
+        "approvalPendingBanner": "Aangevinkt - wacht op bevestiging door een ouder.",
         "approvalRejectReasonLabel": "Reden van afwijzing",
         "approvalApproveButton": "Goedkeuren",
         "approvalRejectButton": "Afwijzen",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Alleen openstaande tonen",
         "createdByComment": "Gemaakt door {{name}} op {{date}} om {{time}}",
         "createdByCommentNoTime": "Gemaakt door {{name}}",
-        "task_approval_admin_only": "Alleen een beheerder keurt taken goed of wijst ze af.",
+        "task_approval_admin_only": "Alleen een ouder geeft taken vrij of wijst ze af.",
         "task_approval_not_pending": "Deze taak wacht op dit moment niet op goedkeuring."
     },
     "shopping": {

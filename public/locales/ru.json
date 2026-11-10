@@ -831,10 +831,10 @@
         "foreignSeriesDetail": "Отметьте её там, чтобы серия продолжилась",
         "errorForeignSeries": "Эта задача повторяется в другом приложении. Отметьте её выполненной там, чтобы серия продолжилась.",
         "approvalToggle": "Требуется подтверждение",
-        "approvalHint": "Баллы зачтутся только после подтверждения администратором.",
+        "approvalHint": "Отметка засчитается после подтверждения родителем.",
         "approvalBadge": "Требуется подтверждение",
         "approvalPendingBadge": "Ждёт подтверждения",
-        "approvalPendingBanner": "Отмечено - ждёт подтверждения администратором.",
+        "approvalPendingBanner": "Отмечено - ждёт подтверждения родителем.",
         "approvalRejectReasonLabel": "Причина отказа",
         "approvalApproveButton": "Подтвердить",
         "approvalRejectButton": "Отклонить",
@@ -848,7 +848,7 @@
         "approvalQueueToggle": "Только ожидающие",
         "createdByComment": "Создал(а) {{name}} {{date}} в {{time}}",
         "createdByCommentNoTime": "Создал(а) {{name}}",
-        "task_approval_admin_only": "Задачи утверждает или отклоняет только администратор.",
+        "task_approval_admin_only": "Задачи одобряет или отклоняет только родитель.",
         "task_approval_not_pending": "Эта задача сейчас не ждёт утверждения."
     },
     "shopping": {

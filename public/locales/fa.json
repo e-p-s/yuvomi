@@ -731,10 +731,10 @@
         "foreignSeriesDetail": "آن را همان‌جا تیک بزنید تا سری ادامه پیدا کند",
         "errorForeignSeries": "این کار در برنامه‌ای دیگر تکرار می‌شود. آن را همان‌جا تیک بزنید تا سری ادامه پیدا کند.",
         "approvalToggle": "نیازمند تأیید",
-        "approvalHint": "امتیازها پس از تأیید مدیر ثبت می‌شوند.",
+        "approvalHint": "تیک زده پس از تأیید یکی از والدین محسوب می‌شود.",
         "approvalBadge": "نیازمند تأیید",
         "approvalPendingBadge": "در انتظار تأیید",
-        "approvalPendingBanner": "علامت زده شد - در انتظار تأیید مدیر.",
+        "approvalPendingBanner": "تیک خورد - در انتظار تأیید یکی از والدین.",
         "approvalRejectReasonLabel": "دلیل رد",
         "approvalApproveButton": "تأیید",
         "approvalRejectButton": "رد",
@@ -746,7 +746,7 @@
         "approvalQueueToggle": "فقط در انتظارها",
         "createdByComment": "ساخته‌شده توسط {{name}} در {{date}} ساعت {{time}}",
         "createdByCommentNoTime": "ساخته‌شده توسط {{name}}",
-        "task_approval_admin_only": "فقط مدیر وظایف را تأیید یا رد می‌کند.",
+        "task_approval_admin_only": "فقط یکی از والدین وظایف را تأیید یا رد می‌کند.",
         "task_approval_not_pending": "این وظيفة اکنون در انتظار تأیید نیست."
     },
     "shopping": {

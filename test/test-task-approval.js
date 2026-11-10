@@ -310,3 +310,46 @@ test('checkin_at traegt den Kalendertag der Haushalt-Zeitzone, nicht UTC', async
     db.prepare("DELETE FROM sync_config WHERE key = 'household_timezone'").run();
   }
 });
+
+// ----------------------------------------------------------
+// Haushaltsregel (User-Anweisung 2026-11-10): Bestaetigen ist Eltern-Arbeit.
+// family_role dad/mom/parent bestaetigt ohne Admin-Rolle; Kinder und ubrige
+// Mitglieder bleiben draussen.
+// ----------------------------------------------------------
+const dadP = db.prepare(
+  "INSERT INTO users (username, display_name, password_hash, role, family_role) VALUES ('vater-p', 'Papa', 'x', 'member', 'dad')"
+).run().lastInsertRowid;
+db.prepare('INSERT INTO reward_participants (user_id, enabled) VALUES (?, 1)').run(dadP);
+const DADP = { id: dadP, role: 'member' };
+
+test('Elternteil (Mitglied, family_role dad) bestaetigt einen haengenden Check-in', async () => {
+  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Fahrrad', points: 4, requires_approval: true, assigned_to: [kid] } });
+  const id = r.body.data.id;
+  await call('PATCH', `/${id}/status`, { as: KID, body: { status: 'done' } });
+  assert.equal(task(id).approval_status, 'pending');
+  const ok = await call('POST', `/${id}/approval`, { as: DADP, body: { action: 'approve' } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(task(id).approval_status, 'approved');
+  assert.equal(task(id).approved_by, dadP);
+});
+
+test('Nicht-Elternteil (family_role other) bleibt draussen: 403 wie bisher', async () => {
+  const other = db.prepare(
+    "INSERT INTO users (username, display_name, password_hash, role, family_role) VALUES ('oma-q', 'Oma', 'x', 'member', 'other')"
+  ).run().lastInsertRowid;
+  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Briefe', points: 2, requires_approval: true, assigned_to: [kid] } });
+  const id = r.body.data.id;
+  await call('PATCH', `/${id}/status`, { as: KID, body: { status: 'done' } });
+  const no = await call('POST', `/${id}/approval`, { as: { id: other, role: 'member' }, body: { action: 'approve' } });
+  assert.equal(no.status, 403);
+  assert.equal(no.body.reason, 'task_approval_admin_only');
+});
+
+test('Elternteil hakt selbst ab: sofort bestaetigt, Punkte sofort gebucht', async () => {
+  const r = await call('POST', '/', { as: ADMIN, body: { title: 'Werkstatt', points: 6, requires_approval: true, assigned_to: [dadP] } });
+  const id = r.body.data.id;
+  const s = await call('PATCH', `/${id}/status`, { as: DADP, body: { status: 'done' } });
+  assert.equal(s.status, 200);
+  assert.equal(task(id).approval_status, 'approved');
+  assert.equal(earned(dadP), 6);
+});

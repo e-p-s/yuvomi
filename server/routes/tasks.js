@@ -200,6 +200,22 @@ function actorMaySetPoints(req) {
   return !!row && row.family_role !== 'child';
 }
 
+/**
+ * Freigabe-Haushaltsregel (User-Anweisung 2026-11-10): Bestaetigen oder
+ * Ablehnen von Check-ins und das Setzen der Freigabepflicht steht Eltern und
+ * Admins offen - family_role dad/mom/parent zahlt gleichberechtigt zur
+ * Admin-Rolle. Der upstream-Entscheid (docs/DECISIONS.md Eintrag 2: Berechtigung
+ * nie aus family_role) ist hier bewusst ueberschrieben: im Haushalt sind die
+ * Eltern die Bestaetigenden, die technische Admin-Rolle soll dafuer nicht
+ * vergeben werden muessen. Kinder und ubrige Mitglieder bleiben draussen.
+ */
+function actorIsParentLike(req) {
+  const actor = req.authUserId || req.session?.userId;
+  if (!actor) return false;
+  const row = db.get().prepare('SELECT role, family_role FROM users WHERE id = ?').get(actor);
+  return !!row && (row.role === 'admin' || ['dad', 'mom', 'parent'].includes(row.family_role));
+}
+
 // Erledigte Aufgaben dürfen nicht umbepunktet werden: genau für 'done' hält der
 // reward_ledger eine earn-Buchung über den damaligen Punktwert
 // (awardForCompletion in server/services/rewards.js); ein nachträglicher Wechsel
@@ -1179,10 +1195,10 @@ router.get('/', (req, res) => {
     }
 
     // Freigabe-Warteschlange: `?approval=pending` liefert nur Check-ins, die auf
-    // Bestaetigung warten. Das Filtern danach ist eine Admin-Ansicht - fuer
-    // Nicht-Admins ist die Nachfrage wirkungslos (sie duerften ohnehin nicht
-    // bestaetigen), die Liste bleibt fuer sie die normale.
-    if (approval === 'pending' && isAdminRequest(req)) {
+    // Bestaetigung warten. Das Filtern danach ist die Sicht der Bestaetigenden
+    // (Eltern und Admins) - fuer alle anderen ist die Nachfrage wirkungslos
+    // (sie duerften ohnehin nicht bestaetigen), die Liste bleibt die normale.
+    if (approval === 'pending' && actorIsParentLike(req)) {
       sql += " AND t.approval_status = 'pending'";
     }
 
@@ -1443,7 +1459,7 @@ router.post('/', (req, res) => {
       if (status !== 'open') {
         const actingUserId = req.authUserId || req.session.userId;
         const newId = Number(result.lastInsertRowid);
-        syncTaskRewards(db.get(), newId, 'open', status, actingUserId, null, { asAdmin: isAdminRequest(req) });
+        syncTaskRewards(db.get(), newId, 'open', status, actingUserId, null, { asAdmin: actorIsParentLike(req) });
         syncTaskCompletion(db.get(), newId, 'open', status, actingUserId);
         // Erledigt angelegte Serie: die naechste Instanz gehoert dazu, genau wie
         // beim Abhaken. Ohne sie endete eine Serie in dem Moment, in dem sie
@@ -1602,13 +1618,13 @@ router.put('/:id', (req, res) => {
     // deshalb genau das abweisen, was offen bleiben soll: das Abhaken aus dem
     // Bearbeiten-Formular schickt Titel und Termin unveraendert mit.
     // Die Freigabepflicht ist Definition, auch an einer UNGESPERRTEN Aufgabe:
-    // niemand ausser Ersteller:in und Admins darf nachtraeglich bestimmen, dass
-    // ein Check-in einer Bestaetigung braucht (oder nicht). Die Sperre selbst
-    // vergleicht mayEditTaskDefinition unten nur, wenn sie greift - dieser
-    // Guard gilt immer.
+    // niemand ausser Ersteller:in und Bestaetigenden (Eltern, Admins) darf
+    // nachtraeglich bestimmen, dass ein Check-in einer Bestaetigung braucht
+    // (oder nicht). Die Sperre selbst vergleicht mayEditTaskDefinition unten
+    // nur, wenn sie greift - dieser Guard gilt immer.
         if (requiresApprovalRequested !== null
         && requiresApprovalRequested !== (task.requires_approval ? 1 : 0)
-        && !isAdminRequest(req)
+        && !actorIsParentLike(req)
         && task.created_by !== (req.authUserId || req.session?.userId)) {
       return res.status(403).json({ ...LOCKED_ERROR, code: 403, reason: 'task_locked' });
     }
@@ -1725,7 +1741,7 @@ router.put('/:id', (req, res) => {
       if (archiveRequested && !task.archived_at) setArchived(task.id, true);
       syncHousekeepingPaymentStatus(db.get(), req.params.id, status);
       // Punkte erst nach setAssignments: die Zuständigen werden daraus abgeleitet.
-      syncTaskRewards(db.get(), task.id, task.status, status, req.authUserId || req.session.userId, null, { asAdmin: isAdminRequest(req) });
+      syncTaskRewards(db.get(), task.id, task.status, status, req.authUserId || req.session.userId, null, { asAdmin: actorIsParentLike(req) });
       // Derselbe Übergang, ein zweiter Vorgang: der Verlauf hält fest, DASS
       // abgehakt wurde (#791). Bewusst neben der Punktevergabe statt in ihr -
       // Punkte gehen an die Zuständigen und nur bei eingeschaltetem Modul, ein
@@ -2436,7 +2452,7 @@ router.patch('/:id/status', (req, res) => {
 
       syncHousekeepingPaymentStatus(db.get(), req.params.id, status);
       // Punkte-Gutschrift/Storno an den Aufgaben-Statuswechsel koppeln.
-      syncTaskRewards(db.get(), Number(req.params.id), prev.status, status, req.authUserId || req.session.userId, doneByUserId, { asAdmin: isAdminRequest(req) });
+      syncTaskRewards(db.get(), Number(req.params.id), prev.status, status, req.authUserId || req.session.userId, doneByUserId, { asAdmin: actorIsParentLike(req) });
       // Der Verlauf hängt am selben Übergang (#791). Dieser Weg trägt ihn
       // dreifach: Checkbox, Swipe und die Sammelaktion gehen alle hier durch.
       syncTaskCompletion(db.get(), Number(req.params.id), prev.status, status, req.authUserId || req.session.userId, doneByUserId);
@@ -2947,8 +2963,8 @@ router.patch('/:id/comments/:commentId', (req, res) => {
 // --------------------------------------------------------
 router.post('/:id/approval', (req, res) => {
   try {
-    if (!isAdminRequest(req)) {
-      return res.status(403).json({ error: 'Admin access required.', code: 403, reason: 'task_approval_admin_only' });
+    if (!actorIsParentLike(req)) {
+      return res.status(403).json({ error: 'A parent has to confirm or reject task approvals.', code: 403, reason: 'task_approval_admin_only' });
     }
     const action = req.body?.action;
     if (action !== 'approve' && action !== 'reject') {

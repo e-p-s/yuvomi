@@ -831,10 +831,10 @@
         "foreignSeriesDetail": "Позначте її там, щоб серія тривала",
         "errorForeignSeries": "Це завдання повторюється в іншому застосунку. Позначте його виконаним там, щоб серія тривала.",
         "approvalToggle": "Потрібне підтвердження",
-        "approvalHint": "Бали зарахують лише після підтвердження адміністратором.",
+        "approvalHint": "Відмітка зарахується після підтвердження батьком.",
         "approvalBadge": "Потрібне підтвердження",
         "approvalPendingBadge": "Очікує підтвердження",
-        "approvalPendingBanner": "Відмічено - очікує підтвердження адміністратором.",
+        "approvalPendingBanner": "Відмічено - чекає на підтвердження батьком.",
         "approvalRejectReasonLabel": "Причина відхилення",
         "approvalApproveButton": "Підтвердити",
         "approvalRejectButton": "Відхилити",
@@ -848,7 +848,7 @@
         "approvalQueueToggle": "Лише очікуючі",
         "createdByComment": "Створив(ла) {{name}} {{date}} о {{time}}",
         "createdByCommentNoTime": "Створив(ла) {{name}}",
-        "task_approval_admin_only": "Завдання затверджує або відхиляє лише адміністратор.",
+        "task_approval_admin_only": "Лише батьок затверджує або відхиляє завдання.",
         "task_approval_not_pending": "Це завдання зараз не чекає на затвердження."
     },
     "shopping": {

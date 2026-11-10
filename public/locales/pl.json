@@ -849,10 +849,10 @@
         "foreignSeriesDetail": "Odhacz je tam, aby seria trwała dalej",
         "errorForeignSeries": "To zadanie powtarza się w innej aplikacji. Odhacz je tam, aby seria trwała dalej.",
         "approvalToggle": "Wymaga zatwierdzenia",
-        "approvalHint": "Punkty zostaną naliczone dopiero po zatwierdzeniu przez administratora.",
+        "approvalHint": "Odhaczenie liczy się po potwierdzeniu przez rodzica.",
         "approvalBadge": "Wymaga zatwierdzenia",
         "approvalPendingBadge": "Czeka na zatwierdzenie",
-        "approvalPendingBanner": "Odhaczone - czeka na zatwierdzenie przez administratora.",
+        "approvalPendingBanner": "Odhaczone - czeka na potwierdzenie przez rodzica.",
         "approvalRejectReasonLabel": "Powód odrzucenia",
         "approvalApproveButton": "Zatwierdź",
         "approvalRejectButton": "Odrzuć",
@@ -866,7 +866,7 @@
         "approvalQueueToggle": "Tylko oczekujące",
         "createdByComment": "Utworzył {{name}}, {{date}} o {{time}}",
         "createdByCommentNoTime": "Utworzył {{name}}",
-        "task_approval_admin_only": "Tylko administrator zatwierdza lub odrzuca zadania.",
+        "task_approval_admin_only": "Tylko rodzic zatwierdza lub odrzuca zadania.",
         "task_approval_not_pending": "To zadanie właśnie nie czeka na zatwierdzenie."
     },
     "shopping": {

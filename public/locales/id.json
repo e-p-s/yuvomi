@@ -731,10 +731,10 @@
         "foreignSeriesDetail": "Centang di sana agar seri berlanjut",
         "errorForeignSeries": "Tugas ini berulang di aplikasi lain. Centang di sana agar seri berlanjut.",
         "approvalToggle": "Perlu persetujuan",
-        "approvalHint": "Administrator mengonfirmasi centang sebelum poin dibukukan.",
+        "approvalHint": "Centang dihitung setelah orang tua menyetujui.",
         "approvalBadge": "Persetujuan diperlukan",
         "approvalPendingBadge": "Menunggu konfirmasi",
-        "approvalPendingBanner": "Diselesaikan - menunggu konfirmasi administrator.",
+        "approvalPendingBanner": "Dicentang - menunggu persetujuan orang tua.",
         "approvalRejectReasonLabel": "Alasan penolakan",
         "approvalApproveButton": "Setujui",
         "approvalRejectButton": "Tolak",
@@ -746,7 +746,7 @@
         "approvalQueueToggle": "Tampilkan yang menunggu saja",
         "createdByComment": "Dibuat oleh {{name}} pada {{date}} pukul {{time}}",
         "createdByCommentNoTime": "Dibuat oleh {{name}}",
-        "task_approval_admin_only": "Hanya administrator yang menyetujui atau menolak tugas.",
+        "task_approval_admin_only": "Hanya orang tua yang menyetujui atau menolak tugas.",
         "task_approval_not_pending": "Tugas ini tidak menunggu persetujuan saat ini."
     },
     "shopping": {

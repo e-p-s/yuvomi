@@ -731,10 +731,10 @@
         "foreignSeriesDetail": "Dort abhaken, damit die Serie weiterläuft",
         "errorForeignSeries": "Diese Aufgabe wiederholt sich in einer anderen App. Hake sie dort ab, damit die Serie weiterläuft.",
         "approvalToggle": "Freigabe erforderlich",
-        "approvalHint": "Der Check-off wird erst nach Bestätigung durch einen Administrator gewertet.",
+        "approvalHint": "Der Check-off wird erst nach Bestätigung durch ein Elternteil gewertet.",
         "approvalBadge": "Freigabe erforderlich",
         "approvalPendingBadge": "Wartet auf Bestätigung",
-        "approvalPendingBanner": "Abgehakt - wartet auf die Bestätigung durch einen Administrator.",
+        "approvalPendingBanner": "Abgehakt - wartet auf die Bestätigung durch ein Elternteil.",
         "approvalRejectReasonLabel": "Grund der Ablehnung",
         "approvalApproveButton": "Freigeben",
         "approvalRejectButton": "Ablehnen",
@@ -746,7 +746,7 @@
         "approvalQueueToggle": "Nur offene anzeigen",
         "createdByComment": "Angelegt von {{name}} am {{date}} um {{time}}",
         "createdByCommentNoTime": "Angelegt von {{name}}",
-        "task_approval_admin_only": "Nur ein Administrator gibt Aufgaben frei oder lehnt sie ab.",
+        "task_approval_admin_only": "Nur ein Elternteil gibt Aufgaben frei oder lehnt sie ab.",
         "task_approval_not_pending": "Diese Aufgabe wartet in diesem Moment auf keine Freigabe."
     },
     "shopping": {

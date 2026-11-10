@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "シリーズを続けるには、そちらで完了にしてください",
         "errorForeignSeries": "このタスクは別のアプリで繰り返し設定されています。シリーズを続けるには、そちらで完了にしてください。",
         "approvalToggle": "承認が必要",
-        "approvalHint": "管理者がチェックを確認してからポイントが付与されます。",
+        "approvalHint": "保護者が確認して初めてチェックが算入されます。",
         "approvalBadge": "承認が必要",
         "approvalPendingBadge": "確認待ち",
-        "approvalPendingBanner": "チェック済み - 管理者の確認を待っています。",
+        "approvalPendingBanner": "チェック済み - 保護者の確認待ちです。",
         "approvalRejectReasonLabel": "却下の理由",
         "approvalApproveButton": "承認",
         "approvalRejectButton": "却下",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "確認待ちのみ表示",
         "createdByComment": "{{name}} が {{date}} {{time}} に作成",
         "createdByCommentNoTime": "{{name}} が作成",
-        "task_approval_admin_only": "タスクの承認と却下は管理者のみが行えます。",
+        "task_approval_admin_only": "タスクの承認・却下ができるのは保護者だけです。",
         "task_approval_not_pending": "このタスクは今、承認を待っていません。"
     },
     "shopping": {

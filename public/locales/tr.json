@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Serinin devam etmesi için orada tamamlandı olarak işaretle",
         "errorForeignSeries": "Bu görev başka bir uygulamada tekrarlanıyor. Serinin devam etmesi için orada tamamlandı olarak işaretle.",
         "approvalToggle": "Onay gerekli",
-        "approvalHint": "Puanlar yazılmadan önce bir yönetici işaretlemeyi onaylamalı.",
+        "approvalHint": "Ebeveyn onayından sonra işaretleme sayılır.",
         "approvalBadge": "Onay gerekli",
         "approvalPendingBadge": "Onay bekliyor",
-        "approvalPendingBanner": "İşaretlendi - yönetici onayı bekliyor.",
+        "approvalPendingBanner": "İşaretlendi - bir ebeveynin onayı bekleniyor.",
         "approvalRejectReasonLabel": "Red gerekçesi",
         "approvalApproveButton": "Onayla",
         "approvalRejectButton": "Reddet",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Yalnızca bekleyenleri göster",
         "createdByComment": "{{name}} tarafından {{date}} {{time}} tarihinde oluşturuldu",
         "createdByCommentNoTime": "{{name}} tarafından oluşturuldu",
-        "task_approval_admin_only": "Görevleri yalnızca bir yönetici onaylar veya reddeder.",
+        "task_approval_admin_only": "Görevleri yalnızca bir ebeveyn onaylar veya reddeder.",
         "task_approval_not_pending": "Bu görev şu anda onay beklemiyor."
     },
     "shopping": {

@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Huk den av der, så fortsetter serien",
         "errorForeignSeries": "Denne oppgaven gjentas i en annen app. Huk den av der, så fortsetter serien.",
         "approvalToggle": "Godkjenning kreves",
-        "approvalHint": "En administrator bekrefter avkrysningen før poengene bookes.",
+        "approvalHint": "Avkrysningen teller etter at en forelder bekrefter den.",
         "approvalBadge": "Godkjenning kreves",
         "approvalPendingBadge": "Venter på bekreftelse",
-        "approvalPendingBanner": "Krysset av - venter på bekreftelse fra en administrator.",
+        "approvalPendingBanner": "Krysset av - venter på bekreftelse fra en forelder.",
         "approvalRejectReasonLabel": "Årsak til avvisning",
         "approvalApproveButton": "Godkjenn",
         "approvalRejectButton": "Avvis",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Vis kun ventende",
         "createdByComment": "Opprettet av {{name}} {{date}} kl. {{time}}",
         "createdByCommentNoTime": "Opprettet av {{name}}",
-        "task_approval_admin_only": "Bare en administrator godkjenner eller avslar oppgaver.",
+        "task_approval_admin_only": "Bare en forelder godkjenner eller avslår oppgaver.",
         "task_approval_not_pending": "Denne oppgaven venter ikke pa godkjenning akkurat naa."
     },
     "shopping": {

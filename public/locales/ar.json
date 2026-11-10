@@ -890,10 +890,10 @@
         "foreignSeriesDetail": "ضع علامة الإنجاز هناك لتستمر السلسلة",
         "errorForeignSeries": "تتكرر هذه المهمة في تطبيق آخر. ضع علامة الإنجاز عليها هناك لتستمر السلسلة.",
         "approvalToggle": "مطلوب موافقة",
-        "approvalHint": "لن تُحتسب النقاط قبل أن يؤكد المشرف التسجيل.",
+        "approvalHint": "يُعتدّ بالإتمام بعد موافقة أحد الوالدين.",
         "approvalBadge": "مطلوب موافقة",
         "approvalPendingBadge": "بانتظار التأكيد",
-        "approvalPendingBanner": "تم التسجيل - بانتظار تأكيد المشرف.",
+        "approvalPendingBanner": "تم الإتمام - بانتظار موافقة أحد الوالدين.",
         "approvalRejectReasonLabel": "سبب الرفض",
         "approvalApproveButton": "موافقة",
         "approvalRejectButton": "رفض",
@@ -908,7 +908,7 @@
         "approvalQueueToggle": "عرض المعلّقة فقط",
         "createdByComment": "أنشأها {{name}} في {{date}} الساعة {{time}}",
         "createdByCommentNoTime": "أنشأها {{name}}",
-        "task_approval_admin_only": "لا يوافق على المهام أو يرفضها إلا المدير.",
+        "task_approval_admin_only": "لا يوافق على المهام أو يرفضها إلا أحد الوالدين.",
         "task_approval_not_pending": "هذه المهمة لا تنتظر موافقة في هذه اللحظة."
     },
     "shopping": {

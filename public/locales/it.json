@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Spuntala lì perché la serie continui",
         "errorForeignSeries": "Questa attività si ripete in un'altra app. Spuntala lì perché la serie continui.",
         "approvalToggle": "Approvazione richiesta",
-        "approvalHint": "Un amministratore conferma la spunta prima che i punti vengano accreditati.",
+        "approvalHint": "La spunta conta dopo la conferma di un genitore.",
         "approvalBadge": "Approvazione richiesta",
         "approvalPendingBadge": "In attesa di conferma",
-        "approvalPendingBanner": "Completata - in attesa della conferma di un amministratore.",
+        "approvalPendingBanner": "Spuntato - in attesa della conferma di un genitore.",
         "approvalRejectReasonLabel": "Motivo del rifiuto",
         "approvalApproveButton": "Approva",
         "approvalRejectButton": "Rifiuta",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Mostra solo in attesa",
         "createdByComment": "Creata da {{name}} il {{date}} alle {{time}}",
         "createdByCommentNoTime": "Creata da {{name}}",
-        "task_approval_admin_only": "Solo un amministratore approva o rifiuta i compiti.",
+        "task_approval_admin_only": "Solo un genitore approva o rifiuta i compiti.",
         "task_approval_not_pending": "Questo compito non è in attesa di approvazione in questo momento."
     },
     "shopping": {

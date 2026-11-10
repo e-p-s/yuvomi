@@ -713,10 +713,10 @@
         "foreignSeriesDetail": "Cochez-la là-bas pour que la série continue",
         "errorForeignSeries": "Cette tâche se répète dans une autre app. Cochez-la là-bas pour que la série continue.",
         "approvalToggle": "Validation requise",
-        "approvalHint": "La validation d'un administrateur est nécessaire avant l'attribution des points.",
+        "approvalHint": "La validation compte après confirmation par un parent.",
         "approvalBadge": "Validation requise",
         "approvalPendingBadge": "En attente de validation",
-        "approvalPendingBanner": "Cochée - en attente de validation par un administrateur.",
+        "approvalPendingBanner": "Coché - en attente de confirmation par un parent.",
         "approvalRejectReasonLabel": "Motif du rejet",
         "approvalApproveButton": "Valider",
         "approvalRejectButton": "Rejeter",
@@ -728,7 +728,7 @@
         "approvalQueueToggle": "Afficher les en attente uniquement",
         "createdByComment": "Créée par {{name}} le {{date}} à {{time}}",
         "createdByCommentNoTime": "Créée par {{name}}",
-        "task_approval_admin_only": "Seul un administrateur approuve ou refuse les tâches.",
+        "task_approval_admin_only": "Seul un parent approuve ou refuse les tâches.",
         "task_approval_not_pending": "Cette tâche n'attend pas d'approbation en ce moment."
     },
     "shopping": {
