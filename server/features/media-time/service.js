@@ -339,9 +339,13 @@ export function dayUsage(d, userId, dayKey) {
       // ueberschritten" (0, solange das Limit nicht erreicht ist) - die echte
       // Istzeit wohnt in den App-Sitzungen (familylink_app_usage). Es gilt der
       // groessere der beiden Werte, nie die Summe: dieselbe Zeit waere sonst
-      // doppelt gezahlt.
+      // doppelt gezahlt. UEBER die Tageszeilen gilt MAX, nicht SUM: der
+      // google_device_id der Limits rotiert pro Scraping-Lauf (10.11.-Befund:
+      // 146 Zeilen/Tag fuer ein Kind), jede Zeile ist derselbe Tageswert -
+      // SUM multiplizierte die Schaetzung um die Zahl der Scrapes (285 min
+      // statt 42 im Feld).
       const daily = d.prepare(
-        'SELECT COALESCE(SUM(consumed_min), 0) AS m FROM familylink_daily WHERE google_uid = ? AND day = ?'
+        'SELECT COALESCE(MAX(consumed_min), 0) AS m FROM familylink_daily WHERE google_uid = ? AND day = ?'
       ).get(fl.google_uid, dayKey).m;
       const apps = d.prepare(
         'SELECT COALESCE(SUM(minutes), 0) AS m FROM familylink_app_usage WHERE google_uid = ? AND day = ?'
@@ -428,7 +432,7 @@ export function perDeviceUsage(d, userId, dayKey) {
   ).get(userId).n;
   if (fl && !ownDevices) {
     const all = d.prepare(
-      'SELECT COALESCE(SUM(consumed_min), 0) AS m FROM familylink_daily WHERE google_uid = ? AND day = ?'
+      'SELECT COALESCE(MAX(consumed_min), 0) AS m FROM familylink_daily WHERE google_uid = ? AND day = ?'
     ).get(fl.google_uid, dayKey).m;
     if (all > 0) {
       rows.push({ device_id: null, device_name: null, minutes: Math.round(all) });

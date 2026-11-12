@@ -248,7 +248,7 @@ test('familylinkUsage - ohne Zuordnung mapped:false, mit Zuordnung Geraete mit g
   assert.equal(linked.consumed_min, 45);
 });
 
-test('dayUsage — Kind ohne eigenes Geraet: Google-Summe ist der Verbrauch', () => {
+test('dayUsage — Kind ohne eigenes Geraet: der Tages-Hoechstwert zaehlt (Geraeterotation)', () => {
   const childId = kid('FlPhoneOnly');
   mapChild(childId, '5555559999');
   const day = dayKey;
@@ -257,9 +257,13 @@ test('dayUsage — Kind ohne eigenes Geraet: Google-Summe ist der Verbrauch', ()
     VALUES ('5555559999', 'gd-a', ?, 25, '2026-11-05T10:00:00Z'),
            ('5555559999', 'gd-b', ?, 10, '2026-11-05T10:00:00Z')
   `).run(day, day);
+  // Google rotiert die Geraetkennung pro Sammlerlauf: beide Zeilen sind
+  // Momentaufnahmen desselben Gerets. SUM multiplizierte den Verbrauch ins
+  // Faelschliche (Realfall 11.11.: 42 Minuten erschienen als 285) - es gilt
+  // der Hoechstwert des Tages, nie die Summe der Rotationszeilen.
   const u = svc.dayUsage(db, childId, day);
-  assert.equal(u.charged_min, 35, 'zwei Geraete ohne Link: Summe zahlend');
-  assert.equal(u.familylink_min, 35);
+  assert.equal(u.charged_min, 25, 'Rotationszeilen: Hoechstwert statt Summe');
+  assert.equal(u.familylink_min, 25);
 });
 
 // ════════════════════════════════════════════════════════════════════════════
