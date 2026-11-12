@@ -986,19 +986,28 @@ document.addEventListener('visibilitychange', () => {
  * hier nichts; ohne Collector-Sitzung steht der Hinweis, NIE eine Null.
  * Die Minuten zaehlen bereits im Balken (dayUsage-Ersatz) - dieser Block ist
  * die Auskunft ueber die Quelle, nicht das Konto. */
-function familylinkDetailsHtml(fl) {
+function familylinkDetailsHtml(fl, userId) {
   if (!fl || !fl.mapped) return '';
+  const deviceBtn = state.canManage && Number.isInteger(userId) ? `
+      <button class="btn btn--secondary btn--sm" type="button"
+              data-action="mt-fl-device" data-fl-device-user="${Number(userId)}">
+        ${esc(t(flLockedState.get(userId) ? 'mediaTime.flDeviceUnlock' : 'mediaTime.flDeviceLock'))}
+      </button>` : '';
   if (fl.status === 'login_noetig') {
     return `<p class="mt-meta__fl mt-meta__fl--warn">${esc(t(state.canManage ? 'mediaTime.flLoginParent' : 'mediaTime.flLoginChild'))}</p>`;
   }
-  if (!fl.devices?.length) return `<p class="mt-meta__fl">${esc(t('mediaTime.flNoneToday'))}</p>`;
+  if (!fl.devices?.length) return `<p class="mt-meta__fl">${esc(t('mediaTime.flNoneToday'))}${deviceBtn}</p>`;
   const total = fl.devices.reduce((s, r) => s + (r.consumed_min || 0), 0);
   const lines = fl.devices.map((r) => {
     if (!r.media_time_device_id) return '';
     return `<p class="mt-meta__fl">${esc(r.device_name || t('mediaTime.flDevice'))}: ${esc(t('mediaTime.flGoogleMin', { min: fmtNum(Math.round(r.consumed_min || 0)) }))}</p>`;
   }).join('');
-  return `<p class="mt-meta__fl mt-meta__fl--head">${esc(t('mediaTime.flSourceLine', { min: fmtNum(Math.round(total)) }))}</p>${lines}`;
+  return `<p class="mt-meta__fl mt-meta__fl--head">${esc(t('mediaTime.flSourceLine', { min: fmtNum(Math.round(total)) }))}</p>${lines}${deviceBtn}`;
 }
+
+/* Sperren/Entsperren: der zuletzt bestaetigte Zustand pro Kind (Google nennt
+ * ihn uns nicht; die Karte fuehrt ihn mit, damit der Knopf das richtige tut). */
+const flLockedState = new Map();
 
 /* Familienansicht (Redesign 06.11.): das eine Bild des Tages. Zone 1 ist eine
  * Karte je Kind (Restzeit als Hero, Klartext-Satz, Balken, Budget-Zeile,
@@ -1283,7 +1292,7 @@ function childCardHtml(card, multiCard = false) {
           ${metaCell(t('mediaTime.metaPurchased'), minutesLabel(data.purchased_min))}
           ${(Number(data.duty_min) || 0) > 0 ? metaCell(t('mediaTime.metaDuty'), minutesLabel(data.duty_min)) : ''}
           ${trackerMetaHtml(data)}
-          ${familylinkDetailsHtml(data.familylink)}
+          ${familylinkDetailsHtml(data.familylink, Number.isInteger(card?.userId) ? Number(card.userId) : null)}
         </div>
       </details>
       ${notesBlock}
@@ -1457,6 +1466,23 @@ function renderToday(el) {
     }));
   el.querySelector('[data-action="mt-booking-add"]')
     ?.addEventListener('click', () => openBookingModal());
+  el.querySelectorAll('[data-action="mt-fl-device"]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const userId = Number(btn.dataset.flDeviceUser);
+      if (!Number.isInteger(userId) || btn.disabled) return;
+      const lock = !flLockedState.get(userId);
+      btn.disabled = true;
+      try {
+        await api.post('/media-time/familylink/device', { user_id: userId, lock });
+        flLockedState.set(userId, lock);
+        toast(t(lock ? 'mediaTime.flDeviceLocked' : 'mediaTime.flDeviceUnlocked'));
+        btn.textContent = t(lock ? 'mediaTime.flDeviceUnlock' : 'mediaTime.flDeviceLock');
+      } catch (e) {
+        toast(mediaTimeErrorSentence(e), 'danger');
+      } finally {
+        btn.disabled = false;
+      }
+    }));
   el.querySelector('.mt-booking-add')
     ?.addEventListener('click', () => openBookingModal());
   el.querySelectorAll('[data-budget-child]').forEach((btn) =>

@@ -7342,6 +7342,10 @@
         "bookingTimeProblem": "Please enter a valid time (for example 15:30).",
         "bookingTimeOrder": "The end must be after the start.",
         "bookingMinutesProblem": "Please enter minutes between 1 and 720.",
-        "bookingEditAnchor": "The end stays where it ran ({{time}}); new minutes only shift the start."
+        "bookingEditAnchor": "The end stays where it ran ({{time}}); new minutes only shift the start.",
+        "flDeviceLock": "Lock device",
+        "flDeviceUnlock": "Unlock device",
+        "flDeviceLocked": "Device locked",
+        "flDeviceUnlocked": "Device unlocked"
     }
 }

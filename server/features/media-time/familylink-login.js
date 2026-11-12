@@ -155,3 +155,38 @@ export async function postFamilylinkLogin({ email, password, code } = {}) {
 function isoNow() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
+
+/**
+ * Geraet eines Kindes sperren/entsperren (Elternpfad, Route prueft Rechte).
+ * Der Collector setzt den Google-Ruf zusammen (gefangene Vorlage + Geraetekarte);
+ * diese Schicht uebergibt nur uid und Wunsch, Google-Namen fließen nicht zurueck.
+ * @returns {Promise<{ok: true, lock: boolean} | {ok: false, status: number, reason: string}>}
+ */
+export async function deviceAction({ googleUid, lock } = {}) {
+  const base = String(process.env.FAMILYLINK_COLLECTOR_BASE || '').trim().replace(/\/+$/, '');
+  const secret = String(process.env.FAMILYLINK_LOGIN_SECRET || '').trim();
+  if (!base || !secret) {
+    return { ok: false, status: 503, reason: 'media_time_familylink_not_configured' };
+  }
+  let res;
+  try {
+    res = await fetchImpl(`${base}/familylink/device`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(40000),
+      headers: {
+        'content-type': 'application/json',
+        authorization: "Bearer" + " " + secret,
+      },
+      body: JSON.stringify({ google_uid: googleUid, lock: Boolean(lock) }),
+    });
+  } catch {
+    return { ok: false, status: 502, reason: 'media_time_familylink_collector_unreachable' };
+  }
+  if (res.status === 404) {
+    return { ok: false, status: 409, reason: 'media_time_familylink_no_device' };
+  }
+  if (!res.ok) {
+    return { ok: false, status: 502, reason: 'media_time_familylink_collector_unreachable' };
+  }
+  return { ok: true, lock: Boolean(lock) };
+}

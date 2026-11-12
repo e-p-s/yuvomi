@@ -527,6 +527,29 @@ export const mediaTimeComponents = {
           type: 'object', required: ['data'],
           properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkLoginData' } },
         },
+        MediaTimeFamilylinkDeviceLockInput: {
+          description: 'Sperren/Entsperren des Google-Geraets eines Kindes: user_id ist das Yuvomi-Kind,\n' +
+            'lock true = sperren, false = entsperren. Der Collector setzt den Google-Ruf aus gefangener\n' +
+            'Vorlage zusammen - Google-Namen und Geraetekennungen verlassen den Sammler nie.',
+          type: 'object',
+          required: ['user_id', 'lock'],
+          properties: {
+            user_id: { type: 'integer', minimum: 1, description: 'Yuvomi-Kind mit Family-Link-Verknuepfung.' },
+            lock: { type: 'boolean', description: 'true = Geraet sperren, false = Geraet entsperren.' },
+          },
+        },
+        MediaTimeFamilylinkDeviceLockData: {
+          type: 'object',
+          required: ['ok', 'lock'],
+          properties: {
+            ok: { type: 'boolean', description: 'True, wenn Google die Aenderung bestaetigt hat.' },
+            lock: { type: 'boolean', description: 'Der jetzt gesetzte Zustand (true = gesperrt).' },
+          },
+        },
+        MediaTimeFamilylinkDeviceLockResponse: {
+          type: 'object', required: ['data'],
+          properties: { data: { $ref: '#/components/schemas/MediaTimeFamilylinkDeviceLockData' } },
+        },
         MediaTimeFamilylinkDay: {
           type: 'object',
           required: ['mapped', 'devices'],

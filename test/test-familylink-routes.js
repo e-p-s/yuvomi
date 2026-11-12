@@ -588,6 +588,67 @@ test('GET /familylink/usage?kind=apps - Eltern sehen die Liste, Kind nicht (403)
   assert.ok('devices' in legacy.body.data, 'usage ohne kind liefert wie bisher das Geraete-Bild');
 });
 
+// --- Sperr-Knopf (POST /familylink/device, 11.11.) ---
+autoEnv();
+
+test('POST /familylink/device - Kind als Akteur: 403 vor jeder Collector-Anfrage', async () => {
+  let touched = false;
+  flLogin.__setFetchImpl(async () => { touched = true; return { ok: true, status: 200 }; });
+  const res = await call('POST', '/familylink/device', { actor: kidB, body: { user_id: kidA.id, lock: true } });
+  assert.equal(res.status, 403);
+  assert.equal(touched, false, 'kein Collector-Ruf ohne Elternrolle');
+  flLogin.__setFetchImpl(null);
+});
+
+test('POST /familylink/device - fehlerhafter Koerper: 400', async () => {
+  const res = await call('POST', '/familylink/device', { body: { user_id: kidB.id } });
+  assert.equal(res.status, 400);
+});
+
+test('POST /familylink/device - ohne Family-Link-Verknuepfung: 404 not_linked', async () => {
+  const kidC = freshKid();
+  let touched = false;
+  flLogin.__setFetchImpl(async () => { touched = true; return { ok: true }; });
+  const res = await call('POST', '/familylink/device', { body: { user_id: kidC.id, lock: true } });
+  assert.equal(res.status, 404);
+  assert.equal(res.body.reason, 'media_time_familylink_not_linked');
+  assert.equal(touched, false, 'ohne Mapping darf der Collector nicht gerufen werden');
+  flLogin.__setFetchImpl(null);
+});
+
+test('POST /familylink/device - Erfolg: Collector bekommt die UID, lock kommt zurueck', async () => {
+  const calls = [];
+  flLogin.__setFetchImpl(async (url, opts) => {
+    calls.push({ url, body: JSON.parse(opts.body) });
+    return { ok: true, status: 200, json: async () => ({ ok: true, lock: true }) };
+  });
+  const res = await call('POST', '/familylink/device', { body: { user_id: kidB.id, lock: true } });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.ok, true);
+  assert.equal(res.body.data.lock, true);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/familylink\/device$/);
+  assert.equal(calls[0].body.google_uid, '5001234567', 'weitergereichte Mapping-UID');
+  assert.equal(calls[0].body.lock, true);
+  flLogin.__setFetchImpl(null);
+});
+
+test('POST /familylink/device - Collector sieht kein Geraet: 409 no_device', async () => {
+  flLogin.__setFetchImpl(async () => ({ ok: false, status: 404, json: async () => ({ error: 'kein_geraet' }) }));
+  const res = await call('POST', '/familylink/device', { body: { user_id: kidB.id, lock: false } });
+  assert.equal(res.status, 409);
+  assert.equal(res.body.reason, 'media_time_familylink_no_device');
+  flLogin.__setFetchImpl(null);
+});
+
+test('POST /familylink/device - Collector unerreichbar: 502', async () => {
+  flLogin.__setFetchImpl(async () => { throw new Error('ECONNREFUSED'); });
+  const res = await call('POST', '/familylink/device', { body: { user_id: kidB.id, lock: true } });
+  assert.equal(res.status, 502);
+  assert.equal(res.body.reason, 'media_time_familylink_collector_unreachable');
+  flLogin.__setFetchImpl(null);
+});
+
 // Aufraeumen fuer folgende Suites (Muster oben).
 flLogin.__setFetchImpl(null);
 flLogin.__resetLoginSession();

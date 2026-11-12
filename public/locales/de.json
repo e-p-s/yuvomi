@@ -7342,6 +7342,10 @@
         "bookingTimeProblem": "Bitte eine gültige Uhrzeit eintragen (zum Beispiel 15:30).",
         "bookingTimeOrder": "Das Ende muss nach dem Anfang liegen.",
         "bookingMinutesProblem": "Bitte Minuten zwischen 1 und 720 eintragen.",
-        "bookingEditAnchor": "Das Ende bleibt, wie es lief ({{time}}); neue Minuten rücken nur den Anfang."
+        "bookingEditAnchor": "Das Ende bleibt, wie es lief ({{time}}); neue Minuten rücken nur den Anfang.",
+        "flDeviceLock": "Gerät sperren",
+        "flDeviceUnlock": "Gerät entsperren",
+        "flDeviceLocked": "Gerät gesperrt",
+        "flDeviceUnlocked": "Gerät entsperrt"
     }
 }

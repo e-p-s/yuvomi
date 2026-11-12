@@ -653,6 +653,34 @@ export function mediaTimePaths() {
         },
       }),
     },
+    '/api/v1/media-time/familylink/device': {
+      post: op({
+        summary: 'Lock or unlock a child\'s Google device from the family view (parents/admin)',
+        tag: 'MediaTime',
+        stateChanging: true,
+        requestBody: jsonBody('#/components/schemas/MediaTimeFamilylinkDeviceLockInput'),
+        description: 'Der Sperr-Knopf der Kindkarte: der Collector (scripts/familylink/familyhub_media.py,\n' +
+          'device_action) setzt den Google-Ruf aus einer gefangenen Vorlage (tpl_devicelock) und der\n' +
+          'Geraetekarte (devices.json, vom Sammlerlauf gepflegt) zusammen. Google-Namen und Geraete-\n' +
+          'kennungen verlassen den Sammler nie; die Antwort traegt nur ok und den neuen Zustand.\n' +
+          'Ohne Sammlerlauf mit Geraetsicht ist nichts zu sperren (409 no_device).',
+        responses: {
+          200: {
+            description: 'Lock state applied (data.lock is the new state)',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MediaTimeFamilylinkDeviceLockResponse' } } },
+          },
+          400: { description: 'user_id or lock missing or malformed' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          404: { description: 'No family link account linked to this child (`media_time_familylink_not_linked`)' },
+          409: { description: 'No device seen for this child yet (`media_time_familylink_no_device`)' },
+          429: { description: 'More than 12 device lock calls in one minute for this account' },
+          500: { $ref: '#/components/responses/InternalServerError' },
+          502: { description: 'The collector did not reach Google (`media_time_familylink_collector_unreachable`)' },
+          503: { description: 'FAMILYLINK_COLLECTOR_BASE or FAMILYLINK_LOGIN_SECRET is unset (`media_time_familylink_not_configured`)' },
+        },
+      }),
+    },
   });
 }
 
@@ -713,6 +741,14 @@ const CASE_REASONS = {
       + '`media_time_familylink_collector_unreachable` (502, der Collector nimmt den Sitzungsstart nicht an), '
       + '`media_time_login_session_rate_limited` (429, mehr als zehn Starts in zehn Minuten je Mitglied), '
       + '`media_time_forbidden` (403, nicht Elternteil oder Admin)',
+  },
+  '/api/v1/media-time/familylink/device': {
+    post: REASON_BAD + ' (400, user_id oder lock fehlt oder ist fehlerhaft), '
+      + '`media_time_unauthenticated` (401, keine Session), `media_time_forbidden` (403, nicht Elternteil oder Admin), '
+      + '`media_time_familylink_not_linked` (404, kein Family-Link-Konto mit diesem Kind verknuepft), '
+      + '`media_time_familylink_no_device` (409, der Sammler hat fuer dieses Kind noch kein Geraet gesehen), '
+      + '`media_time_familylink_collector_unreachable` (502, der Collector hat Google nicht erreicht), '
+      + '`media_time_familylink_not_configured` (503, FAMILYLINK_COLLECTOR_BASE oder FAMILYLINK_LOGIN_SECRET fehlt)',
   },
   '/api/v1/media-time/familylink/mapping': {
     get: REASON_BAD + ', `media_time_unauthenticated` (401, no session), `media_time_forbidden` (403, reading another child without being a parent)',

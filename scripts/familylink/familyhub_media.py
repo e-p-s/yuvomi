@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -221,6 +222,66 @@ def members(tpls, sid):
     return kids
 
 
+def repl_post(tpl, body, sapisid=None):
+    """POST-Gegenstueck zu repl (Sperren/Entsperren): gleiche Header-Kur,
+    frischer Cookie + SAPISIDHASH, Koerper als JSON-String. Google akzeptiert
+    die URL unveraendert; nur uid/body sind variable (11.11. gefangen)."""
+    url = tpl["url"]
+    if sapisid:
+        ts = int(time.time())
+        h = hashlib.sha1(f"{ts} {sapisid} https://familylink.google.com".encode()).hexdigest()
+        url = re.sub(r"SAPISIDHASH\+[0-9]+_[0-9a-f]{40}",
+                     f"SAPISIDHASH+{ts}_{h}", url, count=1)
+    hdrs = tpl["headers"]
+    req = urllib.request.Request(url, data=body.encode(), headers={
+        "Cookie": session_cookie() or hdrs.get("Cookie", ""),
+        "Content-Type": "application/json+protobuf",
+        "Origin": hdrs.get("Origin", "https://familylink.google.com"),
+        "Referer": hdrs.get("Referer", "https://familylink.google.com/"),
+        "User-Agent": hdrs.get("User-Agent", UA),
+    })
+    resp = urllib.request.urlopen(req, timeout=25)
+    try:
+        refresh_session_cookies(resp.headers)
+    except Exception:
+        pass
+    raw = resp.read().decode()
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {"raw": raw[:200]}
+
+
+def device_action(google_uid, lock, device_hash=None):
+    """Geraet sperren (Typ 1) / entsperren (Typ 4) via timeLimitOverrides.
+
+    device_hash: 'aannnppa...'-Kennung; fehlt sie, nimmt sie der zuletzt
+    gesehenen Sitzung des Kindes (devices.json, vom Collector gepflegt)."""
+    tpl = json.load(open(tpl_path("devicelock")))
+    if not device_hash:
+        try:
+            dm = json.load(open(os.path.join(CACHE, "devices.json")))
+            seen = dm.get(google_uid) or []
+            if not seen:
+                return {"error": "kein_geraet"}
+            device_hash = seen[0]["hash"]
+        except (OSError, ValueError, IndexError):
+            return {"error": "kein_geraet"}
+    typ = 1 if lock else 4
+    body = json.dumps([None, google_uid, [[None, None, typ, device_hash]], [1]],
+                      separators=(",", ":"))
+    tpl = dict(tpl)
+    # URL kann eine andere uid tragen (Fang von Kind A fuer Kind B): ersetzen.
+    captured_uid = re.search(r"/people/(\d+)/", tpl["url"])
+    if captured_uid and captured_uid.group(1) != google_uid:
+        tpl["url"] = tpl["url"].replace(captured_uid.group(1), google_uid)
+    sid = session_sid()
+    try:
+        return repl_post(tpl, body, sid)
+    except urllib.error.HTTPError as e:
+        return {"error": f"http_{e.code}"}
+
+
 def learn_child_templates(ws, uid, sid, member_idx=None):
     """appsandusage + appliedTimeLimits des Kindes abhoren: Seite ansteuern.
 
@@ -265,6 +326,38 @@ def learn_child_templates(ws, uid, sid, member_idx=None):
     finally:
         ws.call("Fetch.disable")
     return have
+
+
+def extract_devices(usage_raw):
+    """appsandusage-Rohling -> {hash: {hash, seen, name, model}}.
+    data[3] = Geraeteliste [hash, [None, None, modell, name, ...]],
+    data[6] = Sitzungen mit Geraetehash an Position 2 und Datum an 4."""
+    out = {}
+    if not isinstance(usage_raw, list) or len(usage_raw) < 7:
+        return out
+    names = {}
+    for d in (usage_raw[3] or []):
+        try:
+            if isinstance(d, list) and isinstance(d[0], str):
+                meta = d[1] if len(d) > 1 and isinstance(d[1], list) else []
+                names[d[0]] = {"model": meta[2] if len(meta) > 2 else "",
+                               "name": meta[3] if len(meta) > 3 else ""}
+        except Exception:
+            pass
+    latest = {}
+    for s in (usage_raw[6] or []):
+        try:
+            h, d = s[2], s[4]
+            if isinstance(h, str) and isinstance(d, list):
+                key = "%04d-%02d-%02d" % tuple(d[:3])
+                latest[h] = max(latest.get(h, ""), key)
+        except Exception:
+            pass
+    for h, seen in latest.items():
+        info = names.get(h) or {}
+        out[h] = {"hash": h, "seen": seen,
+                  "name": info.get("name") or "", "model": info.get("model") or ""}
+    return out
 
 
 def parse_usage(data, day=None):
@@ -349,6 +442,27 @@ def report(as_json=False, force_learn=False):
                  "apps": sorted(apps.items(), key=lambda kv: -kv[1]["minutes"])[:15],
                  "applied_raw_preview": str(applied)[:300]}
         out["children"].append(entry)
+        # Geraetekarten pflegen (Basis fuer Sperren/Entsperren): hash + Name +
+        # zuletzt_gesehen pro Kind, absteigend sortiert (Gerat 1 = aktuellstes).
+        try:
+            devs = extract_devices(usage)
+            if devs:
+                p = os.path.join(CACHE, "devices.json")
+                dm = {}
+                if os.path.exists(p):
+                    try:
+                        dm = json.load(open(p))
+                    except (OSError, ValueError):
+                        dm = {}
+                dm[uid] = sorted(devs.values(),
+                                 key=lambda d: d["seen"], reverse=True)
+                os.makedirs(CACHE, exist_ok=True)
+                tmp = p + ".tmp"
+                json.dump(dm, open(tmp, "w"), indent=1)
+                os.chmod(tmp, 0o600)
+                os.replace(tmp, p)
+        except Exception:
+            pass
         if as_json:
             os.makedirs(CACHE, exist_ok=True)
             json.dump({"entry": entry, "usage_raw": usage, "applied_raw": applied},

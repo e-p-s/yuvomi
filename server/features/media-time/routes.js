@@ -23,7 +23,7 @@ import rateLimit from 'express-rate-limit';
 import * as db from '../../db.js';
 import { createLogger } from '../../logger.js';
 import { familylinkStatus, familylinkUsage, familylinkAppUsage, runFamilylinkIngest, setStatus, FAMILYLINK_STATUS_KEYS } from './familylink.js';
-import { startFamilylinkLoginSession, postFamilylinkLogin } from './familylink-login.js';
+import { startFamilylinkLoginSession, postFamilylinkLogin, deviceAction } from './familylink-login.js';
 import { isAdminRequest } from '../../middleware/require-admin.js';
 import {
   YUVOMI_PACKAGE,
@@ -1924,6 +1924,55 @@ router.post('/familylink/login-session', requireManager, loginSessionLimiter, as
   } catch (err) {
     log.error('POST /familylink/login-session error:', err);
     return res.status(500).json({ error: 'Failed to start family link login session.', code: 500 });
+  }
+});
+
+const deviceLockLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Geraet eines Kindes sperren/entsperren (Elternpfad). Der Collector auf dem
+// Sammler-Host setzt den Google-Ruf aus gefangener Vorlage + Geraetekarte
+// zusammen; hier haengt nur die Zuordnung user_id -> google_uid dran.
+router.post('/familylink/device', requireManager, deviceLockLimiter, async (req, res) => {
+  try {
+    const userId = Number(req.body?.user_id);
+    const lock = req.body?.lock;
+    if (!Number.isInteger(userId) || userId <= 0 || typeof lock !== 'boolean') {
+      return res.status(400).json({
+        error: 'user_id (integer) and lock (boolean) are required.',
+        code: 400,
+      });
+    }
+    const link = db.get().prepare(
+      'SELECT google_uid FROM familylink_children WHERE yuvomi_user_id = ? AND enabled = 1'
+    ).get(userId);
+    if (!link) {
+      return res.status(404).json({
+        error: 'No family link account is linked to this child.',
+        code: 404,
+        reason: 'media_time_familylink_not_linked',
+      });
+    }
+    const r = await deviceAction({ googleUid: link.google_uid, lock });
+    if (!r.ok) {
+      return res.status(r.status).json({
+        error: r.reason === 'media_time_familylink_no_device'
+          ? 'No device has been seen for this child yet.'
+          : r.reason === 'media_time_familylink_not_configured'
+            ? 'Family link remote control is not configured on this server.'
+            : 'The family link collector could not be reached.',
+        code: r.status,
+        reason: r.reason,
+      });
+    }
+    return res.json({ data: { ok: true, lock: r.lock } });
+  } catch (err) {
+    log.error('POST /familylink/device error:', err);
+    return res.status(500).json({ error: 'Failed to change device lock.', code: 500 });
   }
 });
 

@@ -1348,6 +1348,31 @@ class Handler(BaseHTTPRequestHandler):
                 sys.stderr.write("login/auto:FLOW fehlgeschlagen %s\n" % type(e).__name__)
                 return self._reply(500, json.dumps({"error": "auto_failed"}).encode())
             return self._reply(200, json.dumps({"result": result}).encode())
+        if u.path == "/familylink/device":
+            # Geraet sperren/entsperren: {google_uid, lock, device?} — der
+            # Collector-Pfad (devices.json + tpl_devicelock) erledigt den Rest.
+            # Antworten tragen nur Status, keine Google-Namen.
+            if not self._authed():
+                return self._reply(401, json.dumps({"error": "unauthorized"}).encode())
+            body = self._json_in() or {}
+            uid = body.get("google_uid")
+            lock = body.get("lock")
+            device = body.get("device")
+            if not (isinstance(uid, str) and uid.isdigit() and 10 < len(uid) < 30
+                    and isinstance(lock, bool)):
+                return self._reply(400, json.dumps({"error": "bad_body"}).encode())
+            if device is not None and not (isinstance(device, str)
+                                           and re.fullmatch(r"[a-z0-9]{20,64}", device)):
+                return self._reply(400, json.dumps({"error": "bad_device"}).encode())
+            try:
+                med = _load_media()
+                r = med.device_action(uid, lock, device)
+            except Exception:
+                return self._reply(500, json.dumps({"error": "action_failed"}).encode())
+            if isinstance(r, dict) and r.get("error"):
+                code = 404 if r["error"] == "kein_geraet" else 502
+                return self._reply(code, json.dumps({"error": r["error"]}).encode())
+            return self._reply(200, json.dumps({"ok": True, "lock": lock}).encode())
         if u.path == "/login/totp":
             # POST {secret}: Basis32-Geheimnis der Authenticator-App setzen.
             # POST {}: Konfiguration abfragen. Das Geheimnis verlaesst den
